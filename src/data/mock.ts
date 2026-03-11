@@ -49,6 +49,7 @@ export type AgentMessage = {
 
 export type ApprovalTransaction = {
   id: string;
+  strategyId: string;
   action: string;
   amount: string;
   chain: string;
@@ -56,6 +57,18 @@ export type ApprovalTransaction = {
   gas: string;
   reason: string;
   executionWindow: string;
+};
+
+export type MarketOpportunity = {
+  id: string;
+  title: string;
+  summary: string;
+  apy: string;
+  tvl: string;
+  risk: string;
+  chain: string;
+  category: "yield" | "arbitrage" | "rebalance";
+  actionLabel: string;
 };
 
 export type ActiveStrategy = {
@@ -103,8 +116,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/agent", label: "Agent", description: "DeFi intelligence" },
   { href: "/strategy", label: "Strategy", description: "Builder canvas" },
   { href: "/automation", label: "Auto", description: "Running systems" },
+  { href: "/market", label: "Market", description: "Opportunities & yields" },
   { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },
-  { href: "/settings", label: "Settings", description: "Coming soon" },
+  { href: "/settings", label: "Settings", description: "Workspace controls" },
 ];
 
 export const PORTFOLIO_CHAINS: ChainBalance[] = [
@@ -169,6 +183,7 @@ export const AGENT_MESSAGES: AgentMessage[] = [
 
 export const PENDING_APPROVAL_TX: ApprovalTransaction = {
   id: "approval-1",
+  strategyId: "weekly-dca",
   action: "Swap USDC → ETH",
   amount: "500 USDC (~0.175 ETH)",
   chain: "Arbitrum",
@@ -180,7 +195,7 @@ export const PENDING_APPROVAL_TX: ApprovalTransaction = {
 
 export const ACTIVE_STRATEGIES: ActiveStrategy[] = [
   {
-    id: "dca",
+    id: "weekly-dca",
     name: "Weekly DCA",
     summary: "Buys ETH every Monday at 9:00 AM when risk posture stays green.",
     nextRun: "Today 9:00 AM",
@@ -198,13 +213,49 @@ export const ACTIVE_STRATEGIES: ActiveStrategy[] = [
     status: "monitoring",
   },
   {
-    id: "rebalance",
+    id: "privacy-rebalance",
     name: "Privacy Rebalance",
     summary: "Keeps stablecoin exposure between 35% and 45% with approval guardrails.",
     nextRun: "Tomorrow 8:30 AM",
     executedCount: 8,
     progress: 81,
     status: "paused",
+  },
+];
+
+export const MARKET_OPPORTUNITIES: MarketOpportunity[] = [
+  {
+    id: "market-aave-arb",
+    title: "Aave V3 on Arbitrum",
+    summary: "Low-risk USDC lending with strong liquidity and stable utilization.",
+    apy: "4.2%",
+    tvl: "$1.2B",
+    risk: "Low",
+    chain: "Arbitrum",
+    category: "yield",
+    actionLabel: "Deploy $500",
+  },
+  {
+    id: "market-base-spread",
+    title: "WETH spread on Base",
+    summary: "Temporary 1.8% divergence versus Arbitrum routing with room to execute privately.",
+    apy: "1.8%",
+    tvl: "$82M",
+    risk: "Medium",
+    chain: "Base",
+    category: "arbitrage",
+    actionLabel: "Review route",
+  },
+  {
+    id: "market-stable-rebalance",
+    title: "Stablecoin rebalance",
+    summary: "Reduce Solana USDC concentration and restore your 40% stablecoin target.",
+    apy: "Policy",
+    tvl: "$12.3k",
+    risk: "Low",
+    chain: "Multi-chain",
+    category: "rebalance",
+    actionLabel: "Preview plan",
   },
 ];
 

@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useUiStore } from "@/store/useUiStore";
+import { uiStoreDefaults, useUiStore } from "@/store/useUiStore";
 
 describe("useUiStore", () => {
   beforeEach(() => {
+    localStorage.clear();
     useUiStore.setState({
-      privacyModeEnabled: true,
-      isSidebarOpen: false,
-      pendingApprovalId: null,
+      ...uiStoreDefaults,
+      notifications: [...uiStoreDefaults.notifications],
+      skippedApprovalStrategyIds: [],
     });
   });
 
@@ -25,5 +26,15 @@ describe("useUiStore", () => {
 
     useUiStore.getState().clearPendingApproval();
     expect(useUiStore.getState().pendingApprovalId).toBeNull();
+  });
+
+  it("updates the theme preference", () => {
+    useUiStore.getState().setThemePreference("light");
+    expect(useUiStore.getState().themePreference).toBe("light");
+  });
+
+  it("stores skipped approvals for a strategy", () => {
+    useUiStore.getState().setSkipApprovalForStrategy("weekly-dca", true);
+    expect(useUiStore.getState().skippedApprovalStrategyIds).toContain("weekly-dca");
   });
 });
