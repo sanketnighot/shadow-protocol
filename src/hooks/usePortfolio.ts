@@ -37,8 +37,10 @@ export function usePortfolio(params: PortfolioParams = {}) {
   const {
     data: rawAssets = [],
     isLoading,
+    isFetching,
     isError,
     error,
+    refetch,
   } = useQuery({
     queryKey: ["portfolio", "balances", effectiveAddress, developerMode],
     queryFn: async (): Promise<PortfolioAsset[]> => {
@@ -76,6 +78,8 @@ export function usePortfolio(params: PortfolioParams = {}) {
     series: PORTFOLIO_SERIES,
     quickActions: QUICK_ACTIONS,
     isLoading,
+    isFetching,
+    refetch,
     balanceError: isError
       ? (typeof error === "string"
           ? error

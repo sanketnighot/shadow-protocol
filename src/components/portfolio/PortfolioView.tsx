@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, RefreshCw, Wallet } from "lucide-react";
 
 import { AssetRow } from "@/components/portfolio/AssetRow";
 import { BridgeModal } from "@/components/portfolio/BridgeModal";
@@ -21,7 +21,7 @@ import { useWalletStore } from "@/store/useWalletStore";
 export function PortfolioView() {
   const { addresses, activeAddress, refreshWallets } = useWalletStore();
   const developerModeEnabled = useUiStore((state) => state.developerModeEnabled);
-  const { assets, isLoading, balanceError } = usePortfolio({
+  const { assets, isLoading, isFetching, refetch, balanceError } = usePortfolio({
     addresses,
     activeAddress,
     developerMode: developerModeEnabled,
@@ -83,6 +83,21 @@ export function PortfolioView() {
             </h1>
           </div>
           <div className="flex gap-2">
+            {hasWallets && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full border-white/10"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw
+                  className={`mr-2 size-4 ${isFetching ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"
