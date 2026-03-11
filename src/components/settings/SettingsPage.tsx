@@ -1,11 +1,18 @@
 import packageJson from "../../../package.json";
 
 import { Button } from "@/components/ui/button";
-import { APP_ABOUT } from "@/data/about";
 import { cn } from "@/lib/utils";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "system"];
+
+const APP_ABOUT = {
+  name: "SHADOW Protocol",
+  tagline: "Private DeFi workstation",
+  description:
+    "Privacy-first desktop app for DeFi automation. Build strategies, run automations, and manage cross-chain assets with local AI and human-in-the-loop approvals.",
+  identifier: "com.shadow.protocol",
+} as const;
 
 export function SettingsPage() {
   const themePreference = useUiStore((state) => state.themePreference);

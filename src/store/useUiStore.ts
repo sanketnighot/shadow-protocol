@@ -31,8 +31,6 @@ type UiStore = {
   skippedApprovalStrategyIds: string[];
   notifications: NotificationItem[];
   archivedNotifications: NotificationItem[];
-  isAboutOpen: boolean;
-  setAboutOpen: (open: boolean) => void;
   togglePrivacyMode: () => void;
   openSidebar: () => void;
   closeSidebar: () => void;
@@ -92,14 +90,12 @@ const DEFAULT_STATE = {
   skippedApprovalStrategyIds: [] as string[],
   notifications: INITIAL_NOTIFICATIONS,
   archivedNotifications: [] as NotificationItem[],
-  isAboutOpen: false,
 };
 
 export const useUiStore = create<UiStore>()(
   persist(
     (set) => ({
       ...DEFAULT_STATE,
-      setAboutOpen: (open) => set({ isAboutOpen: open }),
       togglePrivacyMode: () =>
         set((state) => ({ privacyModeEnabled: !state.privacyModeEnabled })),
       openSidebar: () => set({ isSidebarOpen: true }),

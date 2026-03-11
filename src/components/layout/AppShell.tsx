@@ -7,7 +7,6 @@ import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { AboutDialog } from "@/components/shared/AboutDialog";
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { Button } from "@/components/ui/button";
 import { useAgentChat } from "@/hooks/useAgentChat";
@@ -21,10 +20,8 @@ export function AppShell() {
     (state) => state.clearPendingApproval,
   );
   const closeSidebar = useUiStore((state) => state.closeSidebar);
-  const isAboutOpen = useUiStore((state) => state.isAboutOpen);
   const isSidebarOpen = useUiStore((state) => state.isSidebarOpen);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
-  const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
   const themePreference = useUiStore((state) => state.themePreference);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
@@ -87,24 +84,6 @@ export function AppShell() {
 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [openCommandPalette]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !("__TAURI__" in window)) return;
-    let unlisten: (() => void) | undefined;
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) =>
-        listen("show-about", () => {
-          useUiStore.getState().setAboutOpen(true);
-        }),
-      )
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch(() => {});
-    return () => {
-      unlisten?.();
-    };
-  }, []);
 
   const handleReject = () => {
     clearPendingApproval();
@@ -176,7 +155,6 @@ export function AppShell() {
         onApprove={handleApprove}
       />
       <CommandPalette />
-      <AboutDialog open={isAboutOpen} onOpenChange={setAboutOpen} />
       <OnboardingModal
         open={!hasCompletedOnboarding}
         onComplete={completeOnboarding}
