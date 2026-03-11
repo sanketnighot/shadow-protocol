@@ -18,6 +18,8 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByText("SHADOW Protocol")).toBeInTheDocument();
+    expect(screen.getByText("Live operations")).toBeInTheDocument();
+    expect(screen.queryByText("Cmd+K")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
     expect(screen.getByText("Total Portfolio Value")).toBeInTheDocument();
