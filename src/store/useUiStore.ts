@@ -50,6 +50,8 @@ type UiStore = {
   markNotificationsRead: () => void;
   archiveNotification: (id: string) => void;
   unarchiveNotification: (id: string) => void;
+  removeArchivedNotification: (id: string) => void;
+  removeAllArchivedNotifications: () => void;
 };
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
@@ -162,6 +164,12 @@ export const useUiStore = create<UiStore>()(
             notifications: [{ ...item, unread: false }, ...state.notifications],
           };
         }),
+      removeArchivedNotification: (id) =>
+        set((state) => ({
+          archivedNotifications: state.archivedNotifications.filter((n) => n.id !== id),
+        })),
+      removeAllArchivedNotifications: () =>
+        set({ archivedNotifications: [] }),
     }),
     {
       name: "shadow-ui-store",

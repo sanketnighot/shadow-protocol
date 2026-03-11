@@ -12,7 +12,6 @@ import type { PortfolioAsset } from "@/types/wallet";
 type PortfolioParams = {
   addresses?: string[];
   activeAddress?: string | null;
-  developerMode?: boolean;
 };
 
 function mapToAsset(pa: PortfolioAsset, walletAddress: string): Asset {
@@ -31,7 +30,7 @@ function mapToAsset(pa: PortfolioAsset, walletAddress: string): Asset {
 }
 
 export function usePortfolio(params: PortfolioParams = {}) {
-  const { addresses = [], activeAddress = null, developerMode = false } = params;
+  const { addresses = [], activeAddress = null } = params;
   const effectiveAddress = activeAddress ?? (addresses[0] ?? null);
 
   const {
@@ -42,13 +41,10 @@ export function usePortfolio(params: PortfolioParams = {}) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["portfolio", "balances", effectiveAddress, developerMode],
+    queryKey: ["portfolio", "balances", effectiveAddress],
     queryFn: async (): Promise<PortfolioAsset[]> => {
       if (!effectiveAddress) return [];
-      return invoke("portfolio_fetch_balances", {
-        address: effectiveAddress,
-        developerMode,
-      });
+      return invoke("portfolio_fetch_balances", { address: effectiveAddress });
     },
     enabled: !!effectiveAddress,
     staleTime: 60_000,

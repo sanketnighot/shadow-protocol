@@ -16,11 +16,11 @@ const ERC20_TRANSFER_SELECTOR: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
 fn chain_to_network(chain: &str) -> Option<&'static str> {
     match chain {
         "ETH" => Some("eth-mainnet"),
-        "ARB" => Some("arb-mainnet"),
         "BASE" => Some("base-mainnet"),
+        "POL" => Some("polygon-mainnet"),
         "ETH-SEP" => Some("eth-sepolia"),
         "BASE-SEP" => Some("base-sepolia"),
-        "MATIC-AMOY" => Some("polygon-amoy"),
+        "POL-AMOY" => Some("polygon-amoy"),
         _ => None,
     }
 }

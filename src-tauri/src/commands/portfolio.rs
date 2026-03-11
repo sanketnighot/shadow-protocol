@@ -3,18 +3,18 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "arb-mainnet", "base-mainnet"];
+const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "base-mainnet", "polygon-mainnet"];
 const TESTNET_NETWORKS: &[&str] = &["eth-sepolia", "base-sepolia", "polygon-amoy"];
 
 fn network_to_chain_display(network: &str) -> (&str, &str) {
     let normalized = network.trim().to_lowercase().replace('_', "-");
     match normalized.as_str() {
         "eth-mainnet" => ("Ethereum", "ETH"),
-        "arb-mainnet" => ("Arbitrum", "ARB"),
         "base-mainnet" => ("Base", "BASE"),
+        "polygon-mainnet" | "matic-mainnet" => ("Polygon", "POL"),
         "eth-sepolia" => ("Ethereum Sepolia", "ETH-SEP"),
         "base-sepolia" => ("Base Sepolia", "BASE-SEP"),
-        "polygon-amoy" | "matic-amoy" => ("Polygon Amoy", "MATIC-AMOY"),
+        "polygon-amoy" | "matic-amoy" => ("Polygon Amoy", "POL-AMOY"),
         _ => (network, network),
     }
 }
@@ -129,10 +129,7 @@ fn format_balance_display(raw: &str, decimals: u8) -> String {
 }
 
 #[tauri::command]
-pub async fn portfolio_fetch_balances(
-    address: String,
-    developer_mode: Option<bool>,
-) -> Result<Vec<PortfolioAsset>, PortfolioError> {
+pub async fn portfolio_fetch_balances(address: String) -> Result<Vec<PortfolioAsset>, PortfolioError> {
     let address = address.trim();
     if address.is_empty() || !address.starts_with("0x") || address.len() != 42 {
         return Err(PortfolioError::InvalidAddress);
@@ -147,15 +144,11 @@ pub async fn portfolio_fetch_balances(
         .build()
         .map_err(|_| PortfolioError::RequestFailed)?;
 
-    let networks: Vec<&str> = if developer_mode.unwrap_or(false) {
-        MAINNET_NETWORKS
-            .iter()
-            .chain(TESTNET_NETWORKS.iter())
-            .copied()
-            .collect()
-    } else {
-        MAINNET_NETWORKS.to_vec()
-    };
+    let networks: Vec<&str> = MAINNET_NETWORKS
+        .iter()
+        .chain(TESTNET_NETWORKS.iter())
+        .copied()
+        .collect();
 
     let url = format!(
         "https://api.g.alchemy.com/data/v1/{}/assets/tokens/by-address",
@@ -219,9 +212,12 @@ pub async fn portfolio_fetch_balances(
                 let token_addr = token.token_address.as_deref().unwrap_or("");
                 if token_addr.is_empty() || token_addr.eq_ignore_ascii_case("null") {
                     match network {
-                        "eth-mainnet" | "arb-mainnet" | "base-mainnet"
-                        | "eth-sepolia" | "base-sepolia" => "ETH".to_string(),
-                        "polygon-amoy" => "POL".to_string(),
+                        "eth-mainnet" | "base-mainnet" | "eth-sepolia" | "base-sepolia" => {
+                            "ETH".to_string()
+                        }
+                        "polygon-mainnet" | "matic-mainnet" | "polygon-amoy" | "matic-amoy" => {
+                            "POL".to_string()
+                        }
                         _ => "Unknown".to_string(),
                     }
                 } else {

@@ -20,11 +20,9 @@ import { useWalletStore } from "@/store/useWalletStore";
 
 export function PortfolioView() {
   const { addresses, activeAddress, refreshWallets } = useWalletStore();
-  const developerModeEnabled = useUiStore((state) => state.developerModeEnabled);
   const { assets, isLoading, isFetching, refetch, balanceError } = usePortfolio({
     addresses,
     activeAddress,
-    developerMode: developerModeEnabled,
   });
   const { success } = useToast();
   const [chain, setChain] = useState("All");
@@ -125,7 +123,6 @@ export function PortfolioView() {
               chain={chain}
               sort={sort}
               type={type}
-              developerModeEnabled={developerModeEnabled}
               onChainChange={setChain}
               onSortChange={setSort}
               onTypeChange={setType}

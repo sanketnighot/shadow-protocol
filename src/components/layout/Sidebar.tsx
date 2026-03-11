@@ -2,10 +2,12 @@ import { useState } from "react";
 import {
   Archive,
   Bell,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Inbox,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -65,51 +67,56 @@ function NotificationRow({
           : undefined
       }
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Archive"
-        className="absolute right-2 top-2 size-7 rounded-lg opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 focus:outline-none"
-        onClick={(e) => {
-          e.stopPropagation();
-          onArchive();
-        }}
-      >
-        <Archive className="size-3.5" />
-      </Button>
-      <div className="flex items-start gap-3 pr-8">
-        <div
-          className={cn(
-            "shrink-0 rounded-xl border border-white/10 bg-white/5 p-2",
-            accent,
-          )}
+      <div className="absolute bottom-2 right-2 z-10 flex gap-1 rounded-full border border-white/10 bg-background/95 px-1 py-1 shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {notification.unread && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Mark read"
+            className="size-8 rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkRead();
+            }}
+          >
+            <Check className="size-4" />
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Archive"
+          className="size-8 rounded-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive();
+          }}
         >
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold text-foreground">{notification.title}</p>
-            <span className="text-[10px] text-muted">{notification.createdAtLabel}</span>
+          <Archive className="size-4" />
+        </Button>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div
+            className={cn(
+              "shrink-0 rounded-xl border border-white/10 bg-white/5 p-2",
+              accent,
+            )}
+          >
+            <Icon className="size-4" />
           </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
-            {notification.description}
-          </p>
-          {notification.unread && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-2 h-7 text-xs text-muted hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMarkRead();
-              }}
-            >
-              Mark read
-            </Button>
-          )}
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-foreground">{notification.title}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
+              {notification.description}
+            </p>
+          </div>
         </div>
+        <span className="shrink-0 text-[10px] text-muted">
+          {notification.createdAtLabel}
+        </span>
       </div>
     </article>
   );
@@ -126,6 +133,8 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const markNotificationsRead = useUiStore((s) => s.markNotificationsRead);
   const archiveNotification = useUiStore((s) => s.archiveNotification);
   const unarchiveNotification = useUiStore((s) => s.unarchiveNotification);
+  const removeArchivedNotification = useUiStore((s) => s.removeArchivedNotification);
+  const removeAllArchivedNotifications = useUiStore((s) => s.removeAllArchivedNotifications);
   const unreadCount = notifications.filter((n) => n.unread).length;
 
   const handleOpenNotification = (route: string | undefined) => {
@@ -223,12 +232,33 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             </button>
             {archivedOpen && (
               <div className="mt-2 space-y-2">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px] text-muted hover:text-destructive"
+                    onClick={removeAllArchivedNotifications}
+                  >
+                    Remove all permanently
+                  </Button>
+                </div>
                 {archivedNotifications.map((notification) => (
                   <article
                     key={notification.id}
-                    className="rounded-[18px] border border-white/10 bg-white/5 p-3 opacity-80"
+                    className="group/archived relative rounded-[18px] border border-white/10 bg-white/5 p-3 opacity-80"
                   >
-                    <div className="flex items-start gap-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Delete permanently"
+                      className="absolute right-2 top-2 size-7 rounded-lg opacity-0 transition-opacity hover:text-destructive group-hover/archived:opacity-100"
+                      onClick={() => removeArchivedNotification(notification.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                    <div className="flex items-start gap-3 pr-8">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground">{notification.title}</p>
                         <p className="mt-0.5 line-clamp-1 text-xs text-muted">
