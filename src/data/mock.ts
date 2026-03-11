@@ -47,11 +47,63 @@ export type AgentMessage = {
   blocks: AgentMessageBlock[];
 };
 
+export type ApprovalTransaction = {
+  id: string;
+  action: string;
+  amount: string;
+  chain: string;
+  slippage: string;
+  gas: string;
+  reason: string;
+  executionWindow: string;
+};
+
+export type ActiveStrategy = {
+  id: string;
+  name: string;
+  summary: string;
+  nextRun: string;
+  executedCount: number;
+  progress: number;
+  status: "running" | "monitoring" | "paused";
+};
+
+export type Asset = {
+  id: string;
+  symbol: string;
+  chain: string;
+  chainName: string;
+  balance: string;
+  valueUsd: string;
+  type: "token" | "stablecoin";
+};
+
+export type StrategyTemplateNode = {
+  id: string;
+  type: "trigger" | "condition" | "action";
+  title: string;
+  subtitle: string;
+  position: { x: number; y: number };
+};
+
+export type StrategyTemplateEdge = {
+  id: string;
+  source: string;
+  target: string;
+};
+
+export type GuardrailDefaults = {
+  maxTradeUsd: string;
+  stopBelowPortfolioUsd: string;
+  requireApprovalAboveUsd: string;
+};
+
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", description: "Portfolio pulse" },
   { href: "/agent", label: "Agent", description: "DeFi intelligence" },
-  { href: "/automation", label: "Auto", description: "Coming soon" },
-  { href: "/market", label: "Market", description: "Coming soon" },
+  { href: "/strategy", label: "Strategy", description: "Builder canvas" },
+  { href: "/automation", label: "Auto", description: "Running systems" },
+  { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },
   { href: "/settings", label: "Settings", description: "Coming soon" },
 ];
 
@@ -114,3 +166,118 @@ export const AGENT_MESSAGES: AgentMessage[] = [
     ],
   },
 ];
+
+export const PENDING_APPROVAL_TX: ApprovalTransaction = {
+  id: "approval-1",
+  action: "Swap USDC → ETH",
+  amount: "500 USDC (~0.175 ETH)",
+  chain: "Arbitrum",
+  slippage: "0.5%",
+  gas: "~$0.42",
+  reason: "ETH price dipped below your target $2,850. Executing DCA strategy as planned.",
+  executionWindow: "30 seconds",
+};
+
+export const ACTIVE_STRATEGIES: ActiveStrategy[] = [
+  {
+    id: "dca",
+    name: "Weekly DCA",
+    summary: "Buys ETH every Monday at 9:00 AM when risk posture stays green.",
+    nextRun: "Today 9:00 AM",
+    executedCount: 12,
+    progress: 67,
+    status: "running",
+  },
+  {
+    id: "arb-hunter",
+    name: "Arbitrage Hunter",
+    summary: "Monitors Base and Arbitrum routing for spread-based opportunities.",
+    nextRun: "Live monitoring",
+    executedCount: 3,
+    progress: 42,
+    status: "monitoring",
+  },
+  {
+    id: "rebalance",
+    name: "Privacy Rebalance",
+    summary: "Keeps stablecoin exposure between 35% and 45% with approval guardrails.",
+    nextRun: "Tomorrow 8:30 AM",
+    executedCount: 8,
+    progress: 81,
+    status: "paused",
+  },
+];
+
+export const ASSETS: Asset[] = [
+  {
+    id: "asset-eth",
+    symbol: "ETH",
+    chain: "ETH",
+    chainName: "Ethereum",
+    balance: "1.234 ETH",
+    valueUsd: "$3,456.78",
+    type: "token",
+  },
+  {
+    id: "asset-usdc-arb",
+    symbol: "USDC",
+    chain: "ARB",
+    chainName: "Arbitrum",
+    balance: "2,500 USDC",
+    valueUsd: "$2,500.00",
+    type: "stablecoin",
+  },
+  {
+    id: "asset-cbeth",
+    symbol: "cbETH",
+    chain: "BASE",
+    chainName: "Base",
+    balance: "0.722 cbETH",
+    valueUsd: "$2,098.12",
+    type: "token",
+  },
+  {
+    id: "asset-sol",
+    symbol: "SOL",
+    chain: "SOL",
+    chainName: "Solana",
+    balance: "14.40 SOL",
+    valueUsd: "$2,138.54",
+    type: "token",
+  },
+];
+
+export const STRATEGY_TEMPLATE_NODES: StrategyTemplateNode[] = [
+  {
+    id: "trigger-1",
+    type: "trigger",
+    title: "Every Monday",
+    subtitle: "09:00 UTC",
+    position: { x: 0, y: 60 },
+  },
+  {
+    id: "condition-1",
+    type: "condition",
+    title: "If ETH < $3,000",
+    subtitle: "Trend and spread check",
+    position: { x: 280, y: 60 },
+  },
+  {
+    id: "action-1",
+    type: "action",
+    title: "Buy $100 ETH",
+    subtitle: "Private execution",
+    position: { x: 560, y: 60 },
+  },
+];
+
+export const STRATEGY_TEMPLATE_EDGES: StrategyTemplateEdge[] = [
+  { id: "edge-1", source: "trigger-1", target: "condition-1" },
+  { id: "edge-2", source: "condition-1", target: "action-1" },
+];
+
+export const GUARDRAIL_DEFAULTS: GuardrailDefaults = {
+  maxTradeUsd: "1000",
+  stopBelowPortfolioUsd: "5000",
+  requireApprovalAboveUsd: "500",
+};

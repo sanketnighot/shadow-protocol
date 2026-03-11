@@ -8,8 +8,8 @@ type AgentMessageProps = {
 
 export function AgentMessage({ blocks }: AgentMessageProps) {
   return (
-    <div className="max-w-3xl rounded-[32px] rounded-bl-md border border-white/10 bg-white/5 px-5 py-5">
-      <div className="flex items-center justify-between gap-3">
+    <div className="max-w-full rounded-[24px] rounded-bl-md border border-white/10 bg-white/5 px-4 py-4 sm:max-w-3xl sm:rounded-[32px] sm:px-5 sm:py-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-mono text-[11px] tracking-[0.2em] text-muted uppercase">
             Shadow

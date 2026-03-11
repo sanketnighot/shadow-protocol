@@ -1,20 +1,35 @@
-import { Bell, MoonStar, Search, Settings2 } from "lucide-react";
+import { Bell, Menu, MoonStar, Search, Settings2 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useUiStore } from "@/store/useUiStore";
 
 export function TitleBar() {
+  const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+
   return (
-    <header className="glass-panel flex items-center justify-between rounded-[30px] border-white/10 px-6 py-4">
-      <div className="flex items-center gap-4">
-        <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/12 text-lg font-black tracking-[0.24em] text-primary">
+    <header className="glass-panel flex items-center justify-between rounded-[24px] border-white/10 px-4 py-3 sm:px-5 sm:py-4 lg:rounded-[30px] lg:px-6">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Open navigation"
+          className="rounded-full text-foreground hover:bg-white/10 lg:hidden"
+          onClick={toggleSidebar}
+        >
+          <Menu className="size-4" />
+        </Button>
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/12 text-lg font-black tracking-[0.24em] text-primary sm:size-12">
           S
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
             SHADOW Protocol
           </p>
-          <p className="mt-1 text-sm text-muted">Private DeFi workstation</p>
+          <p className="mt-1 hidden truncate text-sm text-muted sm:block">
+            Private DeFi workstation
+          </p>
         </div>
       </div>
 

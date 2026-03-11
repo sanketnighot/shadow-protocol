@@ -9,7 +9,7 @@ export function QuickActions() {
   const { quickActions } = usePortfolio();
 
   return (
-    <section aria-label="Quick actions" className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Quick actions" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {quickActions.map((action, index) => {
         const Icon = ACTION_ICONS[index];
 

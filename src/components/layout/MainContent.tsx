@@ -2,7 +2,7 @@ import { Outlet } from "react-router-dom";
 
 export function MainContent() {
   return (
-    <main className="min-h-[calc(100vh-10rem)]">
+    <main className="min-h-[calc(100vh-8rem)] min-w-0">
       <Outlet />
     </main>
   );
