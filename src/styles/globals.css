@@ -1,0 +1,92 @@
+@import "./design-tokens.css";
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --color-background: var(--bg-primary);
+  --color-surface: var(--bg-secondary);
+  --color-surface-elevated: var(--bg-tertiary);
+  --color-foreground: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-muted-foreground: var(--text-tertiary);
+  --color-primary: var(--accent-purple);
+  --color-primary-foreground: var(--text-primary);
+  --color-accent: var(--accent-blue);
+  --color-accent-foreground: var(--text-primary);
+  --color-secondary: rgba(255, 255, 255, 0.06);
+  --color-secondary-foreground: var(--text-primary);
+  --color-card: rgba(20, 20, 26, 0.8);
+  --color-card-foreground: var(--text-primary);
+  --color-border: rgba(148, 163, 184, 0.12);
+  --color-input: rgba(255, 255, 255, 0.06);
+  --color-ring: rgba(139, 92, 246, 0.32);
+  --color-destructive: var(--accent-red);
+  --color-success: var(--accent-green);
+  --color-danger: var(--accent-red);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background:
+      radial-gradient(circle at top, rgba(139, 92, 246, 0.18), transparent 30%),
+      linear-gradient(180deg, #0b0b11 0%, #09090d 100%);
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    min-width: 1280px;
+    min-height: 100vh;
+    background: transparent;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+@utility glass-panel {
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, rgba(20, 20, 26, 0.92), rgba(14, 14, 18, 0.72));
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-glow);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility subtle-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
