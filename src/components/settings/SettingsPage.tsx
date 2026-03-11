@@ -1,6 +1,7 @@
 import packageJson from "../../../package.json";
 
 import { Button } from "@/components/ui/button";
+import { APP_ABOUT } from "@/data/about";
 import { cn } from "@/lib/utils";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
@@ -71,10 +72,25 @@ export function SettingsPage() {
 
       <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
         <h2 className="text-xl font-semibold text-foreground">About</h2>
-        <div className="mt-5">
-          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 max-w-xs">
-            <p className="text-xs tracking-[0.18em] text-muted uppercase">Version</p>
-            <p className="mt-2 font-semibold text-foreground">v{packageJson.version}</p>
+        <div className="mt-5 space-y-4">
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 max-w-md">
+            <p className="font-mono text-[11px] tracking-[0.2em] text-muted uppercase">
+              {APP_ABOUT.name}
+            </p>
+            <p className="mt-1 text-sm text-muted">{APP_ABOUT.tagline}</p>
+            <p className="mt-3 text-sm leading-6 text-foreground">
+              {APP_ABOUT.description}
+            </p>
+            <dl className="mt-4 grid gap-2 border-t border-white/10 pt-4 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Version</dt>
+                <dd className="font-medium text-foreground">v{packageJson.version}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Identifier</dt>
+                <dd className="font-mono text-xs text-foreground">{APP_ABOUT.identifier}</dd>
+              </div>
+            </dl>
           </div>
         </div>
       </section>

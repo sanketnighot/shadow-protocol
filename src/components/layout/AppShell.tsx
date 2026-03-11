@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Menu } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { AboutDialog } from "@/components/shared/AboutDialog";
+import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { Button } from "@/components/ui/button";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useToast } from "@/hooks/useToast";
@@ -16,15 +17,23 @@ import { useUiStore } from "@/store/useUiStore";
 
 export function AppShell() {
   const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
-  const clearPendingApproval = useUiStore((state) => state.clearPendingApproval);
+  const clearPendingApproval = useUiStore(
+    (state) => state.clearPendingApproval,
+  );
   const closeSidebar = useUiStore((state) => state.closeSidebar);
+  const isAboutOpen = useUiStore((state) => state.isAboutOpen);
   const isSidebarOpen = useUiStore((state) => state.isSidebarOpen);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
+  const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
   const themePreference = useUiStore((state) => state.themePreference);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
-  const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding);
-  const hasCompletedOnboarding = useOnboardingStore((state) => state.hasCompletedOnboarding);
+  const completeOnboarding = useOnboardingStore(
+    (state) => state.completeOnboarding,
+  );
+  const hasCompletedOnboarding = useOnboardingStore(
+    (state) => state.hasCompletedOnboarding,
+  );
   const { pendingApproval } = useAgentChat();
   const { info, success } = useToast();
 
@@ -79,6 +88,24 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [openCommandPalette]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI__" in window)) return;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("show-about", () => {
+          useUiStore.getState().setAboutOpen(true);
+        }),
+      )
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   const handleReject = () => {
     clearPendingApproval();
     info("Transaction rejected", "The strategy remains in monitoring mode.");
@@ -86,7 +113,10 @@ export function AppShell() {
 
   const handleApprove = () => {
     clearPendingApproval();
-    success("Transaction approved", "SHADOW will execute the private route now.");
+    success(
+      "Transaction approved",
+      "SHADOW will execute the private route now.",
+    );
     setShowApprovalSuccess(true);
     window.setTimeout(() => setShowApprovalSuccess(false), 1200);
   };
@@ -130,7 +160,10 @@ export function AppShell() {
               className="h-full w-[min(22rem,88vw)] p-3"
               onClick={(event) => event.stopPropagation()}
             >
-              <Sidebar className="h-full overflow-y-auto" onNavigate={closeSidebar} />
+              <Sidebar
+                className="h-full overflow-y-auto"
+                onNavigate={closeSidebar}
+              />
             </motion.div>
           </motion.div>
         ) : null}
@@ -143,7 +176,11 @@ export function AppShell() {
         onApprove={handleApprove}
       />
       <CommandPalette />
-      <OnboardingModal open={!hasCompletedOnboarding} onComplete={completeOnboarding} />
+      <AboutDialog open={isAboutOpen} onOpenChange={setAboutOpen} />
+      <OnboardingModal
+        open={!hasCompletedOnboarding}
+        onComplete={completeOnboarding}
+      />
       <AnimatePresence>
         {showApprovalSuccess ? (
           <motion.div
