@@ -27,9 +27,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/shadow.png", "icons/shadow.ico"],
-    "shortDescription": "Shadow Protocol Desktop App",
-    "longDescription": "Shadow Protocol - Desktop application",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Private DeFi workstation — automate strategies and manage cross-chain assets locally.",
+    "longDescription": "SHADOW Protocol is a privacy-first desktop application for DeFi automation. Build strategies, run automations, and manage your portfolio with local AI and human-in-the-loop approvals.",
     "category": "DeveloperTool",
     "macOS": {
       "minimumSystemVersion": "10.13"
