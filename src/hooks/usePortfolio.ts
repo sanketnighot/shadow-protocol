@@ -25,6 +25,8 @@ function mapToAsset(pa: PortfolioAsset, walletAddress: string): Asset {
     valueUsd: pa.valueUsd,
     type: pa.type,
     walletAddress,
+    tokenContract: pa.tokenContract ?? "",
+    decimals: pa.decimals ?? 18,
   };
 }
 

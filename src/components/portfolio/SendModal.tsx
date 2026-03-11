@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import type { Asset } from "@/data/mock";
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,16 @@ import { Input } from "@/components/ui/input";
 type SendModalProps = {
   open: boolean;
   asset: Asset | null;
+  fromAddress: string | null;
   onClose: () => void;
-  onSubmit: (amount: string, address: string) => void;
+  onSubmit: (amount: string, address: string, txHash: string) => void;
 };
 
-export function SendModal({ open, asset, onClose, onSubmit }: SendModalProps) {
+export function SendModal({ open, asset, fromAddress, onClose, onSubmit }: SendModalProps) {
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const validationMessage = useMemo(() => {
     const normalizedAmount = Number(amount);
@@ -45,15 +49,17 @@ export function SendModal({ open, asset, onClose, onSubmit }: SendModalProps) {
     return "";
   }, [address, amount, asset]);
 
+  const displayError = validationMessage || submitError;
+
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
+    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? (setSubmitError(null), onClose()) : undefined)}>
       <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-[-0.03em]">
             Send {asset?.symbol ?? "asset"}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted">
-            Draft a transfer from your {asset?.chainName ?? "selected"} balance with local validation before execution.
+            Transfer {asset?.symbol ?? "asset"} on {asset?.chainName ?? "selected"} to a recipient address.
           </DialogDescription>
         </DialogHeader>
 
@@ -80,8 +86,8 @@ export function SendModal({ open, asset, onClose, onSubmit }: SendModalProps) {
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-muted">
             Network: <span className="font-semibold text-foreground">{asset?.chainName ?? "Unknown"}</span>
           </div>
-          {validationMessage ? (
-            <p className="text-sm text-amber-300">{validationMessage}</p>
+          {displayError ? (
+            <p className="text-sm text-amber-300">{displayError}</p>
           ) : null}
         </div>
 
@@ -97,18 +103,36 @@ export function SendModal({ open, asset, onClose, onSubmit }: SendModalProps) {
           <Button
             type="button"
             className="rounded-full px-6"
-            disabled={validationMessage.length > 0 || !asset}
-            onClick={() => {
-              if (!asset || validationMessage) {
-                return;
-              }
+            disabled={validationMessage.length > 0 || !asset || !fromAddress || isSubmitting}
+            onClick={async () => {
+              if (!asset || validationMessage || !fromAddress) return;
 
-              onSubmit(amount, address.trim());
-              setAmount("");
-              setAddress("");
+              setIsSubmitting(true);
+              try {
+                const { txHash } = await invoke<{ txHash: string }>("portfolio_transfer", {
+                  input: {
+                    fromAddress,
+                    toAddress: address.trim(),
+                    amount,
+                    chain: asset.chain,
+                    tokenContract: asset.tokenContract && asset.tokenContract.length > 0 ? asset.tokenContract : null,
+                    decimals: asset.decimals ?? 18,
+                  },
+                });
+                setSubmitError(null);
+                onSubmit(amount, address.trim(), txHash);
+                setAmount("");
+                setAddress("");
+                onClose();
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                setSubmitError(message);
+              } finally {
+                setIsSubmitting(false);
+              }
             }}
           >
-            Continue
+            {isSubmitting ? "Sending…" : "Send"}
           </Button>
         </DialogFooter>
       </DialogContent>

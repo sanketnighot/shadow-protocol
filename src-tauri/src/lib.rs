@@ -16,9 +16,10 @@ pub fn run() {
             commands::wallet_import_mnemonic,
             commands::wallet_import_private_key,
             commands::wallet_list,
-        commands::wallet_remove,
-        commands::portfolio_fetch_balances,
-    ])
+            commands::wallet_remove,
+            commands::portfolio_fetch_balances,
+            commands::portfolio_transfer,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

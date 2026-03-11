@@ -25,4 +25,6 @@ export type PortfolioAsset = {
   balance: string;
   valueUsd: string;
   type: "token" | "stablecoin";
+  tokenContract: string;
+  decimals: number;
 };

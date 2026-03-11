@@ -91,6 +91,9 @@ export type Asset = {
   type: "token" | "stablecoin";
   /** Address of wallet that holds this asset (for filtering by wallet). */
   walletAddress?: string;
+  /** Empty for native token, contract address for ERC20. */
+  tokenContract?: string;
+  decimals?: number;
 };
 
 export type StrategyTemplateNode = {

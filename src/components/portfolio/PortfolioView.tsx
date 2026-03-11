@@ -173,12 +173,13 @@ export function PortfolioView() {
       <SendModal
         open={portfolioAction?.action === "send"}
         asset={selectedAsset}
+        fromAddress={activeAddress}
         onClose={closePortfolioAction}
-        onSubmit={(amount, address) => {
+        onSubmit={(amount, address, txHash) => {
           closePortfolioAction();
           success(
-            `Send draft ready for ${selectedAsset?.symbol ?? "asset"}`,
-            `${amount} ${selectedAsset?.symbol ?? ""} will be routed to ${address}.`,
+            "Transfer sent",
+            `${amount} ${selectedAsset?.symbol ?? ""} to ${address.slice(0, 10)}… — ${txHash.slice(0, 18)}…`,
           );
         }}
       />

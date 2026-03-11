@@ -90,6 +90,9 @@ pub struct PortfolioAsset {
     pub value_usd: String,
     #[serde(rename = "type")]
     pub asset_type: String,
+    /// Empty for native token, contract address for ERC20.
+    pub token_contract: String,
+    pub decimals: u8,
 }
 
 fn parse_raw_balance(raw: &str) -> String {
@@ -252,6 +255,11 @@ pub async fn portfolio_fetch_balances(
         );
 
         let balance_display = format!("{} {}", balance_formatted, symbol);
+        let token_contract = if contract.is_empty() || contract.eq_ignore_ascii_case("null") {
+            String::new()
+        } else {
+            contract.to_string()
+        };
 
         assets.push(PortfolioAsset {
             id,
@@ -261,6 +269,8 @@ pub async fn portfolio_fetch_balances(
             balance: balance_display,
             value_usd,
             asset_type,
+            token_contract,
+            decimals,
         });
     }
 
