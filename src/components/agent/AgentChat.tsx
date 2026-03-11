@@ -9,13 +9,13 @@ export function AgentChat() {
   const { messages } = useAgentChat();
 
   return (
-    <section className="glass-panel rounded-[32px] border border-white/10 p-6">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-5">
+    <section className="glass-panel rounded-[24px] border border-white/10 p-4 sm:rounded-[32px] sm:p-6">
+      <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-5">
         <div>
           <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
             Agent conversation
           </p>
-          <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] text-foreground">
+          <h1 className="mt-3 text-2xl font-bold tracking-[-0.04em] text-foreground sm:text-3xl">
             Private DeFi guidance, locally orchestrated.
           </h1>
         </div>

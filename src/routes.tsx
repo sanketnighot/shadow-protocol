@@ -1,8 +1,11 @@
 import { createHashRouter } from "react-router-dom";
 
 import { AgentWorkspace } from "@/components/agent/AgentWorkspace";
+import { AutomationCenter } from "@/components/automation/AutomationCenter";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
 import { AppShell } from "@/components/layout/AppShell";
+import { PortfolioView } from "@/components/portfolio/PortfolioView";
+import { StrategyBuilder } from "@/components/strategy/StrategyBuilder";
 
 function ComingSoonPage() {
   return (
@@ -28,8 +31,9 @@ export function createAppRouter() {
       children: [
         { index: true, element: <HomeDashboard /> },
         { path: "agent", element: <AgentWorkspace /> },
-        { path: "automation", element: <ComingSoonPage /> },
-        { path: "market", element: <ComingSoonPage /> },
+        { path: "strategy", element: <StrategyBuilder /> },
+        { path: "automation", element: <AutomationCenter /> },
+        { path: "portfolio", element: <PortfolioView /> },
         { path: "settings", element: <ComingSoonPage /> },
       ],
     },

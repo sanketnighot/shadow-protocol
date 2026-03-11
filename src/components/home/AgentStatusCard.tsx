@@ -11,8 +11,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useUiStore } from "@/store/useUiStore";
 
 export function AgentStatusCard() {
+  const setPendingApproval = useUiStore((state) => state.setPendingApproval);
   const { latestActivityLabel, suggestion } = useAgentChat();
 
   return (
@@ -21,9 +23,9 @@ export function AgentStatusCard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.08 }}
     >
-      <Card className="glass-panel h-full rounded-[28px] border-white/10 bg-transparent text-foreground">
+      <Card className="glass-panel h-full rounded-[24px] border-white/10 bg-transparent text-foreground sm:rounded-[28px]">
         <CardHeader className="gap-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardDescription className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
                 AI agent status
@@ -64,14 +66,15 @@ export function AgentStatusCard() {
               <Button
                 variant="outline"
                 className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
+                onClick={() => setPendingApproval("approval-1")}
               >
                 Approve path
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
               <ShieldCheck className="size-5 text-emerald-300" />
               <p className="text-sm text-muted">{latestActivityLabel}</p>
             </div>

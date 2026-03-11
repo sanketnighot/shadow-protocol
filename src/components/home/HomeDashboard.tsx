@@ -8,7 +8,7 @@ export function HomeDashboard() {
       <PortfolioCard />
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <AgentStatusCard />
-        <div className="glass-panel subtle-grid rounded-[28px] border border-white/10 p-6">
+        <div className="glass-panel subtle-grid rounded-[24px] border border-white/10 p-5 sm:rounded-[28px] sm:p-6">
           <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
             Live posture
           </p>

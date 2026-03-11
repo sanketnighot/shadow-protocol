@@ -1,6 +1,7 @@
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useUiStore } from "@/store/useUiStore";
 
 type OpportunityCardProps = {
   title: string;
@@ -17,6 +18,8 @@ export function OpportunityCard({
   risk,
   actionLabel,
 }: OpportunityCardProps) {
+  const setPendingApproval = useUiStore((state) => state.setPendingApproval);
+
   return (
     <div className="rounded-[24px] border border-primary/15 bg-primary/8 p-5">
       <div className="flex items-center justify-between gap-3">
@@ -41,7 +44,9 @@ export function OpportunityCard({
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button className="rounded-full px-5">{actionLabel}</Button>
+        <Button className="rounded-full px-5" onClick={() => setPendingApproval("approval-1")}>
+          {actionLabel}
+        </Button>
         <Button
           variant="outline"
           className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
