@@ -43,6 +43,13 @@
     color-scheme: dark;
   }
 
+  html[data-theme="light"] {
+    background:
+      radial-gradient(circle at top, rgba(99, 102, 241, 0.18), transparent 30%),
+      linear-gradient(180deg, #f8f8ff 0%, #eef2ff 100%);
+    color-scheme: light;
+  }
+
   body {
     margin: 0;
     min-height: 100vh;
@@ -81,7 +88,7 @@
 
 @utility glass-panel {
   border: 1px solid var(--panel-border);
-  background: linear-gradient(180deg, rgba(20, 20, 26, 0.92), rgba(14, 14, 18, 0.72));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 92%, transparent), color-mix(in srgb, var(--bg-primary) 76%, transparent));
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow-glow);
 }

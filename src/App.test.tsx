@@ -3,14 +3,24 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import App from "./App";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { uiStoreDefaults, useUiStore } from "@/store/useUiStore";
 
 describe("App", () => {
   beforeEach(() => {
+    localStorage.clear();
     window.location.hash = "#/";
+    useUiStore.setState({
+      ...uiStoreDefaults,
+      notifications: [...uiStoreDefaults.notifications],
+      skippedApprovalStrategyIds: [],
+    });
+    useOnboardingStore.setState({ hasCompletedOnboarding: true });
   });
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     window.location.hash = "#/";
   });
 
@@ -68,6 +78,24 @@ describe("App", () => {
     expect(screen.getByText("Strategy builder")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Strategy" })).toBeInTheDocument();
     expect(screen.getByText("Guardrails")).toBeInTheDocument();
+  });
+
+  it("renders the market route", () => {
+    window.location.hash = "#/market";
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Live opportunities across yield, arbitrage, and rebalancing." })).toBeInTheDocument();
+    expect(screen.getByText("Live opportunities across yield, arbitrage, and rebalancing.")).toBeInTheDocument();
+  });
+
+  it("renders the settings route", () => {
+    window.location.hash = "#/settings";
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Personalize how SHADOW looks, feels, and asks for approval." })).toBeInTheDocument();
+    expect(screen.getByText("Appearance")).toBeInTheDocument();
   });
 
   it("opens the approval modal from the agent flow", async () => {
