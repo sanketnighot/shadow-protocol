@@ -10,10 +10,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useCountUp } from "@/hooks/useCountUp";
 import { usePortfolio } from "@/hooks/usePortfolio";
 
 export function PortfolioCard() {
-  const { chains, dailyChangeLabel, series, totalValueLabel } = usePortfolio();
+  const { chains, dailyChangeLabel, series } = usePortfolio();
+  const animatedTotalValue = useCountUp(12345.67);
 
   return (
     <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
@@ -25,7 +27,11 @@ export function PortfolioCard() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <CardTitle className="text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl lg:text-5xl">
-                {totalValueLabel}
+                {new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                  minimumFractionDigits: 2,
+                }).format(animatedTotalValue)}
               </CardTitle>
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/10 bg-emerald-400/8 px-3 py-1 text-sm text-emerald-300">
                 <ArrowUpRight className="size-4" />

@@ -1,22 +1,83 @@
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu } from "lucide-react";
+import { CheckCircle2, Menu } from "lucide-react";
 
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { MainContent } from "@/components/layout/MainContent";
+import { NotificationsCenter } from "@/components/layout/NotificationsCenter";
+import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useToast } from "@/hooks/useToast";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { useUiStore } from "@/store/useUiStore";
 
 export function AppShell() {
+  const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
   const clearPendingApproval = useUiStore((state) => state.clearPendingApproval);
   const closeSidebar = useUiStore((state) => state.closeSidebar);
   const isSidebarOpen = useUiStore((state) => state.isSidebarOpen);
+  const openCommandPalette = useUiStore((state) => state.openCommandPalette);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
+  const themePreference = useUiStore((state) => state.themePreference);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding);
+  const hasCompletedOnboarding = useOnboardingStore((state) => state.hasCompletedOnboarding);
   const { pendingApproval } = useAgentChat();
   const { info, success } = useToast();
+
+  useEffect(() => {
+    const mediaQuery =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-color-scheme: light)")
+        : {
+            matches: false,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+          };
+
+    const applyTheme = () => {
+      const resolvedTheme =
+        themePreference === "system"
+          ? mediaQuery.matches
+            ? "light"
+            : "dark"
+          : themePreference;
+
+      document.documentElement.dataset.theme = resolvedTheme;
+    };
+
+    applyTheme();
+    mediaQuery.addEventListener("change", applyTheme);
+
+    return () => mediaQuery.removeEventListener("change", applyTheme);
+  }, [themePreference]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isTypingTarget =
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (isTypingTarget) {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openCommandPalette();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [openCommandPalette]);
 
   const handleReject = () => {
     clearPendingApproval();
@@ -26,6 +87,8 @@ export function AppShell() {
   const handleApprove = () => {
     clearPendingApproval();
     success("Transaction approved", "SHADOW will execute the private route now.");
+    setShowApprovalSuccess(true);
+    window.setTimeout(() => setShowApprovalSuccess(false), 1200);
   };
 
   return (
@@ -76,6 +139,24 @@ export function AppShell() {
         onReject={handleReject}
         onApprove={handleApprove}
       />
+      <CommandPalette />
+      <NotificationsCenter />
+      <OnboardingModal open={!hasCompletedOnboarding} onComplete={completeOnboarding} />
+      <AnimatePresence>
+        {showApprovalSuccess ? (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-full border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-semibold text-emerald-200 shadow-[0_18px_40px_rgba(16,185,129,0.22)]"
+          >
+            <span className="inline-flex items-center gap-2">
+              <CheckCircle2 className="size-4" />
+              Route approved
+            </span>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

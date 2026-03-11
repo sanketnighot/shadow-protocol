@@ -1,12 +1,14 @@
 import { motion } from "framer-motion";
+import { Bot } from "lucide-react";
 
 import { AgentInput } from "@/components/agent/AgentInput";
 import { AgentMessage } from "@/components/agent/AgentMessage";
 import { UserMessage } from "@/components/agent/UserMessage";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useAgentChat } from "@/hooks/useAgentChat";
 
 export function AgentChat() {
-  const { messages } = useAgentChat();
+  const { isStreaming, messages, sendMessage } = useAgentChat();
 
   return (
     <section className="glass-panel rounded-[24px] border border-white/10 p-4 sm:rounded-[32px] sm:p-6">
@@ -27,23 +29,38 @@ export function AgentChat() {
       </div>
 
       <div className="space-y-5 py-6">
-        {messages.map((message, index) => (
-          <motion.div
-            key={message.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.08 }}
-          >
-            {message.role === "user" ? (
-              <UserMessage content={message.blocks[0]?.type === "text" ? message.blocks[0].content : ""} />
-            ) : (
-              <AgentMessage blocks={message.blocks} />
-            )}
-          </motion.div>
-        ))}
+        {messages.length > 0 ? (
+          <>
+            {messages.map((message, index) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.08 }}
+              >
+                {message.role === "user" ? (
+                  <UserMessage content={message.blocks[0]?.type === "text" ? message.blocks[0].content : ""} />
+                ) : (
+                  <AgentMessage blocks={message.blocks} />
+                )}
+              </motion.div>
+            ))}
+            {isStreaming ? (
+              <p className="font-mono text-xs tracking-[0.18em] text-muted uppercase">
+                Agent is thinking locally...
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState
+            icon={<Bot className="size-5" />}
+            title="No messages yet"
+            description="Ask SHADOW for yield, portfolio actions, or a new strategy and the conversation will start here."
+          />
+        )}
       </div>
 
-      <AgentInput />
+      <AgentInput disabled={isStreaming} onSubmit={sendMessage} />
     </section>
   );
 }

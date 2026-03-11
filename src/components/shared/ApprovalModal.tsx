@@ -1,4 +1,5 @@
-import { ShieldAlert, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, ShieldAlert, TriangleAlert } from "lucide-react";
 
 import type { ApprovalTransaction } from "@/data/mock";
 import { PrivacyToggle } from "@/components/shared/PrivacyToggle";
@@ -11,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useUiStore } from "@/store/useUiStore";
 
 type ApprovalModalProps = {
   open: boolean;
@@ -27,6 +29,15 @@ export function ApprovalModal({
   onReject,
   onClose,
 }: ApprovalModalProps) {
+  const [skipApproval, setSkipApproval] = useState(false);
+  const setSkipApprovalForStrategy = useUiStore((state) => state.setSkipApprovalForStrategy);
+
+  useEffect(() => {
+    if (!open) {
+      setSkipApproval(false);
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
       <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-2xl sm:p-6">
@@ -72,6 +83,20 @@ export function ApprovalModal({
           <p className="mt-2 text-sm leading-6 text-foreground/90">{transaction.reason}</p>
         </div>
 
+        <div className="rounded-[24px] border border-emerald-400/15 bg-emerald-400/8 p-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 p-2.5 text-emerald-300">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs tracking-[0.18em] text-muted uppercase">Simulation</p>
+              <p className="mt-1 text-sm leading-6 text-foreground/90">
+                Success expected. Estimated output: ~0.175 ETH received with gas included in the route preview.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4 rounded-[24px] border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <PrivacyToggle />
           <div className="inline-flex items-center gap-2 text-sm text-amber-200">
@@ -81,7 +106,12 @@ export function ApprovalModal({
         </div>
 
         <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted">
-          <input type="checkbox" className="size-4 accent-primary" />
+          <input
+            type="checkbox"
+            checked={skipApproval}
+            onChange={(event) => setSkipApproval(event.currentTarget.checked)}
+            className="size-4 accent-primary"
+          />
           Don't ask again for this strategy
         </label>
 
@@ -94,7 +124,14 @@ export function ApprovalModal({
           >
             Reject
           </Button>
-          <Button type="button" className="rounded-full px-6" onClick={onApprove}>
+          <Button
+            type="button"
+            className="rounded-full px-6"
+            onClick={() => {
+              setSkipApprovalForStrategy(transaction.strategyId, skipApproval);
+              onApprove();
+            }}
+          >
             Approve
           </Button>
         </DialogFooter>

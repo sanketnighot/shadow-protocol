@@ -1,9 +1,15 @@
 import { Sparkles } from "lucide-react";
 
+import { Skeleton } from "@/components/shared/Skeleton";
 import { GuardrailsForm } from "@/components/strategy/GuardrailsForm";
 import { StrategyCanvas } from "@/components/strategy/StrategyCanvas";
+import { useSimulatedLoading } from "@/hooks/useSimulatedLoading";
+import { useToast } from "@/hooks/useToast";
 
 export function StrategyBuilder() {
+  const isLoading = useSimulatedLoading();
+  const { info, success } = useToast();
+
   return (
     <div className="space-y-6">
       <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
@@ -24,8 +30,25 @@ export function StrategyBuilder() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
-        <StrategyCanvas />
-        <GuardrailsForm />
+        {isLoading ? (
+          <>
+            <Skeleton className="h-[420px] w-full" />
+            <Skeleton className="h-[420px] w-full" />
+          </>
+        ) : (
+          <>
+            <StrategyCanvas />
+            <GuardrailsForm
+              onSave={() => success("Strategy saved", "The updated guardrails are ready for deployment.")}
+              onTestSimulation={() =>
+                info(
+                  "Simulation passed",
+                  "SHADOW validated the route, limits, and approval thresholds.",
+                )
+              }
+            />
+          </>
+        )}
       </div>
     </div>
   );

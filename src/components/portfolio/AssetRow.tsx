@@ -1,11 +1,14 @@
 import type { Asset } from "@/data/mock";
 import { Button } from "@/components/ui/button";
+import { useUiStore } from "@/store/useUiStore";
 
 type AssetRowProps = {
   asset: Asset;
 };
 
 export function AssetRow({ asset }: AssetRowProps) {
+  const openPortfolioAction = useUiStore((state) => state.openPortfolioAction);
+
   return (
     <article className="glass-panel rounded-[24px] border border-white/10 p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -25,13 +28,25 @@ export function AssetRow({ asset }: AssetRowProps) {
             <p className="mt-1 font-semibold text-foreground">{asset.valueUsd}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10">
+            <Button
+              variant="outline"
+              className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10 active:scale-95"
+              onClick={() => openPortfolioAction("send", asset.id)}
+            >
               Send
             </Button>
-            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10">
+            <Button
+              variant="outline"
+              className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10 active:scale-95"
+              onClick={() => openPortfolioAction("swap", asset.id)}
+            >
               Swap
             </Button>
-            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10">
+            <Button
+              variant="outline"
+              className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10 active:scale-95"
+              onClick={() => openPortfolioAction("bridge", asset.id)}
+            >
               Bridge
             </Button>
           </div>

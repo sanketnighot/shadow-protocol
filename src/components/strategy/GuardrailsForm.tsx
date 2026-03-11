@@ -3,7 +3,12 @@ import { useState } from "react";
 import { GUARDRAIL_DEFAULTS } from "@/data/mock";
 import { Button } from "@/components/ui/button";
 
-export function GuardrailsForm() {
+type GuardrailsFormProps = {
+  onSave: () => void;
+  onTestSimulation: () => void;
+};
+
+export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps) {
   const [guardrails, setGuardrails] = useState(GUARDRAIL_DEFAULTS);
 
   return (
@@ -62,10 +67,13 @@ export function GuardrailsForm() {
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Button className="rounded-full px-5">Save Strategy</Button>
+        <Button className="rounded-full px-5 active:scale-95" onClick={onSave}>
+          Save Strategy
+        </Button>
         <Button
           variant="outline"
-          className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
+          className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10 active:scale-95"
+          onClick={onTestSimulation}
         >
           Test Simulation
         </Button>

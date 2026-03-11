@@ -1,6 +1,7 @@
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/useToast";
 import { useUiStore } from "@/store/useUiStore";
 
 type OpportunityCardProps = {
@@ -9,6 +10,8 @@ type OpportunityCardProps = {
   tvl: string;
   risk: string;
   actionLabel: string;
+  approvalId?: string;
+  strategyId?: string;
 };
 
 export function OpportunityCard({
@@ -17,8 +20,21 @@ export function OpportunityCard({
   tvl,
   risk,
   actionLabel,
+  approvalId = "approval-1",
+  strategyId = "weekly-dca",
 }: OpportunityCardProps) {
   const setPendingApproval = useUiStore((state) => state.setPendingApproval);
+  const skippedApprovalStrategyIds = useUiStore((state) => state.skippedApprovalStrategyIds);
+  const { success } = useToast();
+
+  const handlePrimaryAction = () => {
+    if (skippedApprovalStrategyIds.includes(strategyId)) {
+      success("Strategy auto-approved", `${title} can execute without another prompt.`);
+      return;
+    }
+
+    setPendingApproval(approvalId);
+  };
 
   return (
     <div className="rounded-[24px] border border-primary/15 bg-primary/8 p-5">
@@ -44,7 +60,7 @@ export function OpportunityCard({
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button className="rounded-full px-5" onClick={() => setPendingApproval("approval-1")}>
+        <Button className="rounded-full px-5 active:scale-95" onClick={handlePrimaryAction}>
           {actionLabel}
         </Button>
         <Button

@@ -5,9 +5,17 @@ import { Button } from "@/components/ui/button";
 
 type StrategyCardProps = {
   strategy: ActiveStrategy;
+  onEdit: (strategyId: string) => void;
+  onRemove: (strategyId: string) => void;
+  onTogglePause: (strategyId: string) => void;
 };
 
-export function StrategyCard({ strategy }: StrategyCardProps) {
+export function StrategyCard({
+  strategy,
+  onEdit,
+  onRemove,
+  onTogglePause,
+}: StrategyCardProps) {
   const isPaused = strategy.status === "paused";
 
   return (
@@ -18,13 +26,28 @@ export function StrategyCard({ strategy }: StrategyCardProps) {
           <p className="mt-2 text-sm leading-6 text-muted">{strategy.summary}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" className="rounded-full text-foreground hover:bg-white/10">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-foreground hover:bg-white/10 active:scale-95"
+            onClick={() => onTogglePause(strategy.id)}
+          >
             {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
           </Button>
-          <Button variant="ghost" size="icon-sm" className="rounded-full text-foreground hover:bg-white/10">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-foreground hover:bg-white/10 active:scale-95"
+            onClick={() => onEdit(strategy.id)}
+          >
             <Settings2 className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon-sm" className="rounded-full text-foreground hover:bg-white/10">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-foreground hover:bg-white/10 active:scale-95"
+            onClick={() => onRemove(strategy.id)}
+          >
             <Trash2 className="size-4" />
           </Button>
         </div>
@@ -36,8 +59,10 @@ export function StrategyCard({ strategy }: StrategyCardProps) {
           <p className="mt-2 font-semibold text-foreground">{strategy.nextRun}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs tracking-[0.18em] text-muted uppercase">Executed</p>
-          <p className="mt-2 font-semibold text-foreground">{strategy.executedCount} times</p>
+          <p className="text-xs tracking-[0.18em] text-muted uppercase">Executed / Status</p>
+          <p className="mt-2 font-semibold text-foreground">
+            {strategy.executedCount} times · {strategy.status}
+          </p>
         </div>
       </div>
 

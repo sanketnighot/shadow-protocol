@@ -1,13 +1,24 @@
-import { Bot, Home, Settings, Sparkles, Wallet, Zap } from "lucide-react";
+import { Bell, Bot, Compass, Home, Settings, Sparkles, Wallet, Zap } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { NAV_ITEMS } from "@/data/mock";
 import { PrivacyToggle } from "@/components/shared/PrivacyToggle";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useCountUp } from "@/hooks/useCountUp";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/useUiStore";
 
-const NAV_ICONS = [Home, Bot, Sparkles, Zap, Wallet, Settings] as const;
+const NAV_ICONS = {
+  "/": Home,
+  "/agent": Bot,
+  "/strategy": Sparkles,
+  "/automation": Zap,
+  "/market": Compass,
+  "/portfolio": Wallet,
+  "/settings": Settings,
+} as const;
 
 type SidebarProps = {
   className?: string;
@@ -15,8 +26,12 @@ type SidebarProps = {
 };
 
 export function Sidebar({ className, onNavigate }: SidebarProps) {
-  const { dailyChangeLabel, totalValueLabel } = usePortfolio();
+  const { dailyChangeLabel } = usePortfolio();
   const { latestActivityLabel, suggestion } = useAgentChat();
+  const animatedTotalValue = useCountUp(12345.67);
+  const notifications = useUiStore((state) => state.notifications);
+  const toggleNotifications = useUiStore((state) => state.toggleNotifications);
+  const unreadCount = notifications.filter((notification) => notification.unread).length;
 
   return (
     <aside
@@ -27,18 +42,33 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
     >
       <div className="flex h-full min-h-0 flex-col gap-5">
         <div className="space-y-4 border-b border-white/10 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/12 text-base font-black tracking-[0.24em] text-primary">
-              S
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/12 text-base font-black tracking-[0.24em] text-primary">
+                S
+              </div>
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+                  SHADOW Protocol
+                </p>
+                <p className="mt-1 truncate text-sm text-muted">
+                  Private DeFi workstation
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-                SHADOW Protocol
-              </p>
-              <p className="mt-1 truncate text-sm text-muted">
-                Private DeFi workstation
-              </p>
-            </div>
+            <button
+              type="button"
+              aria-label="Open notifications"
+              onClick={toggleNotifications}
+              className="relative rounded-full border border-white/10 bg-white/5 p-2.5 text-foreground transition-all hover:bg-white/10 active:scale-95"
+            >
+              <Bell className="size-4" />
+              {unreadCount > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                  {unreadCount}
+                </span>
+              ) : null}
+            </button>
           </div>
 
           <div className="rounded-[22px] border border-primary/15 bg-primary/8 p-4">
@@ -46,7 +76,11 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               Live operations
             </p>
             <p className="mt-3 text-2xl font-bold tracking-[-0.03em] text-foreground">
-              {totalValueLabel}
+              {new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 2,
+              }).format(animatedTotalValue)}
             </p>
             <p className="mt-1 text-sm text-emerald-300">{dailyChangeLabel}</p>
             <p className="mt-4 text-sm leading-6 text-muted">
@@ -61,11 +95,19 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             </div>
             <PrivacyToggle />
           </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3">
+            <div>
+              <p className="text-xs tracking-[0.18em] text-muted uppercase">Theme</p>
+              <p className="mt-1 text-sm text-foreground">Cycle dark, light, or system</p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
 
         <nav className="space-y-2" aria-label="Primary navigation">
-          {NAV_ITEMS.map((item, index) => {
-            const Icon = NAV_ICONS[index];
+          {NAV_ITEMS.map((item) => {
+            const Icon = NAV_ICONS[item.href as keyof typeof NAV_ICONS];
 
             return (
               <NavLink
