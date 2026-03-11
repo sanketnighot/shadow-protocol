@@ -45,7 +45,6 @@
 
   body {
     margin: 0;
-    min-width: 1280px;
     min-height: 100vh;
     background: transparent;
     text-rendering: optimizeLegibility;
@@ -55,6 +54,7 @@
 
   #root {
     min-height: 100vh;
+    min-width: 0;
   }
 
   button,
@@ -70,6 +70,12 @@
   a {
     color: inherit;
     text-decoration: none;
+  }
+
+  input,
+  textarea,
+  select {
+    min-width: 0;
   }
 }
 

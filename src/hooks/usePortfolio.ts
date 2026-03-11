@@ -1,4 +1,5 @@
 import {
+  ASSETS,
   PORTFOLIO_CHAINS,
   PORTFOLIO_SERIES,
   QUICK_ACTIONS,
@@ -11,5 +12,6 @@ export function usePortfolio() {
     chains: PORTFOLIO_CHAINS,
     series: PORTFOLIO_SERIES,
     quickActions: QUICK_ACTIONS,
+    assets: ASSETS,
   };
 }
