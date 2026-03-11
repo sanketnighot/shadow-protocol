@@ -7,13 +7,14 @@ const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "arb-mainnet", "base-mainnet"
 const TESTNET_NETWORKS: &[&str] = &["eth-sepolia", "base-sepolia", "polygon-amoy"];
 
 fn network_to_chain_display(network: &str) -> (&str, &str) {
-    match network {
+    let normalized = network.trim().to_lowercase().replace('_', "-");
+    match normalized.as_str() {
         "eth-mainnet" => ("Ethereum", "ETH"),
         "arb-mainnet" => ("Arbitrum", "ARB"),
         "base-mainnet" => ("Base", "BASE"),
         "eth-sepolia" => ("Ethereum Sepolia", "ETH-SEP"),
         "base-sepolia" => ("Base Sepolia", "BASE-SEP"),
-        "polygon-amoy" => ("Polygon Amoy", "MATIC-AMOY"),
+        "polygon-amoy" | "matic-amoy" => ("Polygon Amoy", "MATIC-AMOY"),
         _ => (network, network),
     }
 }

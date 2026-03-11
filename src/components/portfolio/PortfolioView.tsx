@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Wallet } from "lucide-react";
 
-import { AssetRow } from "@/components/portfolio/AssetRow";
+import { AssetList } from "@/components/portfolio/AssetList";
 import { BridgeModal } from "@/components/portfolio/BridgeModal";
 import { PortfolioFilters } from "@/components/portfolio/PortfolioFilters";
 import { SendModal } from "@/components/portfolio/SendModal";
@@ -162,9 +162,7 @@ export function PortfolioView() {
                 onAction={undefined}
               />
             ) : filteredAssets.length > 0 ? (
-              filteredAssets.map((asset) => (
-                <AssetRow key={asset.id} asset={asset} />
-              ))
+              <AssetList assets={filteredAssets} />
             ) : (
               <EmptyState
                 icon={<Wallet className="size-5" />}
