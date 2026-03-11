@@ -8,6 +8,8 @@
   --color-background: var(--bg-primary);
   --color-surface: var(--bg-secondary);
   --color-surface-elevated: var(--bg-tertiary);
+  --color-popover: var(--bg-tertiary);
+  --color-popover-foreground: var(--text-primary);
   --color-foreground: var(--text-primary);
   --color-muted: var(--text-secondary);
   --color-muted-foreground: var(--text-tertiary);

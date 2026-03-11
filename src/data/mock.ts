@@ -89,6 +89,8 @@ export type Asset = {
   balance: string;
   valueUsd: string;
   type: "token" | "stablecoin";
+  /** Address of wallet that holds this asset (for filtering by wallet). */
+  walletAddress?: string;
 };
 
 export type StrategyTemplateNode = {
@@ -256,45 +258,6 @@ export const MARKET_OPPORTUNITIES: MarketOpportunity[] = [
     chain: "Multi-chain",
     category: "rebalance",
     actionLabel: "Preview plan",
-  },
-];
-
-export const ASSETS: Asset[] = [
-  {
-    id: "asset-eth",
-    symbol: "ETH",
-    chain: "ETH",
-    chainName: "Ethereum",
-    balance: "1.234 ETH",
-    valueUsd: "$3,456.78",
-    type: "token",
-  },
-  {
-    id: "asset-usdc-arb",
-    symbol: "USDC",
-    chain: "ARB",
-    chainName: "Arbitrum",
-    balance: "2,500 USDC",
-    valueUsd: "$2,500.00",
-    type: "stablecoin",
-  },
-  {
-    id: "asset-cbeth",
-    symbol: "cbETH",
-    chain: "BASE",
-    chainName: "Base",
-    balance: "0.722 cbETH",
-    valueUsd: "$2,098.12",
-    type: "token",
-  },
-  {
-    id: "asset-sol",
-    symbol: "SOL",
-    chain: "SOL",
-    chainName: "Solana",
-    balance: "14.40 SOL",
-    valueUsd: "$2,138.54",
-    type: "token",
   },
 ];
 

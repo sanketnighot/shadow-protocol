@@ -17,6 +17,8 @@ const APP_ABOUT = {
 export function SettingsPage() {
   const themePreference = useUiStore((state) => state.themePreference);
   const setThemePreference = useUiStore((state) => state.setThemePreference);
+  const developerModeEnabled = useUiStore((state) => state.developerModeEnabled);
+  const toggleDeveloperMode = useUiStore((state) => state.toggleDeveloperMode);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
 
   return (
@@ -59,6 +61,42 @@ export function SettingsPage() {
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
+          <h2 className="text-xl font-semibold text-foreground">Developer mode</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Enable to see testnets (Ethereum Sepolia, Base Sepolia, Polygon Amoy) in the Portfolio section.
+          </p>
+          <button
+            type="button"
+            onClick={toggleDeveloperMode}
+            className={cn(
+              "mt-4 flex w-fit items-center gap-3 rounded-[20px] border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-95",
+              developerModeEnabled
+                ? "border-primary/30 bg-primary/12 text-foreground"
+                : "border-white/10 bg-white/5 text-muted hover:bg-white/8",
+            )}
+          >
+            <span
+              className={cn(
+                "flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors",
+                developerModeEnabled
+                  ? "border-primary/50 bg-primary/30 justify-end"
+                  : "border-white/20 bg-white/10 justify-start",
+              )}
+            >
+              <span
+                className={cn(
+                  "block h-5 w-5 shrink-0 rounded-full bg-white shadow transition-transform",
+                  developerModeEnabled ? "mr-1" : "ml-1",
+                )}
+              />
+            </span>
+            <span className="font-medium">
+              {developerModeEnabled ? "On" : "Off"}
+            </span>
+          </button>
         </section>
 
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">

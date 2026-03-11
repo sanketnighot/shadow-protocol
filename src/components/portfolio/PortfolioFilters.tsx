@@ -2,6 +2,7 @@ type PortfolioFiltersProps = {
   chain: string;
   sort: string;
   type: string;
+  developerModeEnabled?: boolean;
   onChainChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onTypeChange: (value: string) => void;
@@ -11,6 +12,7 @@ export function PortfolioFilters({
   chain,
   sort,
   type,
+  developerModeEnabled = false,
   onChainChange,
   onSortChange,
   onTypeChange,
@@ -30,6 +32,13 @@ export function PortfolioFilters({
           <option value="ETH">Ethereum</option>
           <option value="ARB">Arbitrum</option>
           <option value="BASE">Base</option>
+          {developerModeEnabled && (
+            <>
+              <option value="ETH-SEP">Ethereum Sepolia</option>
+              <option value="BASE-SEP">Base Sepolia</option>
+              <option value="MATIC-AMOY">Polygon Amoy</option>
+            </>
+          )}
           <option value="SOL">Solana</option>
         </select>
       </label>

@@ -23,6 +23,7 @@ type PortfolioActionState = {
 
 type UiStore = {
   privacyModeEnabled: boolean;
+  developerModeEnabled: boolean;
   isSidebarOpen: boolean;
   pendingApprovalId: string | null;
   themePreference: ThemePreference;
@@ -32,6 +33,7 @@ type UiStore = {
   notifications: NotificationItem[];
   archivedNotifications: NotificationItem[];
   togglePrivacyMode: () => void;
+  toggleDeveloperMode: () => void;
   openSidebar: () => void;
   closeSidebar: () => void;
   toggleSidebar: () => void;
@@ -82,6 +84,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 
 const DEFAULT_STATE = {
   privacyModeEnabled: true,
+  developerModeEnabled: false,
   isSidebarOpen: false,
   pendingApprovalId: null,
   themePreference: "dark" as ThemePreference,
@@ -98,6 +101,8 @@ export const useUiStore = create<UiStore>()(
       ...DEFAULT_STATE,
       togglePrivacyMode: () =>
         set((state) => ({ privacyModeEnabled: !state.privacyModeEnabled })),
+      toggleDeveloperMode: () =>
+        set((state) => ({ developerModeEnabled: !state.developerModeEnabled })),
       openSidebar: () => set({ isSidebarOpen: true }),
       closeSidebar: () => set({ isSidebarOpen: false }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
@@ -162,6 +167,7 @@ export const useUiStore = create<UiStore>()(
       name: "shadow-ui-store",
       partialize: (state) => ({
         privacyModeEnabled: state.privacyModeEnabled,
+        developerModeEnabled: state.developerModeEnabled,
         themePreference: state.themePreference,
         skippedApprovalStrategyIds: state.skippedApprovalStrategyIds,
         notifications: state.notifications,
