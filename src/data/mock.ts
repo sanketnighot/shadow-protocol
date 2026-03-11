@@ -118,7 +118,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/automation", label: "Auto", description: "Running systems" },
   { href: "/market", label: "Market", description: "Opportunities & yields" },
   { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },
-  { href: "/settings", label: "Settings", description: "Workspace controls" },
+  { href: "/settings", label: "Account", description: "Profile & preferences" },
 ];
 
 export const PORTFOLIO_CHAINS: ChainBalance[] = [

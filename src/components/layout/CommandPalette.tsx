@@ -4,9 +4,9 @@ import {
   Compass,
   Home,
   MoonStar,
-  Settings,
   Sparkles,
   SunMedium,
+  User,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -88,10 +88,10 @@ export function CommandPalette() {
       },
       {
         id: "goto-settings",
-        title: "Go to Settings",
+        title: "Go to Account",
         description: "Change theme and local preferences.",
-        keywords: ["settings", "preferences", "theme"],
-        icon: Settings,
+        keywords: ["account", "settings", "preferences", "theme"],
+        icon: User,
         onSelect: () => navigate("/settings"),
       },
       {
@@ -160,7 +160,7 @@ export function CommandPalette() {
   return (
     <Dialog open={isCommandPaletteOpen} onOpenChange={(open) => (!open ? closeCommandPalette() : undefined)}>
       <DialogContent
-        className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-0 text-foreground sm:max-w-2xl"
+        className="glass-panel left-1/2! top-4! z-50 max-w-[calc(100%-1.5rem)] -translate-x-1/2! translate-y-0! rounded-[28px] border-white/10 bg-background p-0 text-foreground sm:max-w-2xl"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>

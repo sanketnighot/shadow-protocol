@@ -59,7 +59,7 @@ export function OnboardingModal({ open, onComplete }: OnboardingModalProps) {
         </div>
 
         <DialogFooter className="gap-3 sm:justify-between">
-          <p className="text-sm text-muted">You can revisit these preferences later in Settings.</p>
+          <p className="text-sm text-muted">You can revisit these preferences later in Account.</p>
           <Button type="button" className="rounded-full px-6" onClick={onComplete}>
             Enter workspace
           </Button>

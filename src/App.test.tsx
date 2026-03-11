@@ -28,7 +28,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByText("SHADOW Protocol")).toBeInTheDocument();
-    expect(screen.getByText("Live operations")).toBeInTheDocument();
+    expect(screen.getByText("Private DeFi workstation")).toBeInTheDocument();
     expect(screen.queryByText("Cmd+K")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
@@ -94,8 +94,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Personalize how SHADOW looks, feels, and asks for approval." })).toBeInTheDocument();
-    expect(screen.getByText("Appearance")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Appearance & shortcuts" })).toBeInTheDocument();
+    expect(screen.getByText("Theme")).toBeInTheDocument();
   });
 
   it("opens the approval modal from the agent flow", async () => {

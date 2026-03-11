@@ -94,7 +94,7 @@ export function AppShell() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-3 py-3 text-foreground sm:px-5 sm:py-5 lg:h-screen lg:px-6 lg:py-6">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_70%_0%,rgba(139,92,246,0.18),transparent_30%)]" />
-      <div className="relative mx-auto flex max-w-[1600px] min-w-0 flex-col gap-4 lg:h-full">
+      <div className="relative mx-auto flex max-w-[1600px] min-w-0 flex-col gap-4 lg:h-full lg:min-h-0">
         <Button
           type="button"
           variant="ghost"
@@ -105,8 +105,10 @@ export function AppShell() {
         >
           <Menu className="size-4" />
         </Button>
-        <div className="grid min-w-0 gap-4 lg:h-full lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5">
-          <Sidebar className="hidden lg:block lg:h-full lg:overflow-y-auto" />
+        <div className="grid min-w-0 flex-1 gap-4 lg:min-h-0 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5">
+          <div className="hidden lg:flex lg:h-full lg:min-h-0">
+            <Sidebar className="h-full w-full" />
+          </div>
           <MainContent />
         </div>
       </div>
