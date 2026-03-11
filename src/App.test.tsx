@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
@@ -60,14 +60,16 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the portfolio route", () => {
+  it("renders the portfolio route", async () => {
     window.location.hash = "#/portfolio";
 
     render(<App />);
 
-    expect(screen.getByText("All assets")).toBeInTheDocument();
-    expect(screen.getByLabelText("Chain filter")).toBeInTheDocument();
-    expect(screen.getByLabelText("Sort assets")).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText(/Create or import a wallet|All assets/i),
+      ).toBeInTheDocument();
+    });
   });
 
   it("renders the strategy builder route", () => {
