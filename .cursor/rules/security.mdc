@@ -1,0 +1,40 @@
+---
+description: Security rules for all code — enforced on every change
+globs:
+alwaysApply: true
+---
+
+# Security Rules (Enforced)
+
+This is a DeFi application managing real funds. Security violations are blocking.
+
+## Forbidden Practices
+
+### Rust
+- Calling `.unwrap()` on user-derived data or external input
+- Logging private keys, seed phrases, or raw key bytes
+- Storing keys anywhere except OS keychain
+- Using `unsafe` blocks without a documented safety proof
+- Rolling custom cryptography implementations
+- Executing system commands with user-provided arguments
+
+### TypeScript
+- Dynamic code evaluation in any form
+- Rendering unsanitized HTML content
+- Using the `any` type — use `unknown` with type guards instead
+- Storing keys, seeds, or mnemonics in JS variables, browser storage, or cookies
+- Making HTTP requests with unvalidated user-supplied URLs
+
+### Both Languages
+- Hardcoded secrets, API keys, RPC endpoints, or private keys
+- Disabling security lints or lint rules
+- Adding dependencies with known CVEs
+- Logging user financial data (balances, positions, trade amounts) in production
+
+## Required Patterns
+
+- All Tauri commands validate inputs on the Rust side
+- All blockchain amounts use checked arithmetic (`checked_add`, `checked_mul` in Rust; BigInt in TS)
+- All user-facing errors are generic — no internal state leakage
+- Transaction execution requires simulation first
+- Background automation respects spending limits and stop-loss guardrails

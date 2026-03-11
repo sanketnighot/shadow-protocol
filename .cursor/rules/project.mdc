@@ -1,0 +1,41 @@
+---
+description: Project-wide rules for SHADOW Protocol
+globs:
+alwaysApply: true
+---
+
+# SHADOW Protocol — Cursor Rules
+
+You are working on SHADOW Protocol, a privacy-first DeFi automation desktop app built with Tauri 2.0 (Rust backend) + React 19 + TypeScript + Vite 7.
+
+## Critical Security Context
+
+This is a financial application handling private keys and real funds. Every code change must be evaluated for security impact.
+
+- NEVER log, serialize, or transmit private keys, seed phrases, or mnemonics
+- NEVER use `.unwrap()` in Rust production code — use `Result` with proper error handling
+- NEVER use `any` type in TypeScript — strict mode is enforced
+- NEVER trust frontend data in Tauri commands — validate all arguments on the Rust side
+- NEVER store secrets in localStorage, sessionStorage, or cookies
+- NEVER hardcode RPC URLs, chain IDs, API keys, or contract addresses
+
+## Build System
+
+- Package manager is **bun** — use `bun run`, `bun install`, `bun add`
+- Full app: `bun run tauri:dev` | Frontend only: `bun run dev`
+- Rust checks: `cargo clippy` and `cargo test` from `src-tauri/`
+
+## Architecture
+
+- Frontend (`src/`) communicates with Rust backend (`src-tauri/src/`) via Tauri IPC `invoke`
+- Rust owns all sensitive state (keys, transactions, strategies)
+- Frontend is UI-only — no crypto operations in TypeScript
+- Background tasks run in Tokio on the Rust side; frontend listens via Tauri events
+
+## Code Style
+
+- Rust: `thiserror` for errors, `serde` for IPC types, `tokio` for async, `clippy` clean
+- TypeScript: strict mode, typed invoke calls, `const` over `let`, no `var`
+- No console.log/println in production code
+- No commented-out code blocks
+- Delete unused code — don't leave dead code behind

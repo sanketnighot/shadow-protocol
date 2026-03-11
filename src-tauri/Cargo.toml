@@ -1,8 +1,8 @@
 [package]
-name = "shadow"
+name = "Shadow"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Shadow - A Defi Automation Platform"
+authors = ["Sanket Nighot"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

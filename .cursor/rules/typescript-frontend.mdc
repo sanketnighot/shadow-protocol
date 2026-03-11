@@ -1,0 +1,69 @@
+---
+description: Rules for React/TypeScript frontend code in src/
+globs:
+  - src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Frontend Rules
+
+## Tauri IPC
+
+- Import `invoke` from `@tauri-apps/api/core` for all backend calls
+- Define typed interfaces for every invoke call's arguments and return type
+- Never call localhost/fetch for backend communication — always use Tauri invoke
+- Handle invoke errors gracefully with user-friendly messages
+
+```typescript
+// Good: typed invoke
+interface BalanceResponse {
+  balance: string;
+  chain_id: number;
+}
+
+const balance = await invoke<BalanceResponse>("get_balance", {
+  chainId: 1,
+  address: "0x...",
+});
+```
+
+## React Patterns
+
+- Functional components only
+- Use custom hooks for shared logic (prefix with `use`)
+- Zustand for UI state, TanStack Query for async/server state
+- Never store sensitive data (keys, balances with full precision) in React state
+- Use Tauri event listeners (`listen` from `@tauri-apps/api/event`) for real-time updates from Rust
+
+## TypeScript
+
+- No `any` — use `unknown` with type guards, or proper generics
+- No unused variables or parameters (tsconfig enforces)
+- Prefer `const` always; never use `var`
+- Use discriminated unions for state machines (loading/error/success)
+
+```typescript
+// Good: discriminated union
+type FetchState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; error: string }
+  | { status: "success"; data: T };
+```
+
+## Security in Frontend
+
+- Never perform cryptographic operations in TypeScript — delegate to Rust
+- Sanitize all user inputs before sending to Rust backend
+- Do not render raw/unsanitized HTML — use React's built-in JSX escaping
+- Validate wallet addresses client-side before invoking backend
+- No dynamic code evaluation of any kind (no eval, no dynamic function constructors)
+
+## Styling
+
+- Dark theme with purple accent (#8b5cf6)
+- Use shadcn/ui components as the base
+- TailwindCSS for layout and utilities
+- Framer Motion for animations
+- JetBrains Mono for numbers, addresses, hashes
+- Skeleton loaders, not spinners

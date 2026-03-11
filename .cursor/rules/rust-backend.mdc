@@ -1,0 +1,52 @@
+---
+description: Rules for Rust backend code in src-tauri/
+globs:
+  - src-tauri/**/*.rs
+alwaysApply: false
+---
+
+# Rust Backend Rules
+
+## Tauri Commands
+
+- Every `#[tauri::command]` must return `Result<T, String>` or a custom error type
+- Register all commands in `tauri::generate_handler![]` in `lib.rs`
+- Validate all arguments — never trust data from the frontend
+- Keep commands thin: delegate business logic to service modules
+
+```rust
+// Good: thin command, delegates to service
+#[tauri::command]
+async fn get_balance(chain_id: u64, address: String) -> Result<String, String> {
+    let addr = validate_address(&address).map_err(|e| e.to_string())?;
+    services::chain::get_balance(chain_id, addr)
+        .await
+        .map_err(|e| e.to_string())
+}
+```
+
+## Error Handling
+
+- Use `thiserror` for domain errors
+- Never `.unwrap()` — use `.map_err()`, `?` operator, or `.expect("reason")` for provably safe cases
+- User-facing error messages must not expose internal paths, stack traces, or system info
+
+## Security
+
+- Key material: use `zeroize` crate, drop keys immediately after signing
+- OS keychain only for key storage — no file-based key stores
+- All transaction amounts must be validated for overflow before math operations
+- Use `ring` or `sodiumoxide` for cryptographic operations — never roll custom crypto
+
+## Async & Background Tasks
+
+- Use Tokio for all async work; never `std::thread::sleep` on the Tokio runtime
+- Background strategies must be cancellable via `CancellationToken`
+- Send progress/results to frontend via `app_handle.emit("event_name", payload)`
+- Respect user-defined guardrails (spending limits, stop conditions) in every execution loop
+
+## Dependencies
+
+- Pin versions (e.g., `serde = "1.0.210"` not `serde = "1"`) for reproducible builds
+- Prefer minimal, audited crates
+- Run `cargo audit` before adding new dependencies
