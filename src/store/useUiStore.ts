@@ -12,6 +12,8 @@ export type NotificationItem = {
   type: NotificationType;
   createdAtLabel: string;
   unread: boolean;
+  /** Route to open in main content when the notification is clicked (e.g. /automation, /agent). */
+  route?: string;
 };
 
 type PortfolioActionState = {
@@ -25,10 +27,10 @@ type UiStore = {
   pendingApprovalId: string | null;
   themePreference: ThemePreference;
   isCommandPaletteOpen: boolean;
-  isNotificationsOpen: boolean;
   portfolioAction: PortfolioActionState | null;
   skippedApprovalStrategyIds: string[];
   notifications: NotificationItem[];
+  archivedNotifications: NotificationItem[];
   togglePrivacyMode: () => void;
   openSidebar: () => void;
   closeSidebar: () => void;
@@ -38,13 +40,14 @@ type UiStore = {
   setThemePreference: (themePreference: ThemePreference) => void;
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
-  toggleNotifications: () => void;
-  closeNotifications: () => void;
   openPortfolioAction: (action: PortfolioActionType, assetId: string) => void;
   closePortfolioAction: () => void;
   setSkipApprovalForStrategy: (strategyId: string, enabled: boolean) => void;
   addNotification: (notification: Omit<NotificationItem, "id" | "unread">) => void;
+  markNotificationRead: (id: string) => void;
   markNotificationsRead: () => void;
+  archiveNotification: (id: string) => void;
+  unarchiveNotification: (id: string) => void;
 };
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
@@ -55,6 +58,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     type: "success",
     createdAtLabel: "2m ago",
     unread: true,
+    route: "/automation",
   },
   {
     id: "notif-2",
@@ -63,6 +67,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     type: "warning",
     createdAtLabel: "10m ago",
     unread: true,
+    route: "/agent",
   },
   {
     id: "notif-3",
@@ -71,6 +76,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     type: "info",
     createdAtLabel: "24m ago",
     unread: false,
+    route: "/portfolio",
   },
 ];
 
@@ -80,10 +86,10 @@ const DEFAULT_STATE = {
   pendingApprovalId: null,
   themePreference: "dark" as ThemePreference,
   isCommandPaletteOpen: false,
-  isNotificationsOpen: false,
   portfolioAction: null as PortfolioActionState | null,
   skippedApprovalStrategyIds: [] as string[],
   notifications: INITIAL_NOTIFICATIONS,
+  archivedNotifications: [] as NotificationItem[],
 };
 
 export const useUiStore = create<UiStore>()(
@@ -100,9 +106,6 @@ export const useUiStore = create<UiStore>()(
       setThemePreference: (themePreference) => set({ themePreference }),
       openCommandPalette: () => set({ isCommandPaletteOpen: true }),
       closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
-      toggleNotifications: () =>
-        set((state) => ({ isNotificationsOpen: !state.isNotificationsOpen })),
-      closeNotifications: () => set({ isNotificationsOpen: false }),
       openPortfolioAction: (action, assetId) =>
         set({ portfolioAction: { action, assetId } }),
       closePortfolioAction: () => set({ portfolioAction: null }),
@@ -123,6 +126,12 @@ export const useUiStore = create<UiStore>()(
             ...state.notifications,
           ],
         })),
+      markNotificationRead: (id) =>
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, unread: false } : n,
+          ),
+        })),
       markNotificationsRead: () =>
         set((state) => ({
           notifications: state.notifications.map((notification) => ({
@@ -130,6 +139,24 @@ export const useUiStore = create<UiStore>()(
             unread: false,
           })),
         })),
+      archiveNotification: (id) =>
+        set((state) => {
+          const item = state.notifications.find((n) => n.id === id);
+          if (!item) return state;
+          return {
+            notifications: state.notifications.filter((n) => n.id !== id),
+            archivedNotifications: [item, ...state.archivedNotifications],
+          };
+        }),
+      unarchiveNotification: (id) =>
+        set((state) => {
+          const item = state.archivedNotifications.find((n) => n.id === id);
+          if (!item) return state;
+          return {
+            archivedNotifications: state.archivedNotifications.filter((n) => n.id !== id),
+            notifications: [{ ...item, unread: false }, ...state.notifications],
+          };
+        }),
     }),
     {
       name: "shadow-ui-store",
@@ -138,6 +165,7 @@ export const useUiStore = create<UiStore>()(
         themePreference: state.themePreference,
         skippedApprovalStrategyIds: state.skippedApprovalStrategyIds,
         notifications: state.notifications,
+        archivedNotifications: state.archivedNotifications,
       }),
     },
   ),

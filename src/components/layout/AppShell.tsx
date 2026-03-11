@@ -4,8 +4,8 @@ import { CheckCircle2, Menu } from "lucide-react";
 
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
-import { NotificationsCenter } from "@/components/layout/NotificationsCenter";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -112,6 +112,7 @@ export function AppShell() {
           <MainContent />
         </div>
       </div>
+      <Dock onNavigate={closeSidebar} />
       <AnimatePresence>
         {isSidebarOpen ? (
           <motion.div
@@ -142,7 +143,6 @@ export function AppShell() {
         onApprove={handleApprove}
       />
       <CommandPalette />
-      <NotificationsCenter />
       <OnboardingModal open={!hasCompletedOnboarding} onComplete={completeOnboarding} />
       <AnimatePresence>
         {showApprovalSuccess ? (

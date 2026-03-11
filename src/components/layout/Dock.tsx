@@ -1,0 +1,61 @@
+import {
+  Bot,
+  Compass,
+  Home,
+  Sparkles,
+  User,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import { NavLink } from "react-router-dom";
+
+import { NAV_ITEMS } from "@/data/mock";
+import { cn } from "@/lib/utils";
+
+const NAV_ICONS: Record<string, typeof Home> = {
+  "/": Home,
+  "/agent": Bot,
+  "/strategy": Sparkles,
+  "/automation": Zap,
+  "/market": Compass,
+  "/portfolio": Wallet,
+  "/settings": User,
+};
+
+type DockProps = {
+  onNavigate?: () => void;
+};
+
+export function Dock({ onNavigate }: DockProps) {
+  return (
+    <nav
+      aria-label="Main navigation"
+      className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
+    >
+      <div className="glass-panel flex items-center gap-1 rounded-2xl border border-white/10 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.24)] sm:gap-2 sm:px-3 sm:py-2.5">
+        {NAV_ITEMS.map((item) => {
+          const Icon = NAV_ICONS[item.href] ?? Home;
+          return (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              aria-label={item.label}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                cn(
+                  "flex flex-col items-center gap-1 rounded-xl px-3 py-2 transition-all sm:px-4 sm:py-2.5",
+                  isActive
+                    ? "bg-primary/15 text-foreground shadow-[0_4px_16px_rgba(139,92,246,0.2)]"
+                    : "text-muted hover:bg-white/5 hover:text-foreground",
+                )
+              }
+            >
+              <Icon className="size-5 sm:size-5" aria-hidden />
+              <span className="text-[10px] font-medium sm:text-xs">{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
