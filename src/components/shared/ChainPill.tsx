@@ -21,7 +21,7 @@ export function ChainPill({
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       className={cn(
-        "glass-panel min-w-0 rounded-2xl px-4 py-3 transition-transform",
+        "min-w-0 rounded-2xl border border-white/10 bg-[#1a1a24] px-4 py-3 transition-transform",
         className,
       )}
     >

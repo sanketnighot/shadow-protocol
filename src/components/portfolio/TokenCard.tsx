@@ -47,7 +47,7 @@ export function TokenCard({ asset }: TokenCardProps) {
       <button
         type="button"
         onClick={() => setPopupOpen(true)}
-        className="glass-panel flex w-full flex-col items-center gap-3 rounded-[20px] border border-white/10 p-4 text-left transition-colors hover:border-white/20 hover:bg-white/5 active:scale-[0.98]"
+        className="flex w-full flex-col items-center gap-3 rounded-[20px] border border-white/10 bg-[#14141a] p-4 text-left transition-all duration-200 hover:scale-[1.02] hover:border-white/15 hover:shadow-lg active:scale-[0.98]"
       >
         <div className="relative">
           <div
@@ -72,7 +72,7 @@ export function TokenCard({ asset }: TokenCardProps) {
       </button>
 
       <Dialog open={popupOpen} onOpenChange={setPopupOpen}>
-        <DialogContent className="glass-panel max-w-[calc(100%-2rem)] rounded-[28px] border-white/10 bg-background p-6 sm:max-w-sm sm:p-6">
+        <DialogContent className="max-w-[calc(100%-2rem)] rounded-[28px] border border-white/10 bg-[#14141a] p-6 sm:max-w-sm sm:p-6">
           <div className="flex flex-col items-center gap-5">
             <div className="relative">
               <div

@@ -19,7 +19,7 @@ export function PortfolioCard() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="glass-panel overflow-hidden rounded-[24px] border-white/10 bg-transparent text-foreground sm:rounded-[28px]">
+      <Card className="glass-panel overflow-hidden rounded-[24px] border border-white/10 bg-[#14141a] text-foreground sm:rounded-[28px]">
         <CardHeader className="gap-4">
           <CardDescription className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
             Total Portfolio Value

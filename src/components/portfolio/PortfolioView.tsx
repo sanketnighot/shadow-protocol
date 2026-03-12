@@ -67,8 +67,8 @@ export function PortfolioView() {
   const hasWallets = addresses.length > 0;
 
   return (
-    <div className="space-y-6">
-      <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
+    <div className="space-y-8">
+      <section className="rounded-[24px] border border-white/10 bg-[#14141a] p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
@@ -131,7 +131,7 @@ export function PortfolioView() {
         )}
       </section>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {!hasWallets ? (
           <WalletEmptyState
             onCreate={() => setCreateOpen(true)}
@@ -139,7 +139,7 @@ export function PortfolioView() {
           />
         ) : (
           <>
-            <div className="rounded-[24px] border border-white/10 p-4">
+            <div className="rounded-[24px] border border-white/10 bg-[#14141a] p-4">
               <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">
                 Wallets
               </p>

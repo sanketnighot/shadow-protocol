@@ -37,7 +37,7 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
   }
 
   return (
-    <div className="h-44 w-full">
+    <div className="h-44 w-full rounded-2xl border border-white/10 bg-[#1a1a24] px-2 py-2">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
           <defs>

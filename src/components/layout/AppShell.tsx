@@ -6,6 +6,7 @@ import { ActivityBell } from "@/components/layout/ActivityBell";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
+import { MinimalTopBar } from "@/components/layout/MinimalTopBar";
 import { NewUpdateCard } from "@/components/layout/NewUpdateCard";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
@@ -100,7 +101,8 @@ export function AppShell() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-3 py-3 text-foreground sm:px-5 sm:py-5 lg:h-screen lg:px-6 lg:py-6">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_70%_0%,rgba(139,92,246,0.18),transparent_30%)]" />
-      <div className="relative mx-auto flex max-w-[1600px] min-w-0 flex-1 flex-col gap-4 lg:h-full lg:min-h-0">
+      <div className="relative mx-auto flex max-w-[1600px] min-w-0 flex-1 flex-col lg:h-full lg:min-h-0">
+        <MinimalTopBar />
         <MainContent />
       </div>
       <Dock />

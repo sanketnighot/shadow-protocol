@@ -1,9 +1,64 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { MessageSquare } from "lucide-react";
+import { useState } from "react";
+
 import { AgentChat } from "@/components/agent/AgentChat";
+import { ThreadSidebar } from "@/components/agent/ThreadSidebar";
+import { Button } from "@/components/ui/button";
+import { useAgentChat } from "@/hooks/useAgentChat";
 
 export function AgentWorkspace() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { activeThread } = useAgentChat();
+  const activeTitle = activeThread?.title ?? "New chat";
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <AgentChat />
+    <div className="flex h-full min-h-0 gap-4 lg:gap-6">
+      <aside className="hidden h-full md:block">
+        <ThreadSidebar />
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,24,0.9),rgba(12,12,18,0.92))] px-4 py-3 md:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Open thread list"
+            className="gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 text-foreground hover:bg-white/[0.08]"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <MessageSquare className="size-4" />
+            Threads
+          </Button>
+          <p className="truncate text-sm text-muted">{activeTitle}</p>
+        </div>
+        <div className="mx-auto flex h-full w-full max-w-[1180px] flex-1 min-h-0 flex-col">
+          <AgentChat />
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {drawerOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/60 md:hidden"
+              onClick={() => setDrawerOpen(false)}
+            />
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "tween", duration: 0.2 }}
+              className="fixed inset-y-3 left-3 z-50 w-[272px] md:hidden"
+            >
+              <ThreadSidebar onClose={() => setDrawerOpen(false)} />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
