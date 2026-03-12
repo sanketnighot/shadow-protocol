@@ -109,15 +109,17 @@ src-tauri/
 
 ## Learned User Preferences
 
+- Keep responses very concise with short bullet summaries by default
 - Work directly in this workspace; do not use worktrees for implementation
-- Keep the UI minimal with only required elements; avoid crowded layouts
-- Account nav item must be fixed at the bottom of the sidebar with no space below it
+- Keep the UI minimal with only required elements; avoid crowded or overwhelming layouts
+- When fixing bugs or layout issues, find the root cause and prefer shared layout/system fixes over page-by-page patches
 - Portfolio balances use Alchemy API (ALCHEMY_API_KEY in .env); not Covalent
 - Theme control lives only in Settings; not in sidebar
 - Cmd+K command palette should be fixed at top, not vertically centered
 
 ## Learned Workspace Facts
 
+- Primary app navigation now lives in the bottom dock instead of the sidebar
 - Supported chains: Ethereum, Base, Polygon (mainnet + testnet); no Arbitrum or Solana
 - Polygon Amoy native token ticker is POL (not MATIC)
 - Testnets: eth-sepolia, base-sepolia, polygon-amoy (Alchemy network names)

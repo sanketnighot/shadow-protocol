@@ -13,10 +13,18 @@
     "windows": [
       {
         "title": "Shadow",
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 18
+        },
+        "acceptFirstMouse": true,
         "resizable": true,
-        "minWidth": 1280,
-        "minHeight": 720,
-        "width": 1500,
+        "minWidth": 1200,
+        "minHeight": 900,
+        "width": 1200,
         "height": 900
       }
     ],
