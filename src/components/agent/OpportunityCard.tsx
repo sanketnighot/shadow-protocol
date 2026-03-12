@@ -41,7 +41,9 @@ export function OpportunityCard({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-          <p className="mt-2 text-sm text-muted">Best current match for your moderate-risk yield mandate.</p>
+          <p className="mt-2 text-sm text-muted">
+            Best current match for your moderate-risk yield mandate.
+          </p>
         </div>
         <ShieldCheck className="size-5 text-primary" />
       </div>
@@ -60,12 +62,15 @@ export function OpportunityCard({
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button className="rounded-full px-5 active:scale-95" onClick={handlePrimaryAction}>
+        <Button
+          className="rounded-full px-5 active:scale-95"
+          onClick={handlePrimaryAction}
+        >
           {actionLabel}
         </Button>
         <Button
           variant="outline"
-          className="rounded-full border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.08]"
+          className="rounded-full border-white/10 bg-white/3 text-foreground hover:bg-white/8"
         >
           Details
           <ArrowRight className="size-4" />

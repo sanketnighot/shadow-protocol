@@ -54,7 +54,7 @@ function ThreadItem({
         "group relative flex cursor-pointer items-start gap-3 rounded-[20px] border px-3.5 py-3 text-left transition-all",
         isActive
           ? "border-primary/25 bg-[linear-gradient(180deg,rgba(34,22,52,0.94),rgba(19,17,28,0.94))] shadow-[0_16px_36px_rgba(86,42,170,0.18)]"
-          : "border-transparent bg-transparent hover:border-white/8 hover:bg-white/[0.03]",
+          : "border-transparent bg-transparent hover:border-white/8 hover:bg-white/3",
       )}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -79,7 +79,9 @@ function ThreadItem({
             {formatThreadTime(thread.updatedAt)}
           </p>
         </div>
-        <p className="mt-1 truncate text-xs leading-5 text-muted">{getThreadPreview(thread)}</p>
+        <p className="mt-1 truncate text-xs leading-5 text-muted">
+          {getThreadPreview(thread)}
+        </p>
       </div>
       {canDelete && (
         <Button
@@ -129,9 +131,11 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
             <p className="font-mono text-[10px] tracking-[0.28em] text-muted uppercase">
               Threads
             </p>
-            <p className="mt-2 text-sm text-foreground">{threads.length} conversations</p>
+            <p className="mt-2 text-sm text-foreground">
+              {threads.length} conversations
+            </p>
           </div>
-          <div className="flex size-9 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-muted">
+          <div className="flex size-9 items-center justify-center rounded-2xl border border-white/8 bg-white/4 text-muted">
             <MessageSquareMore className="size-4" />
           </div>
         </div>
@@ -139,7 +143,7 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
           type="button"
           variant="outline"
           size="sm"
-          className="mt-4 h-10 w-full justify-start gap-2 rounded-2xl border-white/10 bg-white/[0.03] px-3.5 text-foreground hover:border-white/15 hover:bg-white/[0.06]"
+          className="mt-4 h-10 w-full justify-start gap-2 rounded-2xl border-white/10 bg-white/3 px-3.5 text-foreground hover:border-white/15 hover:bg-white/6"
           onClick={handleCreate}
         >
           <MessageSquarePlus className="size-4" />

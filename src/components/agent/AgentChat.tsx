@@ -52,7 +52,7 @@ export function AgentChat() {
                 </motion.div>
               ))}
               {isStreaming ? (
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-2 font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/8 bg-white/3 px-3 py-2 font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
                   <span className="size-2 animate-pulse rounded-full bg-primary" />
                   Agent is thinking locally
                 </div>

@@ -51,7 +51,7 @@ export function TokenCard({ asset }: TokenCardProps) {
       >
         <div className="relative">
           <div
-            className={`flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
+            className={`flex size-16 items-center justify-center rounded-2xl bg-linear-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
           >
             {asset.symbol.slice(0, 2)}
           </div>
@@ -67,7 +67,9 @@ export function TokenCard({ asset }: TokenCardProps) {
             {asset.symbol}
           </p>
           <p className="text-xs text-muted">{asset.balance}</p>
-          <p className="mt-0.5 font-semibold text-foreground">{asset.valueUsd}</p>
+          <p className="mt-0.5 font-semibold text-foreground">
+            {asset.valueUsd}
+          </p>
         </div>
       </button>
 
@@ -76,7 +78,7 @@ export function TokenCard({ asset }: TokenCardProps) {
           <div className="flex flex-col items-center gap-5">
             <div className="relative">
               <div
-                className={`flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
+                className={`flex size-16 items-center justify-center rounded-2xl bg-linear-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
               >
                 {asset.symbol.slice(0, 2)}
               </div>
@@ -94,7 +96,9 @@ export function TokenCard({ asset }: TokenCardProps) {
               <p className="mt-1 text-sm text-muted">{asset.chainName}</p>
               <div className="mt-3 flex items-center justify-center gap-4">
                 <span className="text-sm text-muted">{asset.balance}</span>
-                <span className="font-semibold text-foreground">{asset.valueUsd}</span>
+                <span className="font-semibold text-foreground">
+                  {asset.valueUsd}
+                </span>
               </div>
             </div>
             <div className="flex w-full flex-col gap-2">

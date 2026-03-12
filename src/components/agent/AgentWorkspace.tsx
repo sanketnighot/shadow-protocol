@@ -24,7 +24,7 @@ export function AgentWorkspace() {
             variant="ghost"
             size="sm"
             aria-label="Open thread list"
-            className="gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 text-foreground hover:bg-white/[0.08]"
+            className="gap-2 rounded-full border border-white/10 bg-white/3 px-3 text-foreground hover:bg-white/8"
             onClick={() => setDrawerOpen(true)}
           >
             <MessageSquare className="size-4" />
