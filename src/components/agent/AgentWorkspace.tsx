@@ -32,7 +32,7 @@ export function AgentWorkspace() {
           </Button>
           <p className="truncate text-sm text-muted">{activeTitle}</p>
         </div>
-        <div className="mx-auto flex h-full w-full max-w-[1180px] flex-1 min-h-0 flex-col">
+        <div className="mx-auto flex h-full w-full max-w-[1200px] flex-1 min-h-0 flex-col">
           <AgentChat />
         </div>
       </div>

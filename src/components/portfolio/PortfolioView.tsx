@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/shared/Skeleton";
 import { Button } from "@/components/ui/button";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useToast } from "@/hooks/useToast";
+import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
 
@@ -30,6 +31,7 @@ export function PortfolioView() {
   const [sort, setSort] = useState("Value");
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isImportOpen, setImportOpen] = useState(false);
+  const openUnlockDialog = useSessionStore((s) => s.openUnlockDialog);
   const closePortfolioAction = useUiStore((state) => state.closePortfolioAction);
   const portfolioAction = useUiStore((state) => state.portfolioAction);
 
@@ -185,6 +187,7 @@ export function PortfolioView() {
         asset={selectedAsset}
         fromAddress={activeAddress}
         onClose={closePortfolioAction}
+        onWalletLocked={() => openUnlockDialog()}
         onSubmit={(amount, address, txHash) => {
           closePortfolioAction();
           success(

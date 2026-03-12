@@ -111,19 +111,24 @@ src-tauri/
 
 - Keep responses very concise with short bullet summaries by default
 - Work directly in this workspace; do not use worktrees for implementation
-- Keep the UI minimal with only required elements; avoid crowded or overwhelming layouts
+- Keep the UI minimal with only required elements; avoid crowded or overwhelming layouts; prefer compact/reduced text sizes app-wide
 - When fixing bugs or layout issues, find the root cause and prefer shared layout/system fixes over page-by-page patches
 - Portfolio balances use Alchemy API (ALCHEMY_API_KEY in .env); not Covalent
 - Theme control lives only in Settings; not in sidebar
 - Cmd+K command palette should be fixed at top, not vertically centered
+- Agent chat input must be fixed at the bottom of the viewport; only the messages area scrolls
+- Prefer Touch ID (biometric) over password prompts for wallet unlock when available
 
 ## Learned Workspace Facts
 
-- Primary app navigation now lives in the bottom dock instead of the sidebar
+- Primary app navigation lives in the bottom dock; sidebar has been removed
 - Supported chains: Ethereum, Base, Polygon (mainnet + testnet); no Arbitrum or Solana
 - Polygon Amoy native token ticker is POL (not MATIC)
 - Testnets: eth-sepolia, base-sepolia, polygon-amoy (Alchemy network names)
-- Tauri: frontend in root `src/`; Rust and config in `src-tauri/`
+- Tauri: frontend in root `src/`; Rust and config in `src-tauri/`; titleBarStyle is Overlay with `hiddenTitle: true` and `startDragging` for drag support
+- Wallet address list is stored in `{appDataDir}/wallets.json` (plain file, no Keychain access on startup); only private keys remain in macOS Keychain
+- Session unlock: private key cached in RAM (`Zeroizing<String>`) for 30-min inactivity; cache cleared on `RunEvent::ExitRequested/Exit`; Tauri commands: `session_unlock`, `session_lock`, `session_status`
+- Biometric unlock uses `tauri-plugin-biometry` v0.2; `set_data`/`get_data` require a code-signed production build on macOS — they fail silently in unsigned dev builds
 
 ## Design System
 

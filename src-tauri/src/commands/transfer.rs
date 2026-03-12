@@ -1,4 +1,4 @@
-//! Execute token transfers via signed transactions. Uses keychain-stored keys and Alchemy RPC.
+//! Execute token transfers via signed transactions. Uses session-cached or keychain-stored keys and Alchemy RPC.
 
 use ethers::abi::{encode, Token};
 use ethers::core::types::{Address, TransactionRequest, U256};
@@ -6,11 +6,11 @@ use ethers::middleware::Middleware;
 use ethers::middleware::SignerMiddleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::{LocalWallet, Signer};
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-const KEYCHAIN_SERVICE: &str = "com.sanket.shadow";
+use crate::session;
+
 const ERC20_TRANSFER_SELECTOR: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
 
 fn chain_to_network(chain: &str) -> Option<&'static str> {
@@ -34,14 +34,6 @@ fn amount_to_wei(amount: f64, decimals: u8) -> Result<U256, TransferError> {
     Ok(U256::from(scaled as u128))
 }
 
-fn load_private_key(address: &str) -> Result<String, TransferError> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, &format!("wallet:{}", address))
-        .map_err(|e| TransferError::Keychain(e.to_string()))?;
-    entry
-        .get_password()
-        .map_err(|e| TransferError::Keychain(e.to_string()))
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum TransferError {
     #[error("Invalid address")]
@@ -54,8 +46,8 @@ pub enum TransferError {
     UnsupportedChain(String),
     #[error("Wallet not found for this address")]
     WalletNotFound,
-    #[error("Keychain error: {0}")]
-    Keychain(String),
+    #[error("Wallet locked — unlock to sign transactions")]
+    WalletLocked,
     #[error("Transaction failed: {0}")]
     TransactionFailed(String),
 }
@@ -105,7 +97,12 @@ pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, 
 
     let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
 
-    let hex_pk = load_private_key(from)?;
+    let hex_pk = session::get_cached_key(from)
+        .ok_or(TransferError::WalletLocked)?
+        .as_str()
+        .to_string();
+    session::refresh_expiry(from);
+
     let wallet: LocalWallet = hex_pk
         .parse()
         .map_err(|_| TransferError::WalletNotFound)?;

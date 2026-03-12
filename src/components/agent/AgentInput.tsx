@@ -30,9 +30,6 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(139,92,246,0.08),transparent_30%,transparent)]" />
       <div className="relative flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="mb-2 pl-2 font-mono text-[10px] tracking-[0.28em] text-muted uppercase">
-            Prompt
-          </p>
           <Input
             aria-label="Agent instruction"
             value={value}

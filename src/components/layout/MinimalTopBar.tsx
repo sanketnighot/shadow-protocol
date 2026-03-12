@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Command, Search } from "lucide-react";
 import { type MouseEvent, useCallback, useMemo } from "react";
 
+import { SessionIndicator } from "@/components/wallet/SessionIndicator";
 import { useUiStore } from "@/store/useUiStore";
 
 export function MinimalTopBar() {
@@ -60,7 +61,9 @@ export function MinimalTopBar() {
             </p>
           </div>
 
-          <button
+          <div className="flex items-center gap-4">
+            <SessionIndicator />
+            <button
             type="button"
             onClick={openCommandPalette}
             className="relative z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-muted transition-all hover:border-white/15 hover:bg-white/10 hover:text-foreground"
@@ -72,6 +75,7 @@ export function MinimalTopBar() {
               {commandHint}
             </span>
           </button>
+          </div>
         </div>
       </div>
     </header>

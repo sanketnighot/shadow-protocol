@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -9,14 +10,30 @@ import { MainContent } from "@/components/layout/MainContent";
 import { MinimalTopBar } from "@/components/layout/MinimalTopBar";
 import { NewUpdateCard } from "@/components/layout/NewUpdateCard";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
+import { UnlockDialog } from "@/components/wallet/UnlockDialog";
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useToast } from "@/hooks/useToast";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
+import { useWalletStore } from "@/store/useWalletStore";
+
+type SessionStatusResult = { locked: boolean; expiresAtSecs?: number };
 
 export function AppShell() {
   const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
+
+  const addresses = useWalletStore((s) => s.addresses);
+  const activeAddress = useWalletStore((s) => s.activeAddress);
+  const refreshWallets = useWalletStore((s) => s.refreshWallets);
+  const setUnlocked = useSessionStore((s) => s.setUnlocked);
+  const setLocked = useSessionStore((s) => s.setLocked);
+  const setActiveAddress = useSessionStore((s) => s.setActiveAddress);
+  const showUnlockDialog = useSessionStore((s) => s.showUnlockDialog);
+  const openUnlockDialog = useSessionStore((s) => s.openUnlockDialog);
+  const closeUnlockDialog = useSessionStore((s) => s.closeUnlockDialog);
+
   const clearPendingApproval = useUiStore(
     (state) => state.clearPendingApproval,
   );
@@ -58,6 +75,44 @@ export function AppShell() {
 
     return () => mediaQuery.removeEventListener("change", applyTheme);
   }, [themePreference]);
+
+  useEffect(() => {
+    void refreshWallets();
+  }, [refreshWallets]);
+
+  useEffect(() => {
+    if (!activeAddress || addresses.length === 0) {
+      closeUnlockDialog();
+      return;
+    }
+    setActiveAddress(activeAddress);
+    const check = async () => {
+      try {
+        const result = await invoke<SessionStatusResult>("session_status", {
+          input: { address: activeAddress },
+        });
+        if (result.locked) {
+          setLocked();
+          openUnlockDialog();
+        } else {
+          const expiresAt = result.expiresAtSecs
+            ? Date.now() + result.expiresAtSecs * 1000
+            : Date.now() + 30 * 60 * 1000;
+          setUnlocked(expiresAt);
+          closeUnlockDialog();
+        }
+      } catch {
+        setLocked();
+        openUnlockDialog();
+      }
+    };
+    void check();
+  }, [activeAddress, addresses.length, setActiveAddress, setLocked, setUnlocked, openUnlockDialog, closeUnlockDialog]);
+
+  const handleUnlocked = (expiresAt: number) => {
+    setUnlocked(expiresAt);
+    closeUnlockDialog();
+  };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -116,6 +171,14 @@ export function AppShell() {
         onApprove={handleApprove}
       />
       <CommandPalette />
+      {showUnlockDialog && activeAddress ? (
+        <UnlockDialog
+          open={showUnlockDialog}
+          onOpenChange={(open) => !open && closeUnlockDialog()}
+          onUnlocked={handleUnlocked}
+          address={activeAddress}
+        />
+      ) : null}
       <OnboardingModal
         open={!hasCompletedOnboarding}
         onComplete={completeOnboarding}

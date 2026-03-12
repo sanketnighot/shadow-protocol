@@ -1,5 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod commands;
+mod session;
+
+use tauri::RunEvent;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -10,6 +13,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_biometry::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             commands::wallet_create,
@@ -17,9 +21,17 @@ pub fn run() {
             commands::wallet_import_private_key,
             commands::wallet_list,
             commands::wallet_remove,
+            commands::session_unlock,
+            commands::session_lock,
+            commands::session_status,
             commands::portfolio_fetch_balances,
             commands::portfolio_transfer,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |_app, event| {
+            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+                session::clear_all();
+            }
+        });
 }

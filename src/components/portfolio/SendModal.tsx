@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { Asset } from "@/data/mock";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/useToast";
 import {
   Dialog,
   DialogContent,
@@ -19,13 +20,15 @@ type SendModalProps = {
   fromAddress: string | null;
   onClose: () => void;
   onSubmit: (amount: string, address: string, txHash: string) => void;
+  onWalletLocked?: () => void;
 };
 
-export function SendModal({ open, asset, fromAddress, onClose, onSubmit }: SendModalProps) {
+export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalletLocked }: SendModalProps) {
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const { warning } = useToast();
 
   const validationMessage = useMemo(() => {
     const normalizedAmount = Number(amount);
@@ -126,7 +129,12 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit }: SendM
                 onClose();
               } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
-                setSubmitError(message);
+                if (message.includes("Wallet locked")) {
+                  warning("Wallet locked", "Unlock to send.");
+                  onWalletLocked?.();
+                } else {
+                  setSubmitError(message);
+                }
               } finally {
                 setIsSubmitting(false);
               }
