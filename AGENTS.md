@@ -113,14 +113,15 @@ src-tauri/
 - Keep the UI minimal with only required elements; avoid crowded layouts
 - Account nav item must be fixed at the bottom of the sidebar with no space below it
 - Portfolio balances use Alchemy API (ALCHEMY_API_KEY in .env); not Covalent
-- Developer mode toggle in Settings enables testnets (ETH Sepolia, Base Sepolia, Polygon Amoy) in Portfolio
-- Do not show a wallet section on the Account (Settings) page; wallets live only in Portfolio
+- Theme control lives only in Settings; not in sidebar
+- Cmd+K command palette should be fixed at top, not vertically centered
 
 ## Learned Workspace Facts
 
+- Supported chains: Ethereum, Base, Polygon (mainnet + testnet); no Arbitrum or Solana
 - Polygon Amoy native token ticker is POL (not MATIC)
 - Testnets: eth-sepolia, base-sepolia, polygon-amoy (Alchemy network names)
-- Theme control lives only in Settings; not in sidebar
+- Tauri: frontend in root `src/`; Rust and config in `src-tauri/`
 
 ## Design System
 

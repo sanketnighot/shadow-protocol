@@ -31,7 +31,7 @@ type UiStore = {
   portfolioAction: PortfolioActionState | null;
   skippedApprovalStrategyIds: string[];
   notifications: NotificationItem[];
-  archivedNotifications: NotificationItem[];
+  lastAddedNotificationId: string | null;
   togglePrivacyMode: () => void;
   toggleDeveloperMode: () => void;
   openSidebar: () => void;
@@ -49,9 +49,7 @@ type UiStore = {
   markNotificationRead: (id: string) => void;
   markNotificationsRead: () => void;
   archiveNotification: (id: string) => void;
-  unarchiveNotification: (id: string) => void;
-  removeArchivedNotification: (id: string) => void;
-  removeAllArchivedNotifications: () => void;
+  clearLastAddedNotification: () => void;
 };
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
@@ -94,7 +92,7 @@ const DEFAULT_STATE = {
   portfolioAction: null as PortfolioActionState | null,
   skippedApprovalStrategyIds: [] as string[],
   notifications: INITIAL_NOTIFICATIONS,
-  archivedNotifications: [] as NotificationItem[],
+  lastAddedNotificationId: null as string | null,
 };
 
 export const useUiStore = create<UiStore>()(
@@ -123,16 +121,16 @@ export const useUiStore = create<UiStore>()(
             : state.skippedApprovalStrategyIds.filter((id) => id !== strategyId),
         })),
       addNotification: (notification) =>
-        set((state) => ({
-          notifications: [
-            {
-              ...notification,
-              id: `notif-${crypto.randomUUID()}`,
-              unread: true,
-            },
-            ...state.notifications,
-          ],
-        })),
+        set((state) => {
+          const id = `notif-${crypto.randomUUID()}`;
+          return {
+            notifications: [
+              { ...notification, id, unread: true },
+              ...state.notifications,
+            ],
+            lastAddedNotificationId: id,
+          };
+        }),
       markNotificationRead: (id) =>
         set((state) => ({
           notifications: state.notifications.map((n) =>
@@ -147,29 +145,11 @@ export const useUiStore = create<UiStore>()(
           })),
         })),
       archiveNotification: (id) =>
-        set((state) => {
-          const item = state.notifications.find((n) => n.id === id);
-          if (!item) return state;
-          return {
-            notifications: state.notifications.filter((n) => n.id !== id),
-            archivedNotifications: [item, ...state.archivedNotifications],
-          };
-        }),
-      unarchiveNotification: (id) =>
-        set((state) => {
-          const item = state.archivedNotifications.find((n) => n.id === id);
-          if (!item) return state;
-          return {
-            archivedNotifications: state.archivedNotifications.filter((n) => n.id !== id),
-            notifications: [{ ...item, unread: false }, ...state.notifications],
-          };
-        }),
-      removeArchivedNotification: (id) =>
         set((state) => ({
-          archivedNotifications: state.archivedNotifications.filter((n) => n.id !== id),
+          notifications: state.notifications.filter((n) => n.id !== id),
         })),
-      removeAllArchivedNotifications: () =>
-        set({ archivedNotifications: [] }),
+      clearLastAddedNotification: () =>
+        set({ lastAddedNotificationId: null }),
     }),
     {
       name: "shadow-ui-store",
@@ -179,7 +159,6 @@ export const useUiStore = create<UiStore>()(
         themePreference: state.themePreference,
         skippedApprovalStrategyIds: state.skippedApprovalStrategyIds,
         notifications: state.notifications,
-        archivedNotifications: state.archivedNotifications,
       }),
     },
   ),

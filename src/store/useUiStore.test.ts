@@ -8,7 +8,6 @@ describe("useUiStore", () => {
     useUiStore.setState({
       ...uiStoreDefaults,
       notifications: [...uiStoreDefaults.notifications],
-      archivedNotifications: [...uiStoreDefaults.archivedNotifications],
       skippedApprovalStrategyIds: [],
     });
   });

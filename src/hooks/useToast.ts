@@ -1,5 +1,3 @@
-import { toast } from "sonner";
-
 import { useUiStore } from "@/store/useUiStore";
 
 export function useToast() {
@@ -13,10 +11,6 @@ export function useToast() {
         type: "success",
         createdAtLabel: "Just now",
       });
-
-      return toast.success(title, {
-        description,
-      });
     },
     info: (title: string, description = "") => {
       addNotification({
@@ -25,10 +19,6 @@ export function useToast() {
         type: "info",
         createdAtLabel: "Just now",
       });
-
-      return toast(title, {
-        description,
-      });
     },
     warning: (title: string, description = "") => {
       addNotification({
@@ -36,10 +26,6 @@ export function useToast() {
         description,
         type: "warning",
         createdAtLabel: "Just now",
-      });
-
-      return toast.warning(title, {
-        description,
       });
     },
   };
