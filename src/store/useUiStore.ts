@@ -49,6 +49,7 @@ type UiStore = {
   markNotificationRead: (id: string) => void;
   markNotificationsRead: () => void;
   archiveNotification: (id: string) => void;
+  archiveAllNotifications: () => void;
   clearLastAddedNotification: () => void;
 };
 
@@ -148,6 +149,8 @@ export const useUiStore = create<UiStore>()(
         set((state) => ({
           notifications: state.notifications.filter((n) => n.id !== id),
         })),
+      archiveAllNotifications: () =>
+        set({ notifications: [], lastAddedNotificationId: null }),
       clearLastAddedNotification: () =>
         set({ lastAddedNotificationId: null }),
     }),

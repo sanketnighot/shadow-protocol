@@ -125,6 +125,7 @@ export function ActivityBell() {
   const markNotificationRead = useUiStore((s) => s.markNotificationRead);
   const markNotificationsRead = useUiStore((s) => s.markNotificationsRead);
   const archiveNotification = useUiStore((s) => s.archiveNotification);
+  const archiveAllNotifications = useUiStore((s) => s.archiveAllNotifications);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -177,22 +178,29 @@ export function ActivityBell() {
 
       {isOpen && (
         <div
-          className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 40%, rgba(0,0,0,0) 100%)",
-          }}
+          className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0e0e14] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
         >
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              className="absolute right-3 top-2 z-10 text-[10px] text-muted hover:text-foreground"
-              onClick={markNotificationsRead}
-            >
-              Mark all read
-            </button>
+          {notifications.length > 0 && (
+            <div className="flex shrink-0 items-center justify-end gap-3 border-b border-white/10 px-3 py-2">
+              <button
+                type="button"
+                className="text-[10px] text-muted hover:text-foreground"
+                onClick={archiveAllNotifications}
+              >
+                Archive all
+              </button>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  className="text-[10px] text-muted hover:text-foreground"
+                  onClick={markNotificationsRead}
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
           )}
-          <div className="flex-1 overflow-y-auto p-3 pt-8">
+          <div className="flex-1 overflow-y-auto p-3">
             {notifications.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted">
                 No updates
