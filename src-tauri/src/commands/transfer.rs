@@ -10,20 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use crate::session;
+use crate::services::chain;
 
 const ERC20_TRANSFER_SELECTOR: [u8; 4] = [0xa9, 0x05, 0x9c, 0xbb];
-
-fn chain_to_network(chain: &str) -> Option<&'static str> {
-    match chain {
-        "ETH" => Some("eth-mainnet"),
-        "BASE" => Some("base-mainnet"),
-        "POL" => Some("polygon-mainnet"),
-        "ETH-SEP" => Some("eth-sepolia"),
-        "BASE-SEP" => Some("base-sepolia"),
-        "POL-AMOY" => Some("polygon-amoy"),
-        _ => None,
-    }
-}
 
 fn amount_to_wei(amount: f64, decimals: u8) -> Result<U256, TransferError> {
     let factor = 10_f64.powi(decimals as i32);
@@ -92,7 +81,7 @@ pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, 
         return Err(TransferError::InvalidAddress);
     }
 
-    let network = chain_to_network(&input.chain)
+    let network = chain::chain_to_network(&input.chain)
         .ok_or_else(|| TransferError::UnsupportedChain(input.chain.clone()))?;
 
     let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);

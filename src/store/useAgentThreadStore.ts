@@ -10,22 +10,34 @@ import {
   type AgentSuggestion,
   type ApprovalTransaction,
 } from "@/data/mock";
+import {
+  messagesToChat,
+  resolveContextBudget,
+} from "@/lib/chatContext";
+import { chatAgent } from "@/lib/agent";
+import type { SwapPreviewPayload } from "@/types/agent";
+import { useOllamaStore } from "@/store/useOllamaStore";
+import { useWalletStore } from "@/store/useWalletStore";
+
+export type PendingAgentAction = {
+  toolName: string;
+  payload: unknown;
+};
 
 export type Thread = {
   id: string;
   title: string | null;
   messages: AgentMessage[];
+  /** Persisted rolling summary of older messages when context exceeds budget. */
+  rollingSummary: string | null;
   isStreaming: boolean;
   latestActivityLabel: string;
   suggestion: AgentSuggestion;
   pendingApproval: ApprovalTransaction | null;
+  /** When agent requires approval, stored for approve_agent_action invoke. */
+  pendingAgentAction: PendingAgentAction | null;
   createdAt: number;
   updatedAt: number;
-};
-
-type AgentReply = {
-  latestActivityLabel: string;
-  blocks: AgentMessageBlock[];
 };
 
 const EMPTY_APPROVAL: ApprovalTransaction = {
@@ -39,83 +51,6 @@ const EMPTY_APPROVAL: ApprovalTransaction = {
   reason: "",
   executionWindow: "",
 };
-
-function buildReply(content: string): AgentReply {
-  const normalizedContent = content.toLowerCase();
-
-  if (normalizedContent.includes("yield")) {
-    return {
-      latestActivityLabel: "Scanned fresh yield routes and ranked the safest USDC deployment.",
-      blocks: [
-        {
-          type: "text",
-          content:
-            "I scanned the latest yield routes across your preferred chains and filtered out higher slippage options.",
-        },
-        {
-          type: "opportunity",
-          title: "Aave V3 on Arbitrum",
-          apy: "4.2%",
-          tvl: "$1.2B",
-          risk: "Low",
-          actionLabel: "Deploy $500",
-        },
-        {
-          type: "text",
-          content:
-            "If you want, I can also surface two higher-yield alternatives with more execution risk.",
-        },
-      ],
-    };
-  }
-
-  if (normalizedContent.includes("swap")) {
-    return {
-      latestActivityLabel: "Prepared a private swap route and checked the current gas posture.",
-      blocks: [
-        {
-          type: "text",
-          content:
-            "I found a private route with competitive pricing and low gas overhead for the swap you described.",
-        },
-        {
-          type: "text",
-          content:
-            "Open the portfolio flow if you want to preview the route and confirm slippage before execution.",
-        },
-      ],
-    };
-  }
-
-  if (normalizedContent.includes("options") || normalizedContent.includes("more")) {
-    return {
-      latestActivityLabel: "Queued alternative options with wider spreads and higher variance.",
-      blocks: [
-        {
-          type: "text",
-          content:
-            "I can surface more options, but the next routes add more volatility exposure and thinner liquidity.",
-        },
-        {
-          type: "text",
-          content:
-            "The current Aave route still scores best for your guardrails, but I can switch to an opportunity-led view if you prefer.",
-        },
-      ],
-    };
-  }
-
-  return {
-    latestActivityLabel: "Updated the local agent context with a fresh recommendation.",
-    blocks: [
-      {
-        type: "text",
-        content:
-          "I updated your local context and can turn this into a strategy, a portfolio action, or a market watchlist next.",
-      },
-    ],
-  };
-}
 
 function deriveTitle(messages: AgentMessage[]): string | null {
   const firstUser = messages.find((m) => m.role === "user");
@@ -133,6 +68,7 @@ type AgentThreadStore = {
   setActiveThreadId: (id: string | null) => void;
   sendMessage: (threadId: string, content: string) => void;
   deleteThread: (id: string) => void;
+  clearPendingApprovalForThread: (threadId: string) => void;
 };
 
 function createEmptyThread(): Thread {
@@ -141,10 +77,12 @@ function createEmptyThread(): Thread {
     id: crypto.randomUUID(),
     title: null,
     messages: [],
+    rollingSummary: null,
     isStreaming: false,
     latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
     pendingApproval: null,
+    pendingAgentAction: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -156,10 +94,12 @@ function createInitialThread(): Thread {
     id: crypto.randomUUID(),
     title: "Find me the best yield for USDC",
     messages: AGENT_MESSAGES,
+    rollingSummary: null,
     isStreaming: false,
     latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
     pendingApproval: PENDING_APPROVAL_TX,
+    pendingAgentAction: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -189,95 +129,245 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         const trimmedContent = content.trim();
         if (trimmedContent.length === 0) return;
 
-        const reply = buildReply(trimmedContent);
         const userMessage: AgentMessage = {
           id: `user-${crypto.randomUUID()}`,
           role: "user",
           blocks: [{ type: "text", content: trimmedContent }],
         };
         const agentMessageId = `agent-${crypto.randomUUID()}`;
-        const streamingBlock = reply.blocks.find((block) => block.type === "text");
-        const streamingContent =
-          streamingBlock?.type === "text"
-            ? streamingBlock.content
-            : "Working through your request.";
-
         const now = Date.now();
-        const newTitle = deriveTitle([...get().threads.find((t) => t.id === threadId)?.messages ?? [], userMessage]);
+        const newTitle = deriveTitle([
+          ...(get().threads.find((t) => t.id === threadId)?.messages ?? []),
+          userMessage,
+        ]);
 
         set((state) => {
           const thread = state.threads.find((t) => t.id === threadId);
           if (!thread) return state;
-
-          const updatedThread: Thread = {
-            ...thread,
-            messages: [
-              ...thread.messages,
-              userMessage,
-              {
-                id: agentMessageId,
-                role: "agent",
-                blocks: [{ type: "text", content: "" }],
-              },
-            ],
-            isStreaming: true,
-            title: thread.title ?? newTitle,
-            updatedAt: now,
-          };
-
           return {
-            threads: state.threads.map((t) => (t.id === threadId ? updatedThread : t)),
+            threads: state.threads.map((t) =>
+              t.id === threadId
+                ? {
+                    ...t,
+                    messages: [
+                      ...t.messages,
+                      userMessage,
+                      {
+                        id: agentMessageId,
+                        role: "agent" as const,
+                        blocks: [{ type: "text" as const, content: "Thinking…" }],
+                      },
+                    ],
+                    isStreaming: true,
+                    title: t.title ?? newTitle,
+                    updatedAt: now,
+                  }
+                : t,
+            ),
           };
         });
 
-        let step = 0;
-        const nextSteps = Math.max(streamingContent.length, 1);
-        const interval = window.setInterval(() => {
-          step += 5;
-          set((state) => {
-            const thread = state.threads.find((t) => t.id === threadId);
-            if (!thread) return state;
+        void (async () => {
+          const model = useOllamaStore.getState().selectedModel;
+          if (!model?.trim()) {
+            useOllamaStore.getState().openSetupModal();
+            set((state) => ({
+              ...state,
+              threads: state.threads.map((t) =>
+                t.id === threadId
+                  ? {
+                      ...t,
+                      isStreaming: false,
+                      messages: t.messages.map((msg) =>
+                        msg.id === agentMessageId
+                          ? {
+                              ...msg,
+                              blocks: [
+                                {
+                                  type: "text" as const,
+                                  content:
+                                    "Please select an AI model from the dropdown above.",
+                                },
+                              ],
+                            }
+                          : msg,
+                      ),
+                      updatedAt: Date.now(),
+                    }
+                  : t,
+              ),
+            }));
+            return;
+          }
+          const thread = get().threads.find((t) => t.id === threadId);
+          if (!thread) return;
+          const messagesExcludingPlaceholder = thread.messages.filter(
+            (m) => m.id !== agentMessageId,
+          );
+          const contextBudget = resolveContextBudget(model);
+          const chatMessages = messagesToChat(messagesExcludingPlaceholder);
+          const latestN = chatMessages.slice(-10).map((m) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+          }));
+          const walletAddress =
+            useWalletStore.getState().activeAddress ?? null;
 
-            return {
-              threads: state.threads.map((t) => {
-                if (t.id !== threadId) return t;
+          try {
+            const response = await chatAgent({
+              model,
+              messages: latestN,
+              walletAddress,
+              numCtx: contextBudget,
+            });
+
+            if (response.kind === "assistantMessage") {
+              const blocks = response.blocks.map((b) => {
+                if (b.type === "text") {
+                  return { type: "text" as const, content: b.content };
+                }
                 return {
-                  ...t,
-                  messages: t.messages.map((message) => {
-                    if (message.id !== agentMessageId) return message;
-                    return {
-                      ...message,
-                      blocks: [{ type: "text", content: streamingContent.slice(0, step) }],
-                    };
-                  }),
+                  type: "toolResult" as const,
+                  toolName: b.toolName,
+                  content: b.content,
                 };
-              }),
-            };
-          });
-
-          if (step >= nextSteps) {
-            window.clearInterval(interval);
+              });
+              if (blocks.length === 0 && response.content) {
+                blocks.push({ type: "text" as const, content: response.content });
+              } else if (blocks.length === 0) {
+                blocks.push({ type: "text" as const, content: "Done." });
+              }
+              set((state) => {
+                const t = state.threads.find((th) => th.id === threadId);
+                if (!t) return state;
+                return {
+                  threads: state.threads.map((th) =>
+                    th.id === threadId
+                      ? {
+                          ...th,
+                          isStreaming: false,
+                          latestActivityLabel: "Agent replied.",
+                          messages: th.messages.map((msg) =>
+                            msg.id === agentMessageId
+                              ? { ...msg, blocks }
+                              : msg,
+                          ),
+                          updatedAt: Date.now(),
+                        }
+                      : th,
+                  ),
+                };
+              });
+            } else if (response.kind === "approvalRequired") {
+              const p = response.payload as SwapPreviewPayload;
+              const approval: ApprovalTransaction = {
+                id: `approval-${crypto.randomUUID()}`,
+                strategyId: `agent-${response.toolName}`,
+                action: `Swap ${p.fromToken} → ${p.toToken}`,
+                amount: p.amount,
+                chain: p.chain,
+                slippage: p.slippage,
+                gas: p.gasEstimate,
+                reason: response.message,
+                executionWindow: "30 seconds",
+              };
+              const approvalBlock: AgentMessageBlock = {
+                type: "approvalRequest",
+                toolName: response.toolName,
+                payload: p,
+                message: response.message,
+              };
+              set((state) => {
+                const t = state.threads.find((th) => th.id === threadId);
+                if (!t) return state;
+                const blocks: AgentMessageBlock[] = [
+                  { type: "text" as const, content: response.message },
+                  approvalBlock,
+                ];
+                return {
+                  threads: state.threads.map((th) =>
+                    th.id === threadId
+                      ? {
+                          ...th,
+                          isStreaming: false,
+                          latestActivityLabel: "Approval required",
+                          messages: th.messages.map((msg) =>
+                            msg.id === agentMessageId
+                              ? { ...msg, blocks }
+                              : msg,
+                          ),
+                          pendingApproval: approval,
+                          pendingAgentAction: {
+                            toolName: response.toolName,
+                            payload: p,
+                          },
+                          updatedAt: Date.now(),
+                        }
+                      : th,
+                  ),
+                };
+              });
+            } else {
+              const fallback =
+                response.kind === "error"
+                  ? response.message
+                  : "Sorry, I couldn't complete that.";
+              set((state) => {
+                const t = state.threads.find((th) => th.id === threadId);
+                if (!t) return state;
+                return {
+                  threads: state.threads.map((th) =>
+                    th.id === threadId
+                      ? {
+                          ...th,
+                          isStreaming: false,
+                          latestActivityLabel: "Agent error",
+                          messages: th.messages.map((msg) =>
+                            msg.id === agentMessageId
+                              ? {
+                                  ...msg,
+                                  blocks: [
+                                    {
+                                      type: "text" as const,
+                                      content: fallback,
+                                    },
+                                  ],
+                                }
+                              : msg,
+                          ),
+                          updatedAt: Date.now(),
+                        }
+                      : th,
+                  ),
+                };
+              });
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const fallback = `Sorry, I couldn't complete that. ${msg}`;
             set((state) => {
-              const thread = state.threads.find((t) => t.id === threadId);
-              if (!thread) return state;
-
+              const t = state.threads.find((th) => th.id === threadId);
+              if (!t) return state;
               return {
-                threads: state.threads.map((t) => {
-                  if (t.id !== threadId) return t;
-                  return {
-                    ...t,
-                    isStreaming: false,
-                    latestActivityLabel: reply.latestActivityLabel,
-                    messages: t.messages.map((message) =>
-                      message.id === agentMessageId ? { ...message, blocks: reply.blocks } : message,
-                    ),
-                    updatedAt: Date.now(),
-                  };
-                }),
+                threads: state.threads.map((th) =>
+                  th.id === threadId
+                    ? {
+                        ...th,
+                        isStreaming: false,
+                        latestActivityLabel: "Agent error",
+                        messages: th.messages.map((msg) =>
+                          msg.id === agentMessageId
+                            ? { ...msg, blocks: [{ type: "text" as const, content: fallback }] }
+                            : msg,
+                        ),
+                        updatedAt: Date.now(),
+                      }
+                    : th,
+                ),
               };
             });
           }
-        }, 45);
+        })();
       },
 
       deleteThread: (id) => {
@@ -292,6 +382,21 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           };
         });
       },
+
+      clearPendingApprovalForThread: (threadId) => {
+        set((state) => ({
+          threads: state.threads.map((t) =>
+            t.id === threadId
+              ? {
+                  ...t,
+                  pendingApproval: null,
+                  pendingAgentAction: null,
+                  updatedAt: Date.now(),
+                }
+              : t,
+          ),
+        }));
+      },
     }),
     {
       name: "shadow-agent-threads",
@@ -299,6 +404,16 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         threads: state.threads,
         activeThreadId: state.activeThreadId,
       }),
+      migrate: (persisted, _version) => {
+        const p = persisted as { threads?: Thread[]; activeThreadId?: string | null };
+        const threads = (p.threads ?? []).map((t) => ({
+          ...t,
+          rollingSummary: "rollingSummary" in t ? t.rollingSummary : null,
+          pendingAgentAction: "pendingAgentAction" in t ? t.pendingAgentAction : null,
+        }));
+        return { ...p, threads } as typeof persisted;
+      },
+      version: 1,
     },
   ),
 );
@@ -312,4 +427,10 @@ export function getPendingApprovalForApp(
   thread: Thread | null,
 ): ApprovalTransaction {
   return thread?.pendingApproval ?? EMPTY_APPROVAL;
+}
+
+export function getPendingAgentActionForApp(
+  thread: Thread | null,
+): PendingAgentAction | null {
+  return thread?.pendingAgentAction ?? null;
 }
