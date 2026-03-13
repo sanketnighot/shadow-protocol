@@ -16,19 +16,15 @@ pub enum ExecutionMode {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Metadata used for schema/docs; execution_mode, supports_multi_wallet used in future routing
 pub struct ToolDef {
     pub name: &'static str,
     pub kind: ToolKind,
     pub description: &'static str,
-    /// How the tool is executed (auto vs approval).
     pub execution_mode: ExecutionMode,
-    /// True if the tool needs connected wallet(s) to run.
     pub requires_wallet: bool,
-    /// True if the tool can aggregate across multiple wallets.
     pub supports_multi_wallet: bool,
-    /// True if a second synthesis pass can use this tool's output (analysis intents).
     pub supports_synthesis: bool,
-    /// Concise example for prompt, e.g. "get_total_portfolio_value()".
     pub example: &'static str,
 }
 
