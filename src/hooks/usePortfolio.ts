@@ -31,7 +31,8 @@ function mapToAsset(pa: PortfolioAsset, walletAddress: string): Asset {
 
 export function usePortfolio(params: PortfolioParams = {}) {
   const { addresses = [], activeAddress = null } = params;
-  const effectiveAddress = activeAddress ?? (addresses[0] ?? null);
+  const addressesToFetch =
+    addresses.length > 0 ? addresses : activeAddress ? [activeAddress] : [];
 
   const {
     data: rawAssets = [],
@@ -41,19 +42,28 @@ export function usePortfolio(params: PortfolioParams = {}) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["portfolio", "balances", effectiveAddress],
+    queryKey: ["portfolio", "balances", addressesToFetch],
     queryFn: async (): Promise<PortfolioAsset[]> => {
-      if (!effectiveAddress) return [];
-      return invoke("portfolio_fetch_balances", { address: effectiveAddress });
+      if (addressesToFetch.length === 0) return [];
+      if (addressesToFetch.length === 1) {
+        return invoke("portfolio_fetch_balances", {
+          address: addressesToFetch[0],
+        });
+      }
+      return invoke("portfolio_fetch_balances_multi", {
+        addresses: addressesToFetch,
+      });
     },
-    enabled: !!effectiveAddress,
+    enabled: addressesToFetch.length > 0,
     staleTime: 60_000,
     retry: false,
   });
 
   const assets: Asset[] =
-    effectiveAddress && rawAssets.length > 0
-      ? rawAssets.map((pa) => mapToAsset(pa, effectiveAddress))
+    rawAssets.length > 0
+      ? rawAssets.map((pa) =>
+          mapToAsset(pa, pa.walletAddress ?? addressesToFetch[0] ?? ""),
+        )
       : [];
 
   const totalValueLabel =

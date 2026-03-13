@@ -118,6 +118,9 @@ src-tauri/
 - Cmd+K command palette should be fixed at top, not vertically centered
 - Agent chat input must be fixed at the bottom of the viewport; only the messages area scrolls
 - Prefer Touch ID (biometric) over password prompts for wallet unlock when available
+- Wallet unlock must prompt for Touch ID/biometric when that option is chosen; should not auto-unlock without verification
+- Agent: chat conversationally first; only issue tool calls when user explicitly asks for live data (balances, prices, swaps); show approvals inline in chat with Approve/Reject buttons, not in a popup
+- Agent LLM responses: proper structure, formatting, clean, and concise; avoid verbose or repetitive output
 
 ## Learned Workspace Facts
 
@@ -129,6 +132,9 @@ src-tauri/
 - Wallet address list is stored in `{appDataDir}/wallets.json` (plain file, no Keychain access on startup); only private keys remain in macOS Keychain
 - Session unlock: private key cached in RAM (`Zeroizing<String>`) for 30-min inactivity; cache cleared on `RunEvent::ExitRequested/Exit`; Tauri commands: `session_unlock`, `session_lock`, `session_status`
 - Biometric unlock uses `tauri-plugin-biometry` v0.2; `set_data`/`get_data` require a code-signed production build on macOS — they fail silently in unsigned dev builds
+- Ollama: model choice with RAM-based recommendations before first pull; ChatModelPicker in agent header for all installed models with pull/delete/switch
+- Updates: ActivityBell floating bottom-right; archive deletes permanently (no Archived tab)
+- Tauri invoke: commands expect args under `input` key (e.g. `invoke("chat_agent", { input: payload })`)
 
 ## Design System
 

@@ -39,6 +39,17 @@ export type AgentMessageBlock =
       tvl: string;
       risk: string;
       actionLabel: string;
+    }
+  | {
+      type: "toolResult";
+      toolName: string;
+      content: string;
+    }
+  | {
+      type: "approvalRequest";
+      toolName: string;
+      payload: unknown;
+      message: string;
     };
 
 export type AgentMessage = {

@@ -9,12 +9,15 @@ import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
 import { MinimalTopBar } from "@/components/layout/MinimalTopBar";
 import { NewUpdateCard } from "@/components/layout/NewUpdateCard";
+import { OllamaSetup } from "@/components/OllamaSetup";
 import { OnboardingModal } from "@/components/layout/OnboardingModal";
 import { UnlockDialog } from "@/components/wallet/UnlockDialog";
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useToast } from "@/hooks/useToast";
+import { checkOllamaStatus } from "@/lib/ollama";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useOllamaStore } from "@/store/useOllamaStore";
 import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
@@ -48,6 +51,9 @@ export function AppShell() {
   );
   const { pendingApproval } = useAgentChat();
   const { info, success } = useToast();
+  const setupComplete = useOllamaStore((s) => s.setupComplete);
+  const openOllamaSetup = useOllamaStore((s) => s.openSetupModal);
+  const setOllamaLastStatus = useOllamaStore((s) => s.setLastStatus);
 
   useEffect(() => {
     const mediaQuery =
@@ -79,6 +85,37 @@ export function AppShell() {
   useEffect(() => {
     void refreshWallets();
   }, [refreshWallets]);
+
+  const setSelectedModel = useOllamaStore((s) => s.setSelectedModel);
+
+  useEffect(() => {
+    const checkOllama = async () => {
+      try {
+        const status = await checkOllamaStatus();
+        setOllamaLastStatus(status);
+        const needsSetup =
+          !status.installed ||
+          !status.running ||
+          status.models.length === 0;
+        if (needsSetup) {
+          openOllamaSetup();
+        } else if (status.models.length > 0) {
+          const current = useOllamaStore.getState().selectedModel;
+          const hasCurrent =
+            current &&
+            status.models.some(
+              (m) => m === current || m.startsWith(current.split(":")[0]),
+            );
+          if (!hasCurrent) {
+            setSelectedModel(status.models[0]);
+          }
+        }
+      } catch {
+        openOllamaSetup();
+      }
+    };
+    void checkOllama();
+  }, [setupComplete, openOllamaSetup, setOllamaLastStatus, setSelectedModel]);
 
   useEffect(() => {
     if (!activeAddress || addresses.length === 0) {
@@ -144,11 +181,8 @@ export function AppShell() {
   };
 
   const handleApprove = () => {
+    success("Transaction approved", "SHADOW will execute the private route now.");
     clearPendingApproval();
-    success(
-      "Transaction approved",
-      "SHADOW will execute the private route now.",
-    );
     setShowApprovalSuccess(true);
     window.setTimeout(() => setShowApprovalSuccess(false), 1200);
   };
@@ -183,6 +217,7 @@ export function AppShell() {
         open={!hasCompletedOnboarding}
         onComplete={completeOnboarding}
       />
+      <OllamaSetup />
       <AnimatePresence>
         {showApprovalSuccess ? (
           <motion.div

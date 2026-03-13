@@ -27,4 +27,5 @@ export type PortfolioAsset = {
   type: "token" | "stablecoin";
   tokenContract: string;
   decimals: number;
+  walletAddress?: string | null;
 };

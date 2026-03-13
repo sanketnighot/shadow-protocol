@@ -1,5 +1,6 @@
 import packageJson from "../../../package.json";
 
+import { ModelSelector } from "@/components/ModelSelector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
@@ -97,6 +98,16 @@ export function SettingsPage() {
               {developerModeEnabled ? "On" : "Off"}
             </span>
           </button>
+        </section>
+
+        <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
+          <h2 className="text-xl font-semibold text-foreground">AI Model</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Local model for the AI agent. Requires Ollama to be set up.
+          </p>
+          <div className="mt-4">
+            <ModelSelector />
+          </div>
         </section>
 
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
