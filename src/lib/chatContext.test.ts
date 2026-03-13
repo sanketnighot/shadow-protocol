@@ -5,6 +5,8 @@ import {
   buildChatMessages,
   DEFAULT_SYSTEM_PROMPT,
   estimateTokens,
+  extractStructuredFacts,
+  mergeStructuredFacts,
   messagesToChat,
   needsSummary,
   resolveContextBudget,
@@ -108,6 +110,49 @@ describe("chatContext", () => {
       expect(latestContent).toEqual(
         Array.from({ length: 10 }, (_, i) => `msg ${5 + i}`),
       );
+    });
+  });
+
+  describe("extractStructuredFacts", () => {
+    it("extracts portfolio facts from get_total_portfolio_value", () => {
+      const content = JSON.stringify({
+        totalUsd: "$1,234.56",
+        walletCount: 2,
+        breakdown: [
+          { token: "ETH", amount: "0.5", value: "$800", chains: "Ethereum" },
+          { token: "USDC", amount: "434", value: "$434.56", chains: "Base" },
+        ],
+      });
+      const facts = extractStructuredFacts("get_total_portfolio_value", content);
+      expect(facts).toContain("Portfolio total: $1,234.56 across 2 wallet(s)");
+      expect(facts).toContain("ETH: 0.5 ($800)");
+      expect(facts).toContain("USDC: 434 ($434.56)");
+      expect(facts).toContain("on Ethereum");
+      expect(facts).toContain("on Base");
+    });
+
+    it("extracts price facts from get_token_price", () => {
+      const content = JSON.stringify({ priceUsd: 3420.5 });
+      const facts = extractStructuredFacts("get_token_price", content);
+      expect(facts).toContain("Token price: $3420.5");
+    });
+
+    it("returns empty for invalid JSON", () => {
+      expect(extractStructuredFacts("get_total_portfolio_value", "not json")).toBe("");
+    });
+  });
+
+  describe("mergeStructuredFacts", () => {
+    it("merges new facts into existing", () => {
+      const existing = "Portfolio total: $100";
+      const newFacts = "ETH price: $3400";
+      expect(mergeStructuredFacts(existing, newFacts)).toContain("$100");
+      expect(mergeStructuredFacts(existing, newFacts)).toContain("$3400");
+    });
+
+    it("returns existing when new facts are empty", () => {
+      expect(mergeStructuredFacts("prior", "")).toBe("prior");
+      expect(mergeStructuredFacts("prior", "   ")).toBe("prior");
     });
   });
 });

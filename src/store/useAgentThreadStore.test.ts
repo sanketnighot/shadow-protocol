@@ -38,6 +38,7 @@ describe("useAgentThreadStore sendMessage", () => {
         msg("u2", "user", "Second question"),
       ],
       rollingSummary: null,
+      structuredFacts: null,
       isStreaming: false,
       latestActivityLabel: "",
       suggestion: { title: "", summary: "", actionLabel: "" },

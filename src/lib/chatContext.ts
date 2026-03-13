@@ -114,6 +114,59 @@ export function needsSummary(
   return olderTokens > remaining;
 }
 
+const STRUCTURED_FACTS_MAX_CHARS = 600;
+
+/**
+ * Extract compact structured facts from a tool result for inclusion in future agent context.
+ * Used for follow-ups like "analyze it", "compare with ETH", "is that concentrated?".
+ */
+export function extractStructuredFacts(toolName: string, content: string): string {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const lines: string[] = [];
+
+    if (toolName === "get_total_portfolio_value") {
+      const data = (parsed.Ok as Record<string, unknown>) ?? parsed;
+      const total = data.totalUsd ?? "0";
+      const walletCount = data.walletCount ?? 0;
+      lines.push(`Portfolio total: ${total} across ${walletCount} wallet(s).`);
+      const breakdown = Array.isArray(data.breakdown) ? data.breakdown : [];
+      for (const item of breakdown.slice(0, 8)) {
+        const obj = item as Record<string, unknown>;
+        const token = obj.token ?? "?";
+        const amount = obj.amount ?? "0";
+        const value = obj.value ?? "0";
+        const chains = obj.chains ?? "";
+        lines.push(`  ${token}: ${amount} (${value})${chains ? ` on ${chains}` : ""}`);
+      }
+    } else if (toolName === "get_wallet_balances") {
+      const items = Array.isArray(parsed) ? parsed : [];
+      for (const item of items.slice(0, 6)) {
+        const obj = item as Record<string, unknown>;
+        lines.push(
+          `  ${obj.token ?? "?"} on ${obj.chain ?? "?"}: ${obj.amount ?? "0"} (${obj.valueUsd ?? "0"})`,
+        );
+      }
+    } else if (toolName === "get_token_price") {
+      const price = parsed.priceUsd ?? 0;
+      lines.push(`Token price: $${price}`);
+    }
+    return lines.length > 0 ? lines.join("\n") : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Merge new facts into existing structured facts, capping total size.
+ */
+export function mergeStructuredFacts(existing: string | null, newFacts: string): string {
+  if (!newFacts.trim()) return existing ?? "";
+  const withNew = existing ? `${existing}\n\n${newFacts}` : newFacts;
+  if (withNew.length <= STRUCTURED_FACTS_MAX_CHARS) return withNew;
+  return withNew.slice(-STRUCTURED_FACTS_MAX_CHARS);
+}
+
 const SUMMARY_SYSTEM_PROMPT =
   "Summarize this conversation concisely. Preserve key facts, decisions, and context. Output only the summary, no preamble.";
 

@@ -22,7 +22,13 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
         </div>
       </div>
       <div className="mt-5 space-y-4">
-        {blocks.map((block, index) => {
+        {[...blocks]
+          .sort((a, b) => {
+            const order = (t: string) =>
+              t === "text" ? 0 : t === "opportunity" || t === "toolResult" ? 1 : 2;
+            return order(a.type) - order(b.type);
+          })
+          .map((block, index) => {
           if (block.type === "text") {
             return block.content === "Thinking…" ? (
               <div key={`${block.type}-${index}`} className="flex h-7 items-center gap-1.5">

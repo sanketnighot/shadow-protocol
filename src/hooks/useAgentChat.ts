@@ -16,6 +16,9 @@ export function useAgentChat() {
   const clearPendingApprovalForThread = useAgentThreadStore(
     (state) => state.clearPendingApprovalForThread,
   );
+  const recordApprovalFollowUp = useAgentThreadStore(
+    (state) => state.recordApprovalFollowUp,
+  );
   const clearPendingApproval = useUiStore((state) => state.clearPendingApproval);
 
   const activeThread = getActiveThread(threads, activeThreadId);
@@ -41,20 +44,20 @@ export function useAgentChat() {
           payload: pendingAgentAction.payload,
         },
       });
-      clearPendingApprovalForThread(activeThread.id);
+      recordApprovalFollowUp(activeThread.id, true);
       clearPendingApproval();
     } catch {
       // error is surfaced in the UI by keeping the card visible; just reset pending state
     } finally {
       setIsApprovePending(false);
     }
-  }, [pendingAgentAction, activeThread, clearPendingApprovalForThread, clearPendingApproval]);
+  }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval]);
 
   const rejectAction = useCallback(() => {
     if (!activeThread) return;
-    clearPendingApprovalForThread(activeThread.id);
+    recordApprovalFollowUp(activeThread.id, false);
     clearPendingApproval();
-  }, [activeThread, clearPendingApprovalForThread, clearPendingApproval]);
+  }, [activeThread, recordApprovalFollowUp, clearPendingApproval]);
 
   return {
     isStreaming: activeThread?.isStreaming ?? false,

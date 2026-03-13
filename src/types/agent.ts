@@ -11,6 +11,7 @@ export type ChatAgentInput = {
   walletAddress?: string | null;
   walletAddresses?: string[] | null;
   numCtx?: number;
+  structuredFacts?: string | null;
 };
 
 export type ResponseBlock =

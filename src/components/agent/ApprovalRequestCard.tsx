@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle, ShieldAlert, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle, XCircle } from "lucide-react";
 
 import type { SwapPreviewPayload } from "@/types/agent";
 
@@ -32,14 +32,7 @@ export function ApprovalRequestCard({
   const isSwap = toolName === "execute_token_swap" && swap;
 
   return (
-    <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-4">
-      <div className="mb-3 flex items-center gap-2">
-        <ShieldAlert className="size-4 shrink-0 text-amber-400" />
-        <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">
-          Action requires approval
-        </p>
-      </div>
-
+    <div className="rounded-xl border border-white/12 bg-white/5 px-4 py-4">
       <p className="mb-4 text-sm leading-6 text-foreground/85">{message}</p>
 
       {isSwap && (

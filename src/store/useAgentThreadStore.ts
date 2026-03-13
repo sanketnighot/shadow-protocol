@@ -11,7 +11,11 @@ import {
   type ApprovalTransaction,
 } from "@/data/mock";
 import {
-  messagesToChat,
+  buildChatMessages,
+  extractStructuredFacts,
+  generateRollingSummary,
+  mergeStructuredFacts,
+  needsSummary,
   resolveContextBudget,
 } from "@/lib/chatContext";
 import { chatAgent } from "@/lib/agent";
@@ -30,6 +34,8 @@ export type Thread = {
   messages: AgentMessage[];
   /** Persisted rolling summary of older messages when context exceeds budget. */
   rollingSummary: string | null;
+  /** Recent structured facts from tool outputs for follow-up context. */
+  structuredFacts: string | null;
   isStreaming: boolean;
   latestActivityLabel: string;
   suggestion: AgentSuggestion;
@@ -69,6 +75,7 @@ type AgentThreadStore = {
   sendMessage: (threadId: string, content: string) => void;
   deleteThread: (id: string) => void;
   clearPendingApprovalForThread: (threadId: string) => void;
+  recordApprovalFollowUp: (threadId: string, approved: boolean) => void;
 };
 
 function createEmptyThread(): Thread {
@@ -78,6 +85,7 @@ function createEmptyThread(): Thread {
     title: null,
     messages: [],
     rollingSummary: null,
+    structuredFacts: null,
     isStreaming: false,
     latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
@@ -95,6 +103,7 @@ function createInitialThread(): Thread {
     title: "Find me the best yield for USDC",
     messages: AGENT_MESSAGES,
     rollingSummary: null,
+    structuredFacts: null,
     isStreaming: false,
     latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
@@ -199,17 +208,40 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
             }));
             return;
           }
-          const thread = get().threads.find((t) => t.id === threadId);
+          let thread = get().threads.find((t) => t.id === threadId);
           if (!thread) return;
           const messagesExcludingPlaceholder = thread.messages.filter(
             (m) => m.id !== agentMessageId,
           );
           const contextBudget = resolveContextBudget(model);
-          const chatMessages = messagesToChat(messagesExcludingPlaceholder);
-          const latestN = chatMessages.slice(-10).map((m) => ({
-            role: m.role === "user" ? "user" : "assistant",
-            content: m.content,
-          }));
+          if (
+            needsSummary(messagesExcludingPlaceholder, contextBudget) &&
+            !thread.rollingSummary
+          ) {
+            const older = messagesExcludingPlaceholder.slice(
+              0,
+              -10,
+            );
+            const summary = await generateRollingSummary(older, model);
+            set((s) => ({
+              threads: s.threads.map((t) =>
+                t.id === threadId
+                  ? { ...t, rollingSummary: summary || null, updatedAt: Date.now() }
+                  : t,
+              ),
+            }));
+            thread = get().threads.find((t) => t.id === threadId) ?? thread;
+          }
+          const built = buildChatMessages({
+            messages: thread.messages.filter((m) => m.id !== agentMessageId),
+            rollingSummary: thread.rollingSummary,
+            contextBudget,
+            latestN: 10,
+          });
+          const messagesForAgent = built
+            .filter((m) => m.role !== "system")
+            .map((m) => ({ role: m.role, content: m.content }));
+          if (messagesForAgent.length === 0) return;
           const { activeAddress, addresses } = useWalletStore.getState();
           const walletAddress = activeAddress ?? null;
           const walletAddresses =
@@ -218,10 +250,11 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           try {
             const response = await chatAgent({
               model,
-              messages: latestN,
+              messages: messagesForAgent,
               walletAddress,
               walletAddresses: walletAddresses.length > 0 ? walletAddresses : null,
               numCtx: contextBudget,
+              structuredFacts: thread.structuredFacts,
             });
 
             if (response.kind === "assistantMessage") {
@@ -240,6 +273,14 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
               } else if (blocks.length === 0) {
                 blocks.push({ type: "text" as const, content: "Done." });
               }
+              const t = get().threads.find((th) => th.id === threadId);
+              let mergedFacts = t?.structuredFacts ?? null;
+              for (const b of response.blocks) {
+                if (b.type === "toolResult") {
+                  const facts = extractStructuredFacts(b.toolName, b.content);
+                  if (facts) mergedFacts = mergeStructuredFacts(mergedFacts, facts);
+                }
+              }
               set((state) => {
                 const t = state.threads.find((th) => th.id === threadId);
                 if (!t) return state;
@@ -255,6 +296,8 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                               ? { ...msg, blocks }
                               : msg,
                           ),
+                          structuredFacts:
+                            mergedFacts !== null ? mergedFacts : th.structuredFacts,
                           updatedAt: Date.now(),
                         }
                       : th,
@@ -400,6 +443,31 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           ),
         }));
       },
+
+      recordApprovalFollowUp: (threadId, approved) => {
+        set((state) => ({
+          threads: state.threads.map((t) => {
+            if (t.id !== threadId) return t;
+            const lastAgent = [...t.messages].reverse().find((m) => m.role === "agent");
+            if (!lastAgent) return { ...t, pendingApproval: null, pendingAgentAction: null, updatedAt: Date.now() };
+            const followUp: AgentMessageBlock = {
+              type: "text",
+              content: approved ? "✓ Approved." : "Rejected.",
+            };
+            return {
+              ...t,
+              messages: t.messages.map((msg) =>
+                msg.id === lastAgent.id
+                  ? { ...msg, blocks: [...msg.blocks, followUp] }
+                  : msg,
+              ),
+              pendingApproval: null,
+              pendingAgentAction: null,
+              updatedAt: Date.now(),
+            };
+          }),
+        }));
+      },
     }),
     {
       name: "shadow-agent-threads",
@@ -412,6 +480,7 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         const threads = (p.threads ?? []).map((t) => ({
           ...t,
           rollingSummary: "rollingSummary" in t ? t.rollingSummary : null,
+          structuredFacts: "structuredFacts" in t ? t.structuredFacts : null,
           pendingAgentAction: "pendingAgentAction" in t ? t.pendingAgentAction : null,
         }));
         return { ...p, threads } as typeof persisted;
