@@ -9,10 +9,14 @@ use super::tools::{
 };
 
 /// Format: TOOL: name(param1=value1, param2=value2)
+/// Matches TOOL: anywhere in text (small models sometimes add intro text)
 pub(crate) fn parse_tool_call(text: &str) -> Option<(String, Vec<(String, String)>)> {
     let prefix = "TOOL:";
     let text = text.trim();
-    let rest = text.strip_prefix(prefix)?.trim();
+    let rest = text
+        .find(prefix)
+        .map(|i| text[i + prefix.len()..].trim())
+        .filter(|s| !s.is_empty())?;
     let paren = rest.find('(')?;
     let name = rest[..paren].trim().to_string();
     let args = rest[paren + 1..].trim_end_matches(')');
@@ -73,7 +77,7 @@ pub async fn route_and_execute(
 
     let has_addresses = !wallet_addresses.is_empty();
     let address = wallet_address.unwrap_or(wallet_addresses.first().map(String::as_str).unwrap_or(""));
-    if !has_addresses && address.is_empty() && def.name != "get_token_price" {
+    if def.requires_wallet && !has_addresses && address.is_empty() {
         return Ok(ToolResult::Error {
             message: "No wallet address. Please connect a wallet first.".to_string(),
         });
@@ -171,39 +175,143 @@ mod tests {
     }
 }
 
-pub fn tools_system_prompt() -> String {
-    let names = tool_registry::tool_names();
-    let list = names.join(", ");
+/// Runtime context injected into the system prompt so the LLM knows what app state exists.
+#[derive(Debug, Clone)]
+pub struct AgentContext {
+    pub wallet_count: u32,
+    pub active_address: Option<String>,
+    pub all_addresses: Vec<String>,
+}
+
+impl AgentContext {
+    pub fn has_wallets(&self) -> bool {
+        self.wallet_count > 0
+    }
+
+    pub fn is_multi_wallet(&self) -> bool {
+        self.wallet_count > 1
+    }
+}
+
+pub fn tools_system_prompt(ctx: &AgentContext) -> String {
+    let tools = tool_registry::all_tools();
+    let list: String = tools
+        .iter()
+        .map(|t| format!("{} — {}", t.name, t.description))
+        .collect::<Vec<_>>()
+        .join("\n- ");
+    let ctx_block = if ctx.has_wallets() {
+        let multi = if ctx.is_multi_wallet() { " (multi-wallet; aggregate by default)" } else { "" };
+        format!(
+            r#"
+## APP CONTEXT (use this — do NOT ask the user for it)
+
+- Connected wallets: {}{}
+- Active wallet: {}
+- For portfolio, balances, or price requests about the user's holdings: CALL A TOOL. Do NOT ask for wallet addresses, token lists, or amounts. Use get_total_portfolio_value() or get_wallet_balances() or get_token_price().
+- For "analyze my portfolio", "how does it look", "what should I do": First call get_total_portfolio_value() to fetch real data, then respond based on that data.
+- Only ask the user to connect/select a wallet if they have zero wallets connected.
+- Addresses available for tool calls: {}"#,
+            ctx.wallet_count,
+            multi,
+            ctx.active_address
+                .as_deref()
+                .unwrap_or("(first of connected)"),
+            ctx.all_addresses
+                .iter()
+                .map(|a| {
+                    if a.len() > 12 {
+                        format!("{}…{}", &a[..6], &a[a.len() - 4..])
+                    } else {
+                        a.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        r#"
+
+## APP CONTEXT
+- No wallets connected. For portfolio or balance questions, you may ask the user to connect a wallet first. For token price lookups (e.g. "ETH price?") you can still use get_token_price() without a wallet."#
+            .to_string()
+    };
+
     format!(
-        r#"You are Shadow, a DeFi assistant in a privacy-first crypto app. Be concise and helpful.
+        r#"You are Shadow, a world-class DeFi assistant in a privacy-first crypto app. You have direct access to the user's portfolio, balances, and prices via tools. Act smart: use tools instead of asking for data the app can fetch.
 
-## CRITICAL: BREVITY AND FORMATTING
+{ctx_block}
 
-- Keep responses SHORT: 1-4 sentences usually. Never write long lists or repeat yourself.
-- For "what can you do?" / "hello" / "hi": One brief sentence. Do NOT enumerate every capability. Do NOT repeat similar items.
-- Use simple formatting: short paragraphs, occasional line breaks. No bullet-point dumps of 10+ items.
-- Prefer conversational tone. Answer the question directly, then stop.
+## CRITICAL: PREFER TOOLS OVER QUESTIONS
 
-## WHEN TO USE TOOLS
+- When the user asks about their portfolio, balances, holdings, "what do I have", "analyze my portfolio", "how does it look" → call get_total_portfolio_value() or get_wallet_balances() immediately. Never ask them to provide this data.
+- When the user asks about a token price → call get_token_price(tokenSymbol=X).
+- When the user wants to swap → call execute_token_swap(...) (requires their approval).
+- Greetings, general DeFi education, "what can you do" → plain text only. NO tool.
 
-Casual chat, greetings, general questions → plain text only. NO tool.
-Live data (balances, prices, portfolio value, swaps) → output ONLY: TOOL: tool_name(params)
-When using a tool, your response must be ONLY that TOOL: line. No other text.
+## RESPONSE FORMAT
 
-Available tools: {list}
-- get_wallet_balances()
-- get_total_portfolio_value()
-- get_token_price(tokenSymbol=ETH)
-- execute_token_swap(fromToken=USDC, toToken=ETH, amount=100, chain=ETH, slippage=1)
+- Keep replies SHORT: 1-4 sentences. No long lists.
+- When using a tool, output ONLY: TOOL: tool_name(params)
+- Never make up balances, prices, or token counts. Only use real data from tools.
 
-## EXAMPLES (follow these lengths)
+Available tools:
+- {list}
 
-User: "hello" → Hi! I'm Shadow. I can check your portfolio, prices, or help with swaps. What do you need?
-User: "what can you do?" → I help with portfolio balances, token prices, and swaps—all on-device and private. Ask me anything.
-User: "how does a DCA work?" → Dollar-cost averaging means buying a fixed amount at regular intervals to smooth out price volatility. I can help you set one up—want details?
-User: "portfolio?" → TOOL: get_total_portfolio_value()
+## EXAMPLES
+
+User: "how does my portfolio look?" → TOOL: get_total_portfolio_value()
+User: "analyze my portfolio" → TOOL: get_total_portfolio_value()
+User: "you can check my portfolio" → TOOL: get_total_portfolio_value()
+User: "hello" → Hi! I'm Shadow. I can check your portfolio, prices, or swaps. What do you need?
 User: "ETH price?" → TOOL: get_token_price(tokenSymbol=ETH)
+User: "portfolio?" → TOOL: get_total_portfolio_value()
 
-Never make up financial data. Never write long repetitive lists."#
+Never ask for data the app can fetch. Never fabricate financial numbers."#
     )
+}
+
+#[cfg(test)]
+mod prompt_tests {
+    use super::{AgentContext, tools_system_prompt};
+
+    #[test]
+    fn tools_system_prompt_includes_wallet_context_when_connected() {
+        let ctx = AgentContext {
+            wallet_count: 2,
+            active_address: Some("0x1234…5678".into()),
+            all_addresses: vec!["0xaaaa".into(), "0xbbbb".into()],
+        };
+        let prompt = tools_system_prompt(&ctx);
+        assert!(prompt.contains("Connected wallets: 2"));
+        assert!(prompt.contains("multi-wallet"));
+        assert!(prompt.contains("0x1234"));
+        assert!(prompt.contains("get_total_portfolio_value"));
+        assert!(prompt.contains("CALL A TOOL"));
+    }
+
+    #[test]
+    fn tools_system_prompt_includes_no_wallet_guidance_when_empty() {
+        let ctx = AgentContext {
+            wallet_count: 0,
+            active_address: None,
+            all_addresses: vec![],
+        };
+        let prompt = tools_system_prompt(&ctx);
+        assert!(prompt.contains("No wallets connected"));
+        assert!(prompt.contains("get_token_price"));
+    }
+
+    #[test]
+    fn tools_system_prompt_includes_portfolio_routing_examples() {
+        let ctx = AgentContext {
+            wallet_count: 1,
+            active_address: Some("0xabc".into()),
+            all_addresses: vec!["0xabc".into()],
+        };
+        let prompt = tools_system_prompt(&ctx);
+        assert!(prompt.contains("analyze my portfolio"));
+        assert!(prompt.contains("get_total_portfolio_value"));
+        assert!(prompt.contains("how does my portfolio look"));
+    }
 }

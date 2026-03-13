@@ -1,4 +1,4 @@
-//! Central registry of agent tools with schema and execution.
+//! Central registry of agent tools with schema and execution metadata.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolKind {
@@ -6,12 +6,30 @@ pub enum ToolKind {
     Write,
 }
 
+/// Execution mode for tool dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionMode {
+    /// Execute immediately; no user approval.
+    ReadAuto,
+    /// Must wait for user approval before execution.
+    ApprovalRequired,
+}
+
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ToolDef {
     pub name: &'static str,
     pub kind: ToolKind,
     pub description: &'static str,
+    /// How the tool is executed (auto vs approval).
+    pub execution_mode: ExecutionMode,
+    /// True if the tool needs connected wallet(s) to run.
+    pub requires_wallet: bool,
+    /// True if the tool can aggregate across multiple wallets.
+    pub supports_multi_wallet: bool,
+    /// True if a second synthesis pass can use this tool's output (analysis intents).
+    pub supports_synthesis: bool,
+    /// Concise example for prompt, e.g. "get_total_portfolio_value()".
+    pub example: &'static str,
 }
 
 pub fn all_tools() -> Vec<ToolDef> {
@@ -20,25 +38,42 @@ pub fn all_tools() -> Vec<ToolDef> {
             name: "get_wallet_balances",
             kind: ToolKind::Read,
             description: "Get all token balances across connected chains for a wallet address.",
+            execution_mode: ExecutionMode::ReadAuto,
+            requires_wallet: true,
+            supports_multi_wallet: true,
+            supports_synthesis: true,
+            example: "get_wallet_balances()",
         },
         ToolDef {
             name: "get_total_portfolio_value",
             kind: ToolKind::Read,
             description: "Get total portfolio value in USD and per-token breakdown.",
+            execution_mode: ExecutionMode::ReadAuto,
+            requires_wallet: true,
+            supports_multi_wallet: true,
+            supports_synthesis: true,
+            example: "get_total_portfolio_value()",
         },
         ToolDef {
             name: "get_token_price",
             kind: ToolKind::Read,
             description: "Get current USD price for a token symbol (e.g. ETH, USDC).",
+            execution_mode: ExecutionMode::ReadAuto,
+            requires_wallet: false,
+            supports_multi_wallet: false,
+            supports_synthesis: true,
+            example: "get_token_price(tokenSymbol=ETH)",
         },
         ToolDef {
             name: "execute_token_swap",
             kind: ToolKind::Write,
             description: "Swap one token for another. Requires user approval.",
+            execution_mode: ExecutionMode::ApprovalRequired,
+            requires_wallet: true,
+            supports_multi_wallet: false,
+            supports_synthesis: false,
+            example: "execute_token_swap(fromToken=USDC, toToken=ETH, amount=100, chain=ETH, slippage=1)",
         },
     ]
 }
 
-pub fn tool_names() -> Vec<&'static str> {
-    all_tools().into_iter().map(|t| t.name).collect()
-}
