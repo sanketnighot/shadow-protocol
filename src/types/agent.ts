@@ -9,6 +9,7 @@ export type ChatAgentInput = {
   model: string;
   messages: ChatMessage[];
   walletAddress?: string | null;
+  walletAddresses?: string[] | null;
   numCtx?: number;
 };
 

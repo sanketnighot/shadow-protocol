@@ -14,6 +14,7 @@ export async function chatAgent(
     model: input.model,
     messages: input.messages,
     walletAddress: input.walletAddress ?? null,
+    walletAddresses: input.walletAddresses ?? null,
     numCtx: input.numCtx ?? null,
   };
   return invoke<ChatAgentResponse>("chat_agent", { input: payload });

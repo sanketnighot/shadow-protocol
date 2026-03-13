@@ -210,14 +210,17 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
             role: m.role === "user" ? "user" : "assistant",
             content: m.content,
           }));
-          const walletAddress =
-            useWalletStore.getState().activeAddress ?? null;
+          const { activeAddress, addresses } = useWalletStore.getState();
+          const walletAddress = activeAddress ?? null;
+          const walletAddresses =
+            addresses.length > 0 ? addresses : (activeAddress ? [activeAddress] : []);
 
           try {
             const response = await chatAgent({
               model,
               messages: latestN,
               walletAddress,
+              walletAddresses: walletAddresses.length > 0 ? walletAddresses : null,
               numCtx: contextBudget,
             });
 

@@ -29,8 +29,16 @@ function getThreadPreview(thread: Thread): string {
   if (firstBlock.type === "text") {
     return firstBlock.content;
   }
-
-  return firstBlock.title;
+  if (firstBlock.type === "opportunity") {
+    return firstBlock.title;
+  }
+  if (firstBlock.type === "toolResult") {
+    return firstBlock.toolName;
+  }
+  if (firstBlock.type === "approvalRequest") {
+    return firstBlock.message.slice(0, 48);
+  }
+  return "Start a new conversation";
 }
 
 function ThreadItem({

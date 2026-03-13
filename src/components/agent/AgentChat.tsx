@@ -3,12 +3,22 @@ import { Bot } from "lucide-react";
 
 import { AgentInput } from "@/components/agent/AgentInput";
 import { AgentMessage } from "@/components/agent/AgentMessage";
+import { ChatModelPicker } from "@/components/agent/ChatModelPicker";
 import { UserMessage } from "@/components/agent/UserMessage";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAgentChat } from "@/hooks/useAgentChat";
 
 export function AgentChat() {
-  const { activeThread, isStreaming, messages, sendMessage } = useAgentChat();
+  const {
+    activeThread,
+    isStreaming,
+    messages,
+    sendMessage,
+    approveAction,
+    rejectAction,
+    isApprovePending,
+    pendingAgentAction,
+  } = useAgentChat();
   const activeTitle = activeThread?.title ?? "New conversation";
 
   return (
@@ -16,7 +26,7 @@ export function AgentChat() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(88,62,160,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_28%)]" />
       <div className="relative shrink-0 border-b border-white/8 px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-mono text-[10px] tracking-[0.32em] text-muted uppercase">
               Agent conversation
             </p>
@@ -24,6 +34,7 @@ export function AgentChat() {
               <span className="text-foreground">{activeTitle}</span>
             </p>
           </div>
+          <ChatModelPicker />
         </div>
       </div>
 
@@ -47,16 +58,15 @@ export function AgentChat() {
                       }
                     />
                   ) : (
-                    <AgentMessage blocks={message.blocks} />
+                    <AgentMessage
+                      blocks={message.blocks}
+                      onApproveAction={pendingAgentAction ? approveAction : undefined}
+                      onRejectAction={pendingAgentAction ? rejectAction : undefined}
+                      isApprovePending={isApprovePending}
+                    />
                   )}
                 </motion.div>
               ))}
-              {isStreaming ? (
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/8 bg-white/3 px-3 py-2 font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-                  <span className="size-2 animate-pulse rounded-full bg-primary" />
-                  Agent is thinking locally
-                </div>
-              ) : null}
             </>
           ) : (
             <div className="flex min-h-full items-center py-10">
