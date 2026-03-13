@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod commands;
 mod session;
+mod services;
 
 use tauri::RunEvent;
 
@@ -16,6 +17,8 @@ pub fn run() {
         .plugin(tauri_plugin_biometry::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            commands::chat_agent,
+            commands::approve_agent_action,
             commands::wallet_create,
             commands::wallet_import_mnemonic,
             commands::wallet_import_private_key,
@@ -25,7 +28,14 @@ pub fn run() {
             commands::session_lock,
             commands::session_status,
             commands::portfolio_fetch_balances,
+            commands::portfolio_fetch_balances_multi,
             commands::portfolio_transfer,
+            commands::check_ollama_status,
+            commands::install_ollama,
+            commands::pull_model,
+            commands::start_ollama_service,
+            commands::get_system_info,
+            commands::delete_model,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
