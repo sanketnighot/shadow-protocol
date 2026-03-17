@@ -1,13 +1,42 @@
-//! Agent chat orchestration: Ollama + tool loop.
+//! Agent chat orchestration: deterministic advice pipeline + tool loop.
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::ollama_client;
-use super::tool_registry;
+use super::portfolio_advice;
 use super::tool_router::{self, AgentContext, ToolResult};
 
 const MAX_TOOL_ROUNDS: u32 = 5;
+
+/// Portfolio/data intent: analyze, portfolio, balances, worst, risk, etc. Triggers autonomous pipeline.
+fn is_advice_intent(msg: &str) -> bool {
+    let lower = msg.to_lowercase();
+    let phrases = [
+        "analyze",
+        "analysis",
+        "how does it look",
+        "how does my portfolio",
+        "what should i do",
+        "optimize",
+        "optimization",
+        "rebalance",
+        "recommend",
+        "suggest",
+        "advice",
+        "portfolio",
+        "balances",
+        "holdings",
+        "what do i have",
+        "show my portfolio",
+        "my portfolio",
+        "worst thing",
+        "risky",
+        "concentration",
+        "what's in my",
+    ];
+    phrases.iter().any(|p| lower.contains(p))
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +49,9 @@ pub struct ChatAgentInput {
     pub num_ctx: Option<u32>,
     /// Recent structured facts from tool outputs for follow-up context.
     pub structured_facts: Option<String>,
+    /// When true, advice pipeline simulates; no swap execution.
+    #[serde(default)]
+    pub demo_mode: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,9 +85,15 @@ pub enum ResponseBlock {
         tool_name: String,
         content: String,
     },
+    DecisionResult {
+        insights: serde_json::Value,
+        decision: serde_json::Value,
+        simulated: bool,
+    },
 }
 
-/// Returns true if the user message suggests they want interpretation/analysis, not just raw data.
+/// Returns true if the user message suggests they want interpretation/analysis.
+#[allow(dead_code)] // kept for tests; synthesis pass removed in favor of advice pipeline
 pub(crate) fn wants_analysis(msg: &str) -> bool {
     let lower = msg.to_lowercase();
     let phrases = [
@@ -165,11 +203,6 @@ fn build_approval_message(tool_name: &str, payload: &serde_json::Value) -> Strin
 }
 
 pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, String> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|e| e.to_string())?;
-
     let wallet = input.wallet_address.as_deref();
     let wallet_addresses: Vec<String> = input
         .wallet_addresses
@@ -181,6 +214,54 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
                 .map(|a| vec![a.clone()])
                 .unwrap_or_default()
         });
+
+    // Deterministic advice pipeline: fetch → preprocess → LLM (insights only) → validate.
+    let last_user = input
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role.eq_ignore_ascii_case("user"))
+        .map(|m| m.content.as_str());
+    if last_user.map(is_advice_intent).unwrap_or(false) && !wallet_addresses.is_empty() {
+        let goal = last_user;
+        let result = portfolio_advice::run_portfolio_advice(
+            &input.model,
+            &wallet_addresses,
+            goal,
+            input.demo_mode,
+            input.num_ctx,
+        )
+        .await?;
+        let insights_json = serde_json::to_value(&result.insights).unwrap_or(serde_json::json!({}));
+        let decision_json = serde_json::to_value(&result.decision).unwrap_or(serde_json::json!({}));
+        let summary = format!(
+            "Portfolio: {:.2} USD, risk {}. Decision: {} — {}",
+            result.insights.total_value,
+            match result.insights.risk_level {
+                super::portfolio_insights::RiskLevel::Low => "low",
+                super::portfolio_insights::RiskLevel::Medium => "medium",
+                super::portfolio_insights::RiskLevel::High => "high",
+            },
+            result.decision.action,
+            result.decision.reason,
+        );
+        return Ok(ChatAgentResponse::AssistantMessage {
+            content: summary.clone(),
+            blocks: vec![
+                ResponseBlock::Text { content: summary },
+                ResponseBlock::DecisionResult {
+                    insights: insights_json,
+                    decision: decision_json,
+                    simulated: result.simulated,
+                },
+            ],
+        });
+    }
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
     let agent_ctx = AgentContext {
         wallet_count: wallet_addresses.len() as u32,
         active_address: input.wallet_address.clone(),
@@ -209,13 +290,6 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
             built.push((role.clone(), content.clone()));
         }
     }
-
-    let last_user_msg: Option<&str> = input
-        .messages
-        .iter()
-        .rev()
-        .find(|m| m.role.eq_ignore_ascii_case("user"))
-        .map(|m| m.content.as_str());
 
     let round = 0u32;
     let mut blocks = Vec::new();
@@ -256,59 +330,19 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
                 });
             }
             ToolResult::ToolOutput { tool_name, content } => {
-                let def = tool_registry::all_tools()
-                    .into_iter()
-                    .find(|t| t.name == tool_name);
-                let do_synthesis = def
-                    .map(|d| d.supports_synthesis)
-                    .unwrap_or(false)
-                    && last_user_msg.map(wants_analysis).unwrap_or(false);
-
-                let (content, blocks) = if do_synthesis {
-                    let mut synthesis_messages = built.clone();
-                    synthesis_messages.push((
-                        "assistant".into(),
-                        format!("TOOL: {}()", tool_name),
-                    ));
-                    synthesis_messages.push((
-                        "user".into(),
-                        format!("[Tool result]\n{content}\n\nPlease analyze this."),
-                    ));
-                    let synthesis_system = "You are Shadow. The user wants analysis of real tool data. Respond with 2-4 concise sentences. Use only the data provided. Never fabricate numbers.";
-                    synthesis_messages[0] = ("system".into(), synthesis_system.to_string());
-
-                    let analysis = ollama_client::chat(
-                        &client,
-                        &input.model,
-                        &synthesis_messages,
-                        input.num_ctx,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                    let mut out_blocks = blocks.clone();
-                    out_blocks.push(ResponseBlock::ToolResult {
-                        tool_name: tool_name.clone(),
-                        content: content.clone(),
-                    });
-                    out_blocks.push(ResponseBlock::Text {
-                        content: analysis.trim().to_string(),
-                    });
-                    (analysis.trim().to_string(), out_blocks)
-                } else {
-                    let summary = format_tool_result(&tool_name, &content);
-                    let mut out_blocks = blocks;
-                    out_blocks.push(ResponseBlock::Text {
-                        content: summary.clone(),
-                    });
-                    out_blocks.push(ResponseBlock::ToolResult {
-                        tool_name: tool_name.clone(),
-                        content: content.clone(),
-                    });
-                    (summary, out_blocks)
-                };
-
-                break Ok(ChatAgentResponse::AssistantMessage { content, blocks });
+                let summary = format_tool_result(&tool_name, &content);
+                let mut out_blocks = blocks;
+                out_blocks.push(ResponseBlock::Text {
+                    content: summary.clone(),
+                });
+                out_blocks.push(ResponseBlock::ToolResult {
+                    tool_name: tool_name.clone(),
+                    content: content.clone(),
+                });
+                break Ok(ChatAgentResponse::AssistantMessage {
+                    content: summary,
+                    blocks: out_blocks,
+                });
             }
             ToolResult::ApprovalRequired { tool_name, payload } => {
                 let message = build_approval_message(&tool_name, &payload);

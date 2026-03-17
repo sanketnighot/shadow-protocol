@@ -1,5 +1,8 @@
 pub mod agent_chat;
 pub mod chain;
+pub mod decision_validator;
+pub mod portfolio_advice;
+pub mod portfolio_insights;
 pub mod ollama_client;
 pub mod portfolio_service;
 pub mod tool_registry;

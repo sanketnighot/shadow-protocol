@@ -17,6 +17,7 @@ export async function chatAgent(
     walletAddresses: input.walletAddresses ?? null,
     numCtx: input.numCtx ?? null,
     structuredFacts: input.structuredFacts ?? null,
+    demoMode: input.demoMode ?? true,
   };
   return invoke<ChatAgentResponse>("chat_agent", { input: payload });
 }

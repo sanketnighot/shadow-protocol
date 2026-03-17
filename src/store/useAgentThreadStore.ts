@@ -10,6 +10,7 @@ import {
   type AgentSuggestion,
   type ApprovalTransaction,
 } from "@/data/mock";
+import { chatAgent } from "@/lib/agent";
 import {
   buildChatMessages,
   extractStructuredFacts,
@@ -18,10 +19,9 @@ import {
   needsSummary,
   resolveContextBudget,
 } from "@/lib/chatContext";
-import { chatAgent } from "@/lib/agent";
-import type { SwapPreviewPayload } from "@/types/agent";
 import { useOllamaStore } from "@/store/useOllamaStore";
 import { useWalletStore } from "@/store/useWalletStore";
+import type { SwapPreviewPayload } from "@/types/agent";
 
 export type PendingAgentAction = {
   toolName: string;
@@ -64,7 +64,9 @@ function deriveTitle(messages: AgentMessage[]): string | null {
   const block = firstUser.blocks[0];
   if (block?.type !== "text") return null;
   const text = block.content.trim();
-  return text.length > 0 ? text.slice(0, 48) + (text.length > 48 ? "…" : "") : null;
+  return text.length > 0
+    ? text.slice(0, 48) + (text.length > 48 ? "…" : "")
+    : null;
 }
 
 type AgentThreadStore = {
@@ -87,7 +89,8 @@ function createEmptyThread(): Thread {
     rollingSummary: null,
     structuredFacts: null,
     isStreaming: false,
-    latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
+    latestActivityLabel:
+      "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
     pendingApproval: null,
     pendingAgentAction: null,
@@ -105,7 +108,8 @@ function createInitialThread(): Thread {
     rollingSummary: null,
     structuredFacts: null,
     isStreaming: false,
-    latestActivityLabel: "Executed DCA purchase: 0.01 ETH with safety checks passed.",
+    latestActivityLabel:
+      "Executed DCA purchase: 0.01 ETH with safety checks passed.",
     suggestion: AGENT_SUGGESTION,
     pendingApproval: PENDING_APPROVAL_TX,
     pendingAgentAction: null,
@@ -164,7 +168,9 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                       {
                         id: agentMessageId,
                         role: "agent" as const,
-                        blocks: [{ type: "text" as const, content: "Thinking…" }],
+                        blocks: [
+                          { type: "text" as const, content: "Thinking…" },
+                        ],
                       },
                     ],
                     isStreaming: true,
@@ -218,15 +224,16 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
             needsSummary(messagesExcludingPlaceholder, contextBudget) &&
             !thread.rollingSummary
           ) {
-            const older = messagesExcludingPlaceholder.slice(
-              0,
-              -10,
-            );
+            const older = messagesExcludingPlaceholder.slice(0, -10);
             const summary = await generateRollingSummary(older, model);
             set((s) => ({
               threads: s.threads.map((t) =>
                 t.id === threadId
-                  ? { ...t, rollingSummary: summary || null, updatedAt: Date.now() }
+                  ? {
+                      ...t,
+                      rollingSummary: summary || null,
+                      updatedAt: Date.now(),
+                    }
                   : t,
               ),
             }));
@@ -245,22 +252,36 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           const { activeAddress, addresses } = useWalletStore.getState();
           const walletAddress = activeAddress ?? null;
           const walletAddresses =
-            addresses.length > 0 ? addresses : (activeAddress ? [activeAddress] : []);
+            addresses.length > 0
+              ? addresses
+              : activeAddress
+                ? [activeAddress]
+                : [];
 
           try {
             const response = await chatAgent({
               model,
               messages: messagesForAgent,
               walletAddress,
-              walletAddresses: walletAddresses.length > 0 ? walletAddresses : null,
+              walletAddresses:
+                walletAddresses.length > 0 ? walletAddresses : null,
               numCtx: contextBudget,
               structuredFacts: thread.structuredFacts,
+              demoMode: true,
             });
 
             if (response.kind === "assistantMessage") {
               const blocks = response.blocks.map((b) => {
                 if (b.type === "text") {
                   return { type: "text" as const, content: b.content };
+                }
+                if (b.type === "decisionResult") {
+                  return {
+                    type: "decisionResult" as const,
+                    insights: b.insights,
+                    decision: b.decision,
+                    simulated: b.simulated,
+                  };
                 }
                 return {
                   type: "toolResult" as const,
@@ -269,7 +290,10 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                 };
               });
               if (blocks.length === 0 && response.content) {
-                blocks.push({ type: "text" as const, content: response.content });
+                blocks.push({
+                  type: "text" as const,
+                  content: response.content,
+                });
               } else if (blocks.length === 0) {
                 blocks.push({ type: "text" as const, content: "Done." });
               }
@@ -278,7 +302,8 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
               for (const b of response.blocks) {
                 if (b.type === "toolResult") {
                   const facts = extractStructuredFacts(b.toolName, b.content);
-                  if (facts) mergedFacts = mergeStructuredFacts(mergedFacts, facts);
+                  if (facts)
+                    mergedFacts = mergeStructuredFacts(mergedFacts, facts);
                 }
               }
               set((state) => {
@@ -297,7 +322,9 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                               : msg,
                           ),
                           structuredFacts:
-                            mergedFacts !== null ? mergedFacts : th.structuredFacts,
+                            mergedFacts !== null
+                              ? mergedFacts
+                              : th.structuredFacts,
                           updatedAt: Date.now(),
                         }
                       : th,
@@ -403,7 +430,12 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                         latestActivityLabel: "Agent error",
                         messages: th.messages.map((msg) =>
                           msg.id === agentMessageId
-                            ? { ...msg, blocks: [{ type: "text" as const, content: fallback }] }
+                            ? {
+                                ...msg,
+                                blocks: [
+                                  { type: "text" as const, content: fallback },
+                                ],
+                              }
                             : msg,
                         ),
                         updatedAt: Date.now(),
@@ -421,7 +453,9 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           if (state.threads.length <= 1) return state;
           const next = state.threads.filter((t) => t.id !== id);
           const nextActive =
-            state.activeThreadId === id ? next[0]?.id ?? null : state.activeThreadId;
+            state.activeThreadId === id
+              ? (next[0]?.id ?? null)
+              : state.activeThreadId;
           return {
             threads: next,
             activeThreadId: nextActive,
@@ -448,8 +482,16 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         set((state) => ({
           threads: state.threads.map((t) => {
             if (t.id !== threadId) return t;
-            const lastAgent = [...t.messages].reverse().find((m) => m.role === "agent");
-            if (!lastAgent) return { ...t, pendingApproval: null, pendingAgentAction: null, updatedAt: Date.now() };
+            const lastAgent = [...t.messages]
+              .reverse()
+              .find((m) => m.role === "agent");
+            if (!lastAgent)
+              return {
+                ...t,
+                pendingApproval: null,
+                pendingAgentAction: null,
+                updatedAt: Date.now(),
+              };
             const followUp: AgentMessageBlock = {
               type: "text",
               content: approved ? "✓ Approved." : "Rejected.",
@@ -476,12 +518,16 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         activeThreadId: state.activeThreadId,
       }),
       migrate: (persisted, _version) => {
-        const p = persisted as { threads?: Thread[]; activeThreadId?: string | null };
+        const p = persisted as {
+          threads?: Thread[];
+          activeThreadId?: string | null;
+        };
         const threads = (p.threads ?? []).map((t) => ({
           ...t,
           rollingSummary: "rollingSummary" in t ? t.rollingSummary : null,
           structuredFacts: "structuredFacts" in t ? t.structuredFacts : null,
-          pendingAgentAction: "pendingAgentAction" in t ? t.pendingAgentAction : null,
+          pendingAgentAction:
+            "pendingAgentAction" in t ? t.pendingAgentAction : null,
         }));
         return { ...p, threads } as typeof persisted;
       },
@@ -490,7 +536,10 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
   ),
 );
 
-export function getActiveThread(threads: Thread[], activeId: string | null): Thread | null {
+export function getActiveThread(
+  threads: Thread[],
+  activeId: string | null,
+): Thread | null {
   if (!activeId) return threads[0] ?? null;
   return threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
 }

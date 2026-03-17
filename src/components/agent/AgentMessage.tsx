@@ -1,5 +1,6 @@
 import type { AgentMessageBlock } from "@/data/mock";
 import { ApprovalRequestCard } from "@/components/agent/ApprovalRequestCard";
+import { DecisionCard } from "@/components/agent/DecisionCard";
 import { FormattedText } from "@/components/agent/FormattedText";
 import { OpportunityCard } from "@/components/agent/OpportunityCard";
 import { ToolResultCard } from "@/components/agent/ToolResultCard";
@@ -25,7 +26,11 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
         {[...blocks]
           .sort((a, b) => {
             const order = (t: string) =>
-              t === "text" ? 0 : t === "opportunity" || t === "toolResult" ? 1 : 2;
+              t === "text"
+                ? 0
+                : t === "opportunity" || t === "toolResult" || t === "decisionResult"
+                  ? 1
+                  : 2;
             return order(a.type) - order(b.type);
           })
           .map((block, index) => {
@@ -58,6 +63,16 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
                 key={`${block.type}-${index}`}
                 toolName={block.toolName}
                 content={block.content}
+              />
+            );
+          }
+          if (block.type === "decisionResult") {
+            return (
+              <DecisionCard
+                key={`${block.type}-${index}`}
+                insights={block.insights}
+                decision={block.decision}
+                simulated={block.simulated}
               />
             );
           }

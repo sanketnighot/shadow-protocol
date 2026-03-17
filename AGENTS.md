@@ -119,7 +119,7 @@ src-tauri/
 - Agent chat input must be fixed at the bottom of the viewport; only the messages area scrolls
 - Prefer Touch ID (biometric) over password prompts for wallet unlock when available
 - Wallet unlock must prompt for Touch ID/biometric when that option is chosen; should not auto-unlock without verification
-- Agent: chat conversationally first; only issue tool calls when user explicitly asks for live data (balances, prices, swaps); show approvals inline in chat with Approve/Reject buttons, not in a popup
+- Agent: chat conversationally for greetings (no tools on hi/hello); when user asks about portfolio/balances/prices, call tools proactively and never ask user for data the app can fetch; portfolio display must show token amounts and per-wallet attribution, formatted in Rust from real API data; show approvals inline with Approve/Reject buttons, not in a popup
 - Agent LLM responses: proper structure, formatting, clean, and concise; avoid verbose or repetitive output
 
 ## Learned Workspace Facts
@@ -135,6 +135,7 @@ src-tauri/
 - Ollama: model choice with RAM-based recommendations before first pull; ChatModelPicker in agent header for all installed models with pull/delete/switch
 - Updates: ActivityBell floating bottom-right; archive deletes permanently (no Archived tab)
 - Tauri invoke: commands expect args under `input` key (e.g. `invoke("chat_agent", { input: payload })`)
+- Agent decision pipeline: deterministic DeFi execution engine; portfolio advice uses preprocessing, strict JSON, refusal detection, and fallback rules; demo mode simulates without execution
 
 ## Design System
 

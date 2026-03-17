@@ -46,6 +46,12 @@ export type AgentMessageBlock =
       content: string;
     }
   | {
+      type: "decisionResult";
+      insights: Record<string, unknown>;
+      decision: Record<string, unknown>;
+      simulated: boolean;
+    }
+  | {
       type: "approvalRequest";
       toolName: string;
       payload: unknown;

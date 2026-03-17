@@ -12,11 +12,19 @@ export type ChatAgentInput = {
   walletAddresses?: string[] | null;
   numCtx?: number;
   structuredFacts?: string | null;
+  /** When true, advice pipeline simulates; no swap execution. Default true for demo. */
+  demoMode?: boolean;
 };
 
 export type ResponseBlock =
   | { type: "text"; content: string }
-  | { type: "toolResult"; toolName: string; content: string };
+  | { type: "toolResult"; toolName: string; content: string }
+  | {
+      type: "decisionResult";
+      insights: Record<string, unknown>;
+      decision: Record<string, unknown>;
+      simulated: boolean;
+    };
 
 export type ChatAgentResponse =
   | {
