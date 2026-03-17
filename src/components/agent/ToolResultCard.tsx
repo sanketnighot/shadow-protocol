@@ -11,7 +11,7 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
   const walletCount = (unwrapped.walletCount as number) ?? 0;
   const breakdown = Array.isArray(unwrapped.breakdown) ? unwrapped.breakdown : [];
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
         <PieChart className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -68,7 +68,7 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
 function BalancesCard({ data }: { data: unknown }) {
   const items = Array.isArray(data) ? data : [];
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
         <Wallet className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -97,7 +97,7 @@ function BalancesCard({ data }: { data: unknown }) {
 function PriceCard({ data }: { data: Record<string, unknown> }) {
   const price = (data.priceUsd as number) ?? 0;
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
       <div className="mb-1.5 flex items-center gap-2">
         <TrendingUp className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -128,7 +128,7 @@ export function ToolResultCard({ toolName, content }: ToolResultCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
       <div className="mb-1.5 flex items-center gap-2">
         <Database className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">

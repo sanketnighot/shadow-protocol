@@ -31,7 +31,7 @@ export const FormattedText = memo(function FormattedText({ content }: FormattedT
 
   const paragraphs = trimmed.split(/\n\n+/);
   return (
-    <div className="space-y-3 text-sm leading-relaxed text-foreground/88 sm:text-[15px]">
+    <div className="space-y-2 text-xs leading-relaxed text-foreground/88 sm:text-sm">
       {paragraphs.map((para, i) => {
         const lines = para.split("\n").filter(Boolean);
         const firstLine = lines[0] ?? "";

@@ -31,15 +31,15 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
   const confidence = safeStr(decision.confidence).toLowerCase();
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-2">
         <Target className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
           Portfolio advice{simulated ? " (simulated)" : ""}
         </span>
       </div>
 
-      <div className="mb-3 grid gap-2 text-xs">
+      <div className="mb-2 grid gap-1.5 text-xs">
         <div className="flex justify-between">
           <span className="text-muted">Total value</span>
           <span className="font-medium text-foreground/95">${totalValue.toFixed(2)}</span>
@@ -63,7 +63,7 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
       </div>
 
       {allocList.length > 0 && (
-        <div className="mb-3 border-t border-white/5 pt-2">
+        <div className="mb-2 border-t border-white/5 pt-1.5">
           <p className="mb-1.5 text-[10px] text-muted">Allocations</p>
           <div className="flex flex-wrap gap-2">
             {allocList.map((a, i) => (
@@ -78,7 +78,7 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
         </div>
       )}
 
-      <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+      <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
         <Zap className="mt-0.5 size-3.5 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
           <p className="font-medium capitalize text-foreground/95">{action}</p>

@@ -14,15 +14,13 @@ type AgentMessageProps = {
 
 export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprovePending }: AgentMessageProps) {
   return (
-    <div className="max-w-full rounded-[26px] rounded-bl-lg border border-white/8 bg-[linear-gradient(180deg,rgba(20,20,28,0.96),rgba(14,14,20,0.98))] px-4 py-4 shadow-[0_18px_44px_rgba(0,0,0,0.2)] sm:max-w-4xl sm:px-6 sm:py-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.3em] text-muted uppercase">
-            Shadow
-          </p>
-        </div>
+    <div className="max-w-full rounded-xl rounded-bl-md border border-white/8 bg-[linear-gradient(180deg,rgba(20,20,28,0.96),rgba(14,14,20,0.98))] px-3 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.18)] sm:max-w-4xl sm:px-4 sm:py-3">
+      <div className="flex items-center gap-2">
+        <p className="font-mono text-[9px] tracking-[0.25em] text-muted uppercase">
+          Shadow
+        </p>
       </div>
-      <div className="mt-5 space-y-4">
+      <div className="mt-2 space-y-2">
         {[...blocks]
           .sort((a, b) => {
             const order = (t: string) =>
@@ -36,10 +34,10 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
           .map((block, index) => {
           if (block.type === "text") {
             return block.content === "Thinking…" ? (
-              <div key={`${block.type}-${index}`} className="flex h-7 items-center gap-1.5">
-                <span className="size-2 animate-pulse rounded-full bg-primary/80" />
-                <span className="size-2 animate-pulse rounded-full bg-primary/80 [animation-delay:150ms]" />
-                <span className="size-2 animate-pulse rounded-full bg-primary/80 [animation-delay:300ms]" />
+              <div key={`${block.type}-${index}`} className="flex h-5 items-center gap-1">
+                <span className="size-1.5 animate-pulse rounded-full bg-primary/80" />
+                <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:150ms]" />
+                <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:300ms]" />
               </div>
             ) : (
               <FormattedText key={`${block.type}-${index}`} content={block.content} />

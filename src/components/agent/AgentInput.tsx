@@ -14,7 +14,7 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
 
   return (
     <form
-      className="relative overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(22,22,30,0.96),rgba(13,13,18,0.98))] p-2 shadow-[0_18px_48px_rgba(0,0,0,0.24)]"
+      className="relative overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(22,22,30,0.96),rgba(13,13,18,0.98))] p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.2)]"
       onSubmit={(event) => {
         event.preventDefault();
         const trimmedValue = value.trim();
@@ -36,14 +36,14 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
             onChange={(event) => setValue(event.currentTarget.value)}
             placeholder="Type your instruction..."
             disabled={disabled}
-            className="h-[52px] w-full rounded-[20px] border-white/8 bg-black/25 px-4 text-foreground placeholder:text-muted focus-visible:border-primary/30 focus-visible:ring-primary/15"
+            className="h-10 w-full rounded-lg border-white/8 bg-black/25 px-3 text-sm text-foreground placeholder:text-muted focus-visible:border-primary/30 focus-visible:ring-primary/15"
           />
         </div>
         <Button
           type="submit"
           size="icon-lg"
           disabled={disabled || value.trim().length === 0}
-          className="mt-6 size-12 rounded-[20px] shadow-[0_14px_32px_rgba(139,92,246,0.35)]"
+          className="size-9 rounded-lg shadow-[0_10px_24px_rgba(139,92,246,0.3)]"
         >
           <ArrowUpRight className="size-4" />
         </Button>
