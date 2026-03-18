@@ -91,3 +91,11 @@ pub async fn remove_ollama_key() -> SettingsResult {
         Err(e) => SettingsResult { success: false, error: Some(e.to_string()) },
     }
 }
+
+#[tauri::command]
+pub async fn delete_all_data(app: tauri::AppHandle) -> SettingsResult {
+    match settings::delete_all_app_data(&app).await {
+        Ok(_) => SettingsResult { success: true, error: None },
+        Err(e) => SettingsResult { success: false, error: Some(e) },
+    }
+}

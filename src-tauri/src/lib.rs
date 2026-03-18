@@ -71,6 +71,7 @@ pub fn run() {
             commands::set_ollama_key,
             commands::get_ollama_key,
             commands::remove_ollama_key,
+            commands::delete_all_data,
             commands::portfolio_fetch_balances,
             commands::portfolio_fetch_balances_multi,
             commands::portfolio_fetch_transactions,

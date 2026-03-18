@@ -11,6 +11,7 @@ pub use chat::*;
 pub use ollama_manager::*;
 pub use portfolio::*;
 pub use session::*;
+pub use settings::*;
 pub use transfer::*;
 pub use wallet::*;
 pub use wallet_sync::*;
