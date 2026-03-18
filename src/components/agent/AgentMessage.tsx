@@ -1,4 +1,5 @@
 import type { AgentMessageBlock } from "@/data/mock";
+import { Bot } from "lucide-react";
 import { ApprovalRequestCard } from "@/components/agent/ApprovalRequestCard";
 import { DecisionCard } from "@/components/agent/DecisionCard";
 import { FormattedText } from "@/components/agent/FormattedText";
@@ -14,13 +15,17 @@ type AgentMessageProps = {
 
 export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprovePending }: AgentMessageProps) {
   return (
-    <div className="max-w-full rounded-xl rounded-bl-md border border-white/8 bg-[linear-gradient(180deg,rgba(20,20,28,0.96),rgba(14,14,20,0.98))] px-3 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.18)] sm:max-w-4xl sm:px-4 sm:py-3">
-      <div className="flex items-center gap-2">
-        <p className="font-mono text-[9px] tracking-[0.25em] text-muted uppercase">
+    <div className="flex max-w-[95%] sm:max-w-[85%] flex-col items-start gap-2">
+      <div className="flex items-center gap-2 px-1">
+        <div className="flex size-6 items-center justify-center rounded-full bg-white/10 text-foreground ring-1 ring-white/20 shadow-inner">
+          <Bot className="size-3.5" />
+        </div>
+        <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-foreground uppercase">
           Shadow
-        </p>
+        </span>
       </div>
-      <div className="mt-2 space-y-2">
+      
+      <div className="mt-1 flex w-full flex-col gap-3 rounded-[24px] rounded-tl-[8px] border border-white/10 bg-[#1a1a24] p-4 sm:p-5 shadow-xl shadow-black/20">
         {[...blocks]
           .sort((a, b) => {
             const order = (t: string) =>
@@ -34,13 +39,15 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
           .map((block, index) => {
           if (block.type === "text") {
             return block.content === "Thinking…" ? (
-              <div key={`${block.type}-${index}`} className="flex h-5 items-center gap-1">
+              <div key={`${block.type}-${index}`} className="flex h-6 items-center gap-1.5 px-2">
                 <span className="size-1.5 animate-pulse rounded-full bg-primary/80" />
                 <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:150ms]" />
                 <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:300ms]" />
               </div>
             ) : (
-              <FormattedText key={`${block.type}-${index}`} content={block.content} />
+              <div key={`${block.type}-${index}`} className="text-sm leading-relaxed text-foreground/90">
+                <FormattedText content={block.content} />
+              </div>
             );
           }
           if (block.type === "opportunity") {

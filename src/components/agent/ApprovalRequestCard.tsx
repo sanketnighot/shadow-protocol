@@ -28,8 +28,9 @@ export function ApprovalRequestCard({
   onReject,
   isPending,
 }: ApprovalRequestCardProps) {
+  const name = toolName ?? "";
   const swap = payload as SwapPreviewPayload | null;
-  const isSwap = toolName === "execute_token_swap" && swap;
+  const isSwap = name === "execute_token_swap" && swap;
 
   return (
     <div className="rounded-xl border border-white/12 bg-white/5 px-4 py-4">

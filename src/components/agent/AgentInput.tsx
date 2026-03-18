@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 type AgentInputProps = {
   disabled?: boolean;
@@ -14,7 +13,7 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
 
   return (
     <form
-      className="relative overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(22,22,30,0.96),rgba(13,13,18,0.98))] p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.2)]"
+      className="relative overflow-hidden rounded-full border border-white/10 bg-[#1a1a24]/90 p-1.5 shadow-[0_12px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all focus-within:border-primary/40 focus-within:shadow-[0_12px_48px_rgba(139,92,246,0.15)]"
       onSubmit={(event) => {
         event.preventDefault();
         const trimmedValue = value.trim();
@@ -27,25 +26,24 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
         setValue("");
       }}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(139,92,246,0.08),transparent_30%,transparent)]" />
-      <div className="relative flex items-center gap-2">
+      <div className="relative flex items-center gap-2 px-2">
         <div className="min-w-0 flex-1">
-          <Input
+          <input
             aria-label="Agent instruction"
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
             placeholder="Type your instruction..."
             disabled={disabled}
-            className="h-10 w-full rounded-lg border-white/8 bg-black/25 px-3 text-sm text-foreground placeholder:text-muted focus-visible:border-primary/30 focus-visible:ring-primary/15"
+            className="h-12 w-full bg-transparent px-2 text-base text-foreground placeholder:text-muted focus:outline-none disabled:opacity-50"
           />
         </div>
         <Button
           type="submit"
           size="icon-lg"
           disabled={disabled || value.trim().length === 0}
-          className="size-9 rounded-lg shadow-[0_10px_24px_rgba(139,92,246,0.3)]"
+          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:scale-105 hover:bg-primary/90 disabled:opacity-50 disabled:hover:scale-100"
         >
-          <ArrowUpRight className="size-4" />
+          <ArrowUpRight className="size-5" />
         </Button>
       </div>
     </form>

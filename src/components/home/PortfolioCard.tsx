@@ -12,10 +12,16 @@ import {
 } from "@/components/ui/card";
 import { useCountUp } from "@/hooks/useCountUp";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useWalletStore } from "@/store/useWalletStore";
 
 export function PortfolioCard() {
-  const { chains, dailyChangeLabel, series } = usePortfolio();
-  const animatedTotalValue = useCountUp(12345.67);
+  const { addresses, activeAddress } = useWalletStore();
+  const { chains, dailyChangeLabel, series, totalValueLabel } = usePortfolio({
+    addresses,
+    activeAddress,
+  });
+  const totalValue = Number(totalValueLabel.replace(/[$,]/g, "")) || 0;
+  const animatedTotalValue = useCountUp(totalValue);
 
   return (
     <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>

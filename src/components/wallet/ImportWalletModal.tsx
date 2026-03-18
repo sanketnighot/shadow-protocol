@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/hooks/useToast";
 import type { ImportWalletResult } from "@/types/wallet";
 import { useWalletStore } from "@/store/useWalletStore";
+import { useWalletSyncStore } from "@/store/useWalletSyncStore";
 import { invoke } from "@tauri-apps/api/core";
 
 type ImportWalletModalProps = {
@@ -39,6 +40,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
   const [error, setError] = useState<string | null>(null);
   const { success } = useToast();
   const refreshWallets = useWalletStore((s) => s.refreshWallets);
+  const startSync = useWalletSyncStore((s) => s.startSync);
 
   const reset = () => {
     setMnemonic("");
@@ -59,6 +61,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
           input: { mnemonic: mnemonic.trim() },
         });
         void refreshWallets();
+        void startSync([res.address]);
         success("Wallet imported", `Address: ${res.address}`);
         onOpenChange(false);
         reset();
@@ -78,6 +81,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
           input: { private_key: privateKey.trim() },
         });
         void refreshWallets();
+        void startSync([res.address]);
         success("Wallet imported", `Address: ${res.address}`);
         onOpenChange(false);
         reset();

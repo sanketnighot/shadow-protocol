@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/hooks/useToast";
 import type { CreateWalletResult } from "@/types/wallet";
 import { useWalletStore } from "@/store/useWalletStore";
+import { useWalletSyncStore } from "@/store/useWalletSyncStore";
 import { invoke } from "@tauri-apps/api/core";
 
 type CreateWalletModalProps = {
@@ -27,6 +28,7 @@ export function CreateWalletModal({ open, onOpenChange }: CreateWalletModalProps
   const [error, setError] = useState<string | null>(null);
   const { success } = useToast();
   const refreshWallets = useWalletStore((s) => s.refreshWallets);
+  const startSync = useWalletSyncStore((s) => s.startSync);
 
   const handleCreate = async () => {
     setIsLoading(true);
@@ -51,6 +53,9 @@ export function CreateWalletModal({ open, onOpenChange }: CreateWalletModalProps
 
   const handleConfirm = () => {
     void refreshWallets();
+    if (result?.address) {
+      void startSync([result.address]);
+    }
     success("Wallet created", `Address: ${result?.address ?? ""}`);
     setResult(null);
     onOpenChange(false);

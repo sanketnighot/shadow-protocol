@@ -28,7 +28,7 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
   const [address, setAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { warning } = useToast();
+  const { warning, info } = useToast();
 
   const validationMessage = useMemo(() => {
     const normalizedAmount = Number(amount);
@@ -112,7 +112,7 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
 
               setIsSubmitting(true);
               try {
-                const { txHash } = await invoke<{ txHash: string }>("portfolio_transfer", {
+                const { txHash } = await invoke<{ txHash: string }>("portfolio_transfer_background", {
                   input: {
                     fromAddress,
                     toAddress: address.trim(),
@@ -123,6 +123,7 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
                   },
                 });
                 setSubmitError(null);
+                info("Transfer broadcast", "Confirmation in progress. Check Updates for status.");
                 onSubmit(amount, address.trim(), txHash);
                 setAmount("");
                 setAddress("");

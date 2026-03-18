@@ -3,29 +3,44 @@ import { Plus, RefreshCw, Wallet } from "lucide-react";
 
 import { AssetList } from "@/components/portfolio/AssetList";
 import { BridgeModal } from "@/components/portfolio/BridgeModal";
+import { NftGrid } from "@/components/portfolio/NftGrid";
 import { PortfolioFilters } from "@/components/portfolio/PortfolioFilters";
+import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { SendModal } from "@/components/portfolio/SendModal";
 import { SwapModal } from "@/components/portfolio/SwapModal";
+import { TransactionList } from "@/components/portfolio/TransactionList";
+import { SuperWalletHero } from "@/components/portfolio/SuperWalletHero";
+import { WalletSelectorDropdown } from "@/components/portfolio/WalletSelectorDropdown";
+import { SmartOpportunities } from "@/components/portfolio/SmartOpportunities";
 import { CreateWalletModal } from "@/components/wallet/CreateWalletModal";
 import { ImportWalletModal } from "@/components/wallet/ImportWalletModal";
 import { WalletEmptyState } from "@/components/wallet/WalletEmptyState";
-import { WalletTabs } from "@/components/wallet/WalletTabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { Button } from "@/components/ui/button";
+import { useNfts } from "@/hooks/useNfts";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useTransactions } from "@/hooks/useTransactions";
 import { useToast } from "@/hooks/useToast";
 import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
 
+type PortfolioTabId = "tokens" | "nfts" | "transactions";
+
 export function PortfolioView() {
   const { addresses, activeAddress, refreshWallets } = useWalletStore();
-  const { assets, isLoading, isFetching, refetch, balanceError } = usePortfolio({
+  const { assets, totalValueLabel, dailyChangeLabel, chains, series, isLoading, isFetching, refetch, balanceError } = usePortfolio({
+    addresses,
+    activeAddress,
+  });
+  const { nfts, isLoading: nftsLoading } = useNfts({ addresses, activeAddress });
+  const { transactions, isLoading: txLoading } = useTransactions({
     addresses,
     activeAddress,
   });
   const { success } = useToast();
+  const [activeTab, setActiveTab] = useState<PortfolioTabId>("tokens");
   const [chain, setChain] = useState("All");
   const [type, setType] = useState("All");
   const [sort, setSort] = useState("Value");
@@ -34,6 +49,7 @@ export function PortfolioView() {
   const openUnlockDialog = useSessionStore((s) => s.openUnlockDialog);
   const closePortfolioAction = useUiStore((state) => state.closePortfolioAction);
   const portfolioAction = useUiStore((state) => state.portfolioAction);
+  const openAction = useUiStore((state) => state.openPortfolioAction);
 
   useEffect(() => {
     void refreshWallets();
@@ -62,122 +78,151 @@ export function PortfolioView() {
   }, [assets, chain, sort, type]);
 
   const selectedAsset = useMemo(
-    () => assets.find((asset) => asset.id === portfolioAction?.assetId) ?? null,
+    () => assets.find((asset) => asset.id === portfolioAction?.assetId) ?? assets[0] ?? null,
     [assets, portfolioAction?.assetId],
   );
 
   const hasWallets = addresses.length > 0;
 
-  return (
-    <div className="space-y-8">
-      <section className="rounded-[24px] border border-white/10 bg-[#14141a] p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-              {hasWallets ? "All assets" : "Wallets"}
-            </p>
-            <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] text-foreground">
-              {hasWallets
-                ? "Unified cross-chain asset view with execution shortcuts."
-                : "Create or import a wallet to get started."}
-            </h1>
-          </div>
-          <div className="flex gap-2">
-            {hasWallets && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full border-white/10"
-                onClick={() => void refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw
-                  className={`mr-2 size-4 ${isFetching ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-full"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="mr-2 size-4" />
-              Create
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-full border-white/10"
-              onClick={() => setImportOpen(true)}
-            >
-              Import
-            </Button>
-          </div>
-        </div>
+  const handleHeroAction = (action: "send" | "swap" | "bridge" | "receive") => {
+    if (action === "receive") {
+      success("Receive", "Your aggregated address is ready to receive funds.");
+      return;
+    }
+    if (selectedAsset) {
+      openAction(action, selectedAsset.id);
+    } else {
+      success("Action required", "Please select an asset first or ensure you have a balance.");
+    }
+  };
 
+  return (
+    <div className="space-y-6">
+      {/* Top Header Actions (Create/Import/Refresh) */}
+      <div className="flex items-center justify-end gap-2">
         {hasWallets && (
-          <div className="mt-6">
-            <PortfolioFilters
-              chain={chain}
-              sort={sort}
-              type={type}
-              onChainChange={setChain}
-              onSortChange={setSort}
-              onTypeChange={setType}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="rounded-full bg-white/5 hover:bg-white/10"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw
+              className={`mr-2 size-4 ${isFetching ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-full border-white/10 bg-white/5 hover:bg-white/10"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus className="mr-2 size-4" />
+          Create
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-full border-white/10 bg-transparent hover:bg-white/5"
+          onClick={() => setImportOpen(true)}
+        >
+          Import
+        </Button>
+      </div>
+
+      {!hasWallets ? (
+        <WalletEmptyState
+          onCreate={() => setCreateOpen(true)}
+          onImport={() => setImportOpen(true)}
+        />
+      ) : (
+        <>
+          {/* Main Hero Dashboard */}
+          <SuperWalletHero
+            totalValueLabel={totalValueLabel}
+            dailyChangeLabel={dailyChangeLabel}
+            chains={chains}
+            series={series}
+            onAction={handleHeroAction}
+          />
+
+          {/* Controls: Smart Selector */}
+          <div className="flex items-center justify-between px-1">
+            <WalletSelectorDropdown />
+          </div>
+
+          {/* Portfolio Tabs & Content */}
+          <div className="rounded-[32px] border border-white/10 bg-[#14141a] p-5 sm:p-8">
+            <PortfolioTabs
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              tokensContent={
+                <div className="mt-4">
+                  <SmartOpportunities />
+
+                  <div className="mb-6 rounded-2xl bg-white/[0.02] p-2">
+                    <PortfolioFilters
+                      chain={chain}
+                      sort={sort}
+                      type={type}
+                      onChainChange={setChain}
+                      onSortChange={setSort}
+                      onTypeChange={setType}
+                    />
+                  </div>
+
+                  {isLoading ? (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[220px] w-full rounded-[24px]" />
+                      ))}
+                    </div>
+                  ) : balanceError ? (
+                    <EmptyState
+                      icon={<Wallet className="size-5" />}
+                      title="Unable to load balances"
+                      description={balanceError}
+                    />
+                  ) : filteredAssets.length > 0 ? (
+                    <AssetList assets={filteredAssets} />
+                  ) : (
+                    <EmptyState
+                      icon={<Wallet className="size-5" />}
+                      title="No assets match these filters"
+                      description="Adjust the chain or asset type filters to bring balances back into view."
+                      actionLabel="Reset filters"
+                      onAction={() => {
+                        setChain("All");
+                        setType("All");
+                        setSort("Value");
+                      }}
+                    />
+                  )}
+                </div>
+              }
+              nftsContent={
+                <div className="mt-4">
+                  <NftGrid nfts={nfts} isLoading={nftsLoading} />
+                </div>
+              }
+              transactionsContent={
+                <div className="mt-4">
+                  <TransactionList
+                    transactions={transactions}
+                    isLoading={txLoading}
+                  />
+                </div>
+              }
             />
           </div>
-        )}
-      </section>
-
-      <div className="space-y-6">
-        {!hasWallets ? (
-          <WalletEmptyState
-            onCreate={() => setCreateOpen(true)}
-            onImport={() => setImportOpen(true)}
-          />
-        ) : (
-          <>
-            <div className="rounded-[24px] border border-white/10 bg-[#14141a] p-4">
-              <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">
-                Wallets
-              </p>
-              <WalletTabs />
-            </div>
-            {isLoading ? (
-              <>
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
-              </>
-            ) : balanceError ? (
-              <EmptyState
-                icon={<Wallet className="size-5" />}
-                title="Unable to load balances"
-                description={balanceError}
-                actionLabel={undefined}
-                onAction={undefined}
-              />
-            ) : filteredAssets.length > 0 ? (
-              <AssetList assets={filteredAssets} />
-            ) : (
-              <EmptyState
-                icon={<Wallet className="size-5" />}
-                title="No assets match these filters"
-                description="Adjust the chain or asset type filters to bring balances back into view."
-                actionLabel="Reset filters"
-                onAction={() => {
-                  setChain("All");
-                  setType("All");
-                  setSort("Value");
-                }}
-              />
-            )}
-          </>
-        )}
-      </div>
+        </>
+      )}
 
       <CreateWalletModal open={isCreateOpen} onOpenChange={setCreateOpen} />
       <ImportWalletModal open={isImportOpen} onOpenChange={setImportOpen} />

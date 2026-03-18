@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/useUiStore";
+import { useWalletStore } from "@/store/useWalletStore";
 
 const ACTION_ICONS = [Send, Repeat2, Sparkles, BarChart3] as const;
 
 export function QuickActions() {
-  const { quickActions } = usePortfolio();
+  const { addresses, activeAddress } = useWalletStore();
+  const { quickActions, assets } = usePortfolio({ addresses, activeAddress });
   const navigate = useNavigate();
   const openPortfolioAction = useUiStore((state) => state.openPortfolioAction);
 
@@ -16,11 +18,15 @@ export function QuickActions() {
     switch (label) {
       case "Send":
         navigate("/portfolio");
-        openPortfolioAction("send", "asset-eth");
+        if (assets.length > 0) {
+          openPortfolioAction("send", assets[0].id);
+        }
         break;
       case "Swap":
         navigate("/portfolio");
-        openPortfolioAction("swap", "asset-usdc-arb");
+        if (assets.length > 0) {
+          openPortfolioAction("swap", assets[0].id);
+        }
         break;
       case "Strategy":
         navigate("/strategy");

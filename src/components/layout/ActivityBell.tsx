@@ -3,18 +3,21 @@ import {
   Bell,
   Check,
   CheckCircle2,
+  Loader2,
   TriangleAlert,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
   type NotificationItem,
   type NotificationType,
   useUiStore,
 } from "@/store/useUiStore";
+import { useWalletSyncStore } from "@/store/useWalletSyncStore";
 
 const NOTIFICATION_STYLES: Record<
   NotificationType,
@@ -123,6 +126,10 @@ export function ActivityBell() {
 
   const notifications = useUiStore((s) => s.notifications);
   const markNotificationRead = useUiStore((s) => s.markNotificationRead);
+  const syncStatus = useWalletSyncStore((s) => s.syncStatus);
+  const syncProgress = useWalletSyncStore((s) => s.progress);
+  const syncStep = useWalletSyncStore((s) => s.currentStep);
+  const syncWalletCount = useWalletSyncStore((s) => s.walletCount);
   const markNotificationsRead = useUiStore((s) => s.markNotificationsRead);
   const archiveNotification = useUiStore((s) => s.archiveNotification);
   const archiveAllNotifications = useUiStore((s) => s.archiveAllNotifications);
@@ -180,6 +187,17 @@ export function ActivityBell() {
         <div
           className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0e0e14] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
         >
+          {syncStatus === "syncing" && (
+            <div className="shrink-0 border-b border-white/10 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin text-primary" />
+                <span className="text-xs font-medium text-foreground">
+                  Syncing {syncWalletCount > 1 ? `${syncWalletCount} wallets` : "wallet"}… {syncStep}
+                </span>
+              </div>
+              <Progress value={syncProgress} className="mt-2 h-1.5" />
+            </div>
+          )}
           {notifications.length > 0 && (
             <div className="flex shrink-0 items-center justify-end gap-3 border-b border-white/10 px-3 py-2">
               <button

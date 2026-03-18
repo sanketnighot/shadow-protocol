@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowRight, ArrowLeftRight, Repeat } from "lucide-react";
 import type { Asset } from "@/data/mock";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -33,92 +34,142 @@ function tokenColor(symbol: string): string {
   return colors[symbol] ?? "from-white/10 to-white/5";
 }
 
+function getMockApy(symbol: string): string | null {
+  const yields: Record<string, string> = {
+    ETH: "3.2% APY",
+    USDC: "5.1% APY",
+    DAI: "4.8% APY",
+  };
+  return yields[symbol] ?? null;
+}
+
 export function TokenCard({ asset }: TokenCardProps) {
   const [popupOpen, setPopupOpen] = useState(false);
   const openPortfolioAction = useUiStore((state) => state.openPortfolioAction);
 
-  const handleAction = (action: "send" | "swap" | "bridge") => {
+  const handleAction = (action: "send" | "swap" | "bridge", e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setPopupOpen(false);
     openPortfolioAction(action, asset.id);
   };
 
+  const apy = getMockApy(asset.symbol);
+
   return (
     <>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setPopupOpen(true)}
-        className="flex w-full flex-col items-center gap-3 rounded-[20px] border border-white/10 bg-[#14141a] p-4 text-left transition-all duration-200 hover:scale-[1.02] hover:border-white/15 hover:shadow-lg active:scale-[0.98]"
+        className="group relative flex w-full flex-col items-center gap-4 overflow-hidden rounded-[24px] border border-white/10 bg-linear-to-b from-[#1a1a24] to-[#14141a] p-5 text-left transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-primary/5 active:scale-[0.98]"
       >
-        <div className="relative">
+        {/* APY Badge */}
+        {apy && (
+          <div className="absolute right-3 top-3 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+            {apy}
+          </div>
+        )}
+
+        <div className="relative mt-2">
           <div
-            className={`flex size-16 items-center justify-center rounded-2xl bg-linear-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
+            className={`flex size-16 items-center justify-center rounded-[20px] bg-linear-to-br ${tokenColor(
+              asset.symbol,
+            )} text-2xl font-bold text-foreground shadow-inner ring-1 ring-white/10`}
           >
             {asset.symbol.slice(0, 2)}
           </div>
           <div
-            className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-background bg-muted/90 text-[10px] font-semibold text-foreground"
+            className="absolute -bottom-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full border-2 border-[#14141a] bg-muted/90 text-[9px] font-bold text-foreground shadow-sm"
             title={asset.chainName}
           >
             {chainBadgeLabel(asset.chain)}
           </div>
         </div>
+
         <div className="w-full text-center">
-          <p className="truncate text-sm font-medium text-foreground">
+          <p className="truncate text-base font-semibold text-foreground tracking-tight">
             {asset.symbol}
           </p>
-          <p className="text-xs text-muted">{asset.balance}</p>
-          <p className="mt-0.5 font-semibold text-foreground">
-            {asset.valueUsd}
-          </p>
+          <div className="mt-1 flex items-baseline justify-center gap-1.5">
+            <span className="text-lg font-bold text-foreground">{asset.valueUsd}</span>
+          </div>
+          <p className="mt-0.5 text-xs font-medium text-muted">{asset.balance}</p>
         </div>
-      </button>
+
+        {/* Hover Quick Actions Overlay */}
+        <div className="absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center gap-2 bg-black/40 px-2 pb-4 pt-10 backdrop-blur-md transition-transform duration-300 group-hover:translate-y-0">
+          <button
+            onClick={(e) => handleAction("send", e)}
+            className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            title="Send"
+          >
+            <ArrowRight className="size-4" />
+          </button>
+          <button
+            onClick={(e) => handleAction("swap", e)}
+            className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            title="Swap"
+          >
+            <Repeat className="size-4" />
+          </button>
+          <button
+            onClick={(e) => handleAction("bridge", e)}
+            className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            title="Bridge"
+          >
+            <ArrowLeftRight className="size-4" />
+          </button>
+        </div>
+      </div>
 
       <Dialog open={popupOpen} onOpenChange={setPopupOpen}>
-        <DialogContent className="max-w-[calc(100%-2rem)] rounded-[28px] border border-white/10 bg-[#14141a] p-6 sm:max-w-sm sm:p-6">
-          <div className="flex flex-col items-center gap-5">
+        <DialogContent className="max-w-[calc(100%-2rem)] rounded-[32px] border border-white/10 bg-[#14141a] p-6 sm:max-w-sm sm:p-8">
+          <div className="flex flex-col items-center gap-6">
             <div className="relative">
               <div
-                className={`flex size-16 items-center justify-center rounded-2xl bg-linear-to-br ${tokenColor(asset.symbol)} text-2xl font-bold text-foreground shadow-inner`}
+                className={`flex size-20 items-center justify-center rounded-3xl bg-linear-to-br ${tokenColor(
+                  asset.symbol,
+                )} text-3xl font-bold text-foreground shadow-inner`}
               >
                 {asset.symbol.slice(0, 2)}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-foreground"
+                className="absolute -bottom-2 -right-2 flex size-8 items-center justify-center rounded-full border-[3px] border-[#14141a] bg-muted text-xs font-bold text-foreground"
                 title={asset.chainName}
               >
                 {chainBadgeLabel(asset.chain)}
               </div>
             </div>
             <div className="text-center">
-              <DialogTitle className="text-xl font-bold tracking-tight">
+              <DialogTitle className="text-2xl font-bold tracking-tight">
                 {asset.symbol}
               </DialogTitle>
-              <p className="mt-1 text-sm text-muted">{asset.chainName}</p>
-              <div className="mt-3 flex items-center justify-center gap-4">
-                <span className="text-sm text-muted">{asset.balance}</span>
-                <span className="font-semibold text-foreground">
+              <p className="mt-1.5 text-sm font-medium text-muted">{asset.chainName}</p>
+              <div className="mt-4 flex flex-col items-center justify-center gap-1">
+                <span className="text-3xl font-bold tracking-tight text-foreground">
                   {asset.valueUsd}
                 </span>
+                <span className="text-sm font-medium text-muted">{asset.balance}</span>
               </div>
             </div>
-            <div className="flex w-full flex-col gap-2">
+            <div className="flex w-full flex-col gap-3">
               <Button
-                className="w-full rounded-2xl py-6 text-base font-medium"
+                className="w-full rounded-2xl py-6 text-base font-semibold shadow-lg shadow-primary/20"
                 onClick={() => handleAction("send")}
               >
                 Send
               </Button>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
-                  className="rounded-2xl border-white/10 bg-white/5 py-5 hover:bg-white/10"
+                  className="rounded-2xl border-white/10 bg-white/5 py-6 font-medium hover:bg-white/10 hover:text-foreground"
                   onClick={() => handleAction("swap")}
                 >
                   Swap
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-2xl border-white/10 bg-white/5 py-5 hover:bg-white/10"
+                  className="rounded-2xl border-white/10 bg-white/5 py-6 font-medium hover:bg-white/10 hover:text-foreground"
                   onClick={() => handleAction("bridge")}
                 >
                   Bridge
