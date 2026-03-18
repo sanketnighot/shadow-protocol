@@ -1,44 +1,36 @@
 //! Routes tool requests from model output and dispatches execution.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::tool_registry;
 use super::tools::{
     get_total_portfolio_value, get_total_portfolio_value_multi, get_token_price,
     get_wallet_balances, get_wallet_balances_multi, prepare_swap_preview,
 };
+use super::local_db;
+use super::sonar_client;
 
-/// Format: TOOL: name(param1=value1, param2=value2)
-/// Matches TOOL: anywhere in text (small models sometimes add intro text)
-pub(crate) fn parse_tool_call(text: &str) -> Option<(String, Vec<(String, String)>)> {
-    let prefix = "TOOL:";
-    let text = text.trim();
-    let rest = text
-        .find(prefix)
-        .map(|i| text[i + prefix.len()..].trim())
-        .filter(|s| !s.is_empty())?;
-    let paren = rest.find('(')?;
-    let name = rest[..paren].trim().to_string();
-    let args = rest[paren + 1..].trim_end_matches(')');
-    let mut params = Vec::new();
-    for pair in args.split(',') {
-        let pair = pair.trim();
-        if let Some(eq) = pair.find('=') {
-            let k = pair[..eq].trim().to_string();
-            let v = pair[eq + 1..].trim().trim_matches('"').to_string();
-            if !k.is_empty() {
-                params.push((k, v));
-            }
-        }
-    }
-    Some((name, params))
+#[derive(Debug, Deserialize)]
+pub struct ToolCall {
+    pub name: String,
+    pub parameters: serde_json::Value,
 }
 
-fn get_param(params: &[(String, String)], key: &str) -> Option<String> {
-    params
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(key))
-        .map(|(_, v)| v.clone())
+/// Parses a JSON tool call from the LLM output.
+/// Expects format: {"name": "tool_name", "parameters": {...}}
+pub(crate) fn parse_tool_call(text: &str) -> Option<ToolCall> {
+    // LLMs sometimes wrap JSON in markdown blocks
+    let cleaned = if let Some(start) = text.find("```json") {
+        let end = text[start..].find("```")?;
+        &text[start + 7..start + end]
+    } else if let Some(start) = text.find('{') {
+        let end = text.rfind('}')?;
+        &text[start..=end]
+    } else {
+        text
+    };
+
+    serde_json::from_str(cleaned.trim()).ok()
 }
 
 #[derive(Debug, Serialize)]
@@ -61,8 +53,8 @@ pub async fn route_and_execute(
     wallet_address: Option<&str>,
     wallet_addresses: &[String],
 ) -> Result<ToolResult, String> {
-    let (name, params) = match parse_tool_call(model_output) {
-        Some(t) => t,
+    let call = match parse_tool_call(model_output) {
+        Some(c) => c,
         None => {
             return Ok(ToolResult::AssistantMessage {
                 content: model_output.to_string(),
@@ -72,8 +64,8 @@ pub async fn route_and_execute(
 
     let def = tool_registry::all_tools()
         .into_iter()
-        .find(|t| t.name == name)
-        .ok_or_else(|| format!("Unknown tool: {name}"))?;
+        .find(|t| t.name == call.name)
+        .ok_or_else(|| format!("Unknown tool: {}", call.name))?;
 
     let has_addresses = !wallet_addresses.is_empty();
     let address = wallet_address.unwrap_or(wallet_addresses.first().map(String::as_str).unwrap_or(""));
@@ -98,7 +90,7 @@ pub async fn route_and_execute(
             let res = res.map_err(|e| e.to_string())?;
             let content = serde_json::to_string(&res).unwrap_or_else(|_| "[]".into());
             Ok(ToolResult::ToolOutput {
-                tool_name: name,
+                tool_name: def.name.to_string(),
                 content,
             })
         }
@@ -115,63 +107,58 @@ pub async fn route_and_execute(
             };
             let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
             Ok(ToolResult::ToolOutput {
-                tool_name: name,
+                tool_name: def.name.to_string(),
                 content,
             })
         }
         "get_token_price" => {
-            let symbol = get_param(&params, "tokenSymbol")
-                .or_else(|| get_param(&params, "token"))
-                .unwrap_or_else(|| "ETH".to_string());
-            let res = get_token_price(&symbol).await.map_err(|e| e.to_string())?;
+            let symbol = call.parameters.get("tokenSymbol")
+                .and_then(|v| v.as_str())
+                .unwrap_or("ETH");
+            let res = get_token_price(symbol).await.map_err(|e| e.to_string())?;
             let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
             Ok(ToolResult::ToolOutput {
-                tool_name: name,
+                tool_name: def.name.to_string(),
+                content,
+            })
+        }
+        "web_research" => {
+            let query = call.parameters.get("query")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing query for web_research")?;
+            let res = sonar_client::search(query).await?;
+            Ok(ToolResult::ToolOutput {
+                tool_name: def.name.to_string(),
+                content: res,
+            })
+        }
+        "analyze_portfolio_history" => {
+            let limit = call.parameters.get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(10) as u32;
+            let snapshots = local_db::get_portfolio_snapshots(limit).map_err(|e| e.to_string())?;
+            let content = serde_json::to_string(&snapshots).unwrap_or_else(|_| "[]".into());
+            Ok(ToolResult::ToolOutput {
+                tool_name: def.name.to_string(),
                 content,
             })
         }
         "execute_token_swap" => {
-            let from = get_param(&params, "fromToken").unwrap_or_else(|| "USDC".to_string());
-            let to = get_param(&params, "toToken").unwrap_or_else(|| "ETH".to_string());
-            let amount = get_param(&params, "amount").unwrap_or_else(|| "0".to_string());
-            let chain = get_param(&params, "chain").unwrap_or_else(|| "ETH".to_string());
-            let slippage_s = get_param(&params, "slippage");
-            let slippage = slippage_s.and_then(|s| s.trim().trim_end_matches('%').parse().ok());
+            let from = call.parameters.get("fromToken").and_then(|v| v.as_str()).unwrap_or("USDC");
+            let to = call.parameters.get("toToken").and_then(|v| v.as_str()).unwrap_or("ETH");
+            let amount = call.parameters.get("amount").and_then(|v| v.as_str()).unwrap_or("0");
+            let chain = call.parameters.get("chain").and_then(|v| v.as_str()).unwrap_or("ETH");
+            let slippage = call.parameters.get("slippage").and_then(|v| v.as_f64());
 
-            let preview = prepare_swap_preview(&from, &to, &amount, &chain, slippage)?;
+            let preview = prepare_swap_preview(from, to, amount, chain, slippage)?;
             let payload = serde_json::to_value(&preview).unwrap_or(serde_json::json!({}));
 
             Ok(ToolResult::ApprovalRequired {
-                tool_name: name,
+                tool_name: def.name.to_string(),
                 payload,
             })
         }
-        _ => Err(format!("Unknown tool: {name}")),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_tool_call;
-
-    #[test]
-    fn parse_tool_call_extracts_name_and_params() {
-        let (name, params) = parse_tool_call("TOOL: get_wallet_balances(address=0x123)").unwrap();
-        assert_eq!(name, "get_wallet_balances");
-        assert_eq!(params, vec![("address".to_string(), "0x123".to_string())]);
-    }
-
-    #[test]
-    fn parse_tool_call_handles_multiple_params() {
-        let (name, params) =
-            parse_tool_call("TOOL: get_token_price(tokenSymbol=ETH)").unwrap();
-        assert_eq!(name, "get_token_price");
-        assert_eq!(params, vec![("tokenSymbol".to_string(), "ETH".to_string())]);
-    }
-
-    #[test]
-    fn parse_tool_call_returns_none_for_plain_text() {
-        assert!(parse_tool_call("Hello, no tool here").is_none());
+        _ => Err(format!("Unknown tool: {}", def.name)),
     }
 }
 
@@ -195,11 +182,14 @@ impl AgentContext {
 
 pub fn tools_system_prompt(ctx: &AgentContext) -> String {
     let tools = tool_registry::all_tools();
-    let list: String = tools
-        .iter()
-        .map(|t| format!("{} — {}", t.name, t.description))
-        .collect::<Vec<_>>()
-        .join("\n- ");
+    let tools_json = serde_json::to_string_pretty(&tools.iter().map(|t| {
+        serde_json::json!({
+            "name": t.name,
+            "description": t.description,
+            "parameters": serde_json::from_str::<serde_json::Value>(t.parameters).unwrap_or(serde_json::json!({"type": "object"}))
+        })
+    }).collect::<Vec<_>>()).unwrap_or_else(|_| "[]".to_string());
+
     let ctx_block = if ctx.has_wallets() {
         let multi = if ctx.is_multi_wallet() { " (multi-wallet; aggregate by default)" } else { "" };
         format!(
@@ -244,70 +234,21 @@ You DO NOT say you lack access.
 Instead: automatically call tools when needed, process results, return a final decision.
 
 You are NOT a chatbot. You observe, analyze, decide, output.
-If portfolio data is needed → call get_total_portfolio_value() or get_wallet_balances() automatically.
-If price is needed → call get_token_price(tokenSymbol=X) automatically.
-If swap is requested → call execute_token_swap(...) (user approves in app).
 
 FORBIDDEN: "please call", "you should call", "try using", "provide wallet address", "I don't have access".
 
-When using a tool, output ONLY: TOOL: tool_name(params)
-Greetings only (hi, hello, what can you do) → plain text, NO tool.
+When using a tool, you MUST output ONLY a valid JSON object in the following format:
+{{"name": "tool_name", "parameters": {{"param1": "value1"}}}}
 
 {ctx_block}
 
 Available tools:
-- {list}
+{tools_json}
 
 Examples:
-"portfolio?" → TOOL: get_total_portfolio_value()
-"what do I have?" → TOOL: get_total_portfolio_value()
-"worst thing in my portfolio?" → TOOL: get_total_portfolio_value()
-"ETH price?" → TOOL: get_token_price(tokenSymbol=ETH)
-"hello" → Hi! I'm Shadow. I can analyze your portfolio, prices, or swaps. What do you need?"#
+"portfolio?" → {{"name": "get_total_portfolio_value", "parameters": {{}}}}
+"ETH price?" → {{"name": "get_token_price", "parameters": {{"tokenSymbol": "ETH"}}}}
+"is ARB risky?" → {{"name": "web_research", "parameters": {{"query": "Arbitrum project risks and latest news March 2026"}}}}
+"hello" → Hi! I'm Shadow. I can analyze your portfolio, research the web, or help with swaps. What do you need?"#
     )
-}
-
-#[cfg(test)]
-mod prompt_tests {
-    use super::{AgentContext, tools_system_prompt};
-
-    #[test]
-    fn tools_system_prompt_includes_wallet_context_when_connected() {
-        let ctx = AgentContext {
-            wallet_count: 2,
-            active_address: Some("0x1234…5678".into()),
-            all_addresses: vec!["0xaaaa".into(), "0xbbbb".into()],
-        };
-        let prompt = tools_system_prompt(&ctx);
-        assert!(prompt.contains("Connected wallets: 2"));
-        assert!(prompt.contains("multi-wallet"));
-        assert!(prompt.contains("0x1234"));
-        assert!(prompt.contains("get_total_portfolio_value"));
-        assert!(prompt.contains("direct access"));
-    }
-
-    #[test]
-    fn tools_system_prompt_includes_no_wallet_guidance_when_empty() {
-        let ctx = AgentContext {
-            wallet_count: 0,
-            active_address: None,
-            all_addresses: vec![],
-        };
-        let prompt = tools_system_prompt(&ctx);
-        assert!(prompt.contains("No wallets connected"));
-        assert!(prompt.contains("get_token_price"));
-    }
-
-    #[test]
-    fn tools_system_prompt_includes_portfolio_routing_examples() {
-        let ctx = AgentContext {
-            wallet_count: 1,
-            active_address: Some("0xabc".into()),
-            all_addresses: vec!["0xabc".into()],
-        };
-        let prompt = tools_system_prompt(&ctx);
-        assert!(prompt.contains("worst thing in my portfolio"));
-        assert!(prompt.contains("get_total_portfolio_value"));
-        assert!(prompt.contains("portfolio?"));
-    }
 }

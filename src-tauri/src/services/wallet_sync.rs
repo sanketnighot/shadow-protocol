@@ -198,15 +198,15 @@ async fn fetch_asset_transfers_for_network(
 }
 
 pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, wallet_count: usize) {
-    let api_key = match std::env::var("ALCHEMY_API_KEY") {
-        Ok(k) => k,
-        Err(_) => {
+    let api_key = match super::settings::get_alchemy_key_or_env() {
+        Some(k) => k,
+        None => {
             emit_done(
                 &app,
                 &SyncDonePayload {
                     address: address.clone(),
                     success: false,
-                    error: Some("Missing ALCHEMY_API_KEY".into()),
+                    error: Some("Missing ALCHEMY_API_KEY. Set it in Settings.".into()),
                 },
             );
             return;
@@ -338,6 +338,20 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
     let _ = local_db::set_wallet_sync_status(&address, "done", Some(now));
+
+    // After a successful sync, capture a portfolio snapshot for historical tracking
+    let addresses = crate::commands::get_addresses(&app);
+    if !addresses.is_empty() {
+        let _h = app.clone();
+        tokio::spawn(async move {
+            let addrs_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
+            if let Ok(total) = super::tools::get_total_portfolio_value_multi(&addrs_refs).await {
+                let top_assets = total.breakdown.iter().take(5).collect::<Vec<_>>();
+                let top_assets_json = serde_json::to_string(&top_assets).unwrap_or_else(|_| "[]".to_string());
+                let _ = local_db::insert_portfolio_snapshot(&total.total_usd, &top_assets_json);
+            }
+        });
+    }
 
     emit_progress(
         &app,

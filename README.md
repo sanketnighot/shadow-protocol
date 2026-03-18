@@ -1,7 +1,3 @@
-
-
-
-
 # SHADOW Protocol
 
 ### *Secure Hybrid Autonomous DeFi Operations Workstation*
@@ -11,7 +7,7 @@
 [Runtime Bun](https://bun.sh/)
 [Local AI](https://ollama.com/)
 
-**Privacy-first. Desktop-native. AI-driven.**  
+**Privacy-first. Desktop-native. AI-driven.**
 The ultimate command center for autonomous multi-chain DeFi operations.
 
 [Explore Docs](docs/shadow-protocol.md) · [Report Bug](https://github.com/your-repo/shadow-protocol/issues) · [Request Feature](https://github.com/your-repo/shadow-protocol/issues)

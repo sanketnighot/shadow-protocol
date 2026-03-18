@@ -2,6 +2,7 @@
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use super::settings;
 
 const OLLAMA_HOST: &str = "http://localhost:11434";
 
@@ -64,9 +65,15 @@ pub async fn chat(
     };
 
     let url = format!("{}/api/chat", OLLAMA_HOST);
-    let resp = client
-        .post(&url)
-        .json(&body)
+    let mut req = client.post(&url).json(&body);
+
+    if let Ok(Some(key)) = settings::get_ollama_key() {
+        if !key.trim().is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", key));
+        }
+    }
+
+    let resp = req
         .send()
         .await
         .map_err(|e| OllamaError::RequestFailed(e.to_string()))?;

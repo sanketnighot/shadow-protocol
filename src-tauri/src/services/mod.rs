@@ -1,4 +1,5 @@
 pub mod agent_chat;
+pub mod anonymizer;
 pub mod chain;
 pub mod local_db;
 pub mod wallet_sync;
@@ -7,6 +8,9 @@ pub mod portfolio_advice;
 pub mod portfolio_insights;
 pub mod ollama_client;
 pub mod portfolio_service;
+pub mod settings;
+pub mod shadow_watcher;
+pub mod sonar_client;
 pub mod tool_registry;
 pub mod tool_router;
 pub mod tools;

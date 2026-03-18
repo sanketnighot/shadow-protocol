@@ -56,6 +56,15 @@ CREATE INDEX IF NOT EXISTS idx_tokens_chain ON tokens(chain);
 CREATE INDEX IF NOT EXISTS idx_nfts_wallet ON nfts(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_tx_wallet ON transactions(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_tx_timestamp ON transactions(timestamp);
+
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp INTEGER NOT NULL,
+  total_usd TEXT NOT NULL,
+  top_assets_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON portfolio_snapshots(timestamp);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -137,6 +146,55 @@ pub fn get_wallet_last_synced(address: &str) -> Result<Option<i64>, DbError> {
             Ok(None)
         }
     })
+}
+
+/// Insert a new portfolio snapshot.
+pub fn insert_portfolio_snapshot(
+    total_usd: &str,
+    top_assets_json: &str,
+) -> Result<(), DbError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO portfolio_snapshots (timestamp, total_usd, top_assets_json) VALUES (?1, ?2, ?3)",
+            params![now, total_usd, top_assets_json],
+        )?;
+        Ok(())
+    })
+}
+
+/// Get portfolio snapshots within a range, limited to count.
+pub fn get_portfolio_snapshots(limit: u32) -> Result<Vec<PortfolioSnapshot>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT timestamp, total_usd, top_assets_json FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(PortfolioSnapshot {
+                timestamp: row.get(0)?,
+                total_usd: row.get(1)?,
+                top_assets_json: row.get(2)?,
+            })
+        })?;
+
+        let mut snapshots = Vec::new();
+        for s in rows {
+            snapshots.push(s?);
+        }
+        Ok(snapshots)
+    })
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortfolioSnapshot {
+    pub timestamp: i64,
+    pub total_usd: String,
+    pub top_assets_json: String,
 }
 
 /// Upsert tokens for a wallet. Replaces all tokens for this wallet on the given chain.

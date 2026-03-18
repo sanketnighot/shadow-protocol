@@ -134,8 +134,7 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
         return Err(PortfolioError::InvalidAddress);
     }
 
-    let _ = dotenvy::dotenv();
-    let api_key = std::env::var("ALCHEMY_API_KEY").map_err(|_| PortfolioError::MissingApiKey)?;
+    let api_key = super::settings::get_alchemy_key_or_env().ok_or(PortfolioError::MissingApiKey)?;
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -298,8 +297,7 @@ mod tests {
 
 /// Fetch current USD price for a token via Alchemy Prices API.
 pub async fn get_token_price_usd(token_symbol: &str) -> Result<f64, PortfolioError> {
-    let _ = dotenvy::dotenv();
-    let api_key = std::env::var("ALCHEMY_API_KEY").map_err(|_| PortfolioError::MissingApiKey)?;
+    let api_key = super::settings::get_alchemy_key_or_env().ok_or(PortfolioError::MissingApiKey)?;
 
     let symbol = token_symbol.trim().to_uppercase();
     if symbol.is_empty() {
