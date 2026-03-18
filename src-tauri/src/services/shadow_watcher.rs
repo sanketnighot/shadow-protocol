@@ -1,12 +1,11 @@
 //! Proactive background portfolio monitoring and risk alerting.
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use std::time::Duration;
 use tokio::time::interval;
 use serde::Serialize;
 use reqwest::Client;
 
-use super::local_db;
 use super::sonar_client;
 use super::ollama_client;
 use super::anonymizer;

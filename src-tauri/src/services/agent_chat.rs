@@ -4,39 +4,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::ollama_client;
-use super::portfolio_advice;
 use super::tool_router::{self, AgentContext, ToolResult};
 
 const MAX_TOOL_ROUNDS: u32 = 5;
-
-/// Portfolio/data intent: analyze, portfolio, balances, worst, risk, etc. Triggers autonomous pipeline.
-fn is_advice_intent(msg: &str) -> bool {
-    let lower = msg.to_lowercase();
-    let phrases = [
-        "analyze",
-        "analysis",
-        "how does it look",
-        "how does my portfolio",
-        "what should i do",
-        "optimize",
-        "optimization",
-        "rebalance",
-        "recommend",
-        "suggest",
-        "advice",
-        "portfolio",
-        "balances",
-        "holdings",
-        "what do i have",
-        "show my portfolio",
-        "my portfolio",
-        "worst thing",
-        "risky",
-        "concentration",
-        "what's in my",
-    ];
-    phrases.iter().any(|p| lower.contains(p))
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,34 +55,6 @@ pub enum ResponseBlock {
         tool_name: String,
         content: String,
     },
-    DecisionResult {
-        insights: serde_json::Value,
-        decision: serde_json::Value,
-        simulated: bool,
-    },
-}
-
-/// Returns true if the user message suggests they want interpretation/analysis.
-#[allow(dead_code)] // kept for tests; synthesis pass removed in favor of advice pipeline
-pub(crate) fn wants_analysis(msg: &str) -> bool {
-    let lower = msg.to_lowercase();
-    let phrases = [
-        "analyze",
-        "analysis",
-        "compare",
-        "what should i do",
-        "what should i ",
-        "risk",
-        "rebalance",
-        "how does it look",
-        "how does my portfolio",
-        "interpret",
-        "recommend",
-        "suggest",
-        "opinion",
-        "thoughts on",
-    ];
-    phrases.iter().any(|p| lower.contains(p))
 }
 
 fn format_tool_result(tool_name: &str, content: &str) -> String {
@@ -322,26 +264,3 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::wants_analysis;
-
-    #[test]
-    fn wants_analysis_returns_true_for_analysis_phrases() {
-        assert!(wants_analysis("analyze my portfolio"));
-        assert!(wants_analysis("How does it look?"));
-        assert!(wants_analysis("What should I do with my holdings?"));
-        assert!(wants_analysis("compare ETH with BTC"));
-        assert!(wants_analysis("rebalance recommendations"));
-        assert!(wants_analysis("risk assessment"));
-        assert!(wants_analysis("your thoughts on this?"));
-    }
-
-    #[test]
-    fn wants_analysis_returns_false_for_simple_data_asks() {
-        assert!(!wants_analysis("what's my portfolio worth?"));
-        assert!(!wants_analysis("ETH price?"));
-        assert!(!wants_analysis("show balances"));
-        assert!(!wants_analysis("hello"));
-    }
-}

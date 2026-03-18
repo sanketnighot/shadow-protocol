@@ -189,6 +189,18 @@ pub fn get_portfolio_snapshots(limit: u32) -> Result<Vec<PortfolioSnapshot>, DbE
     })
 }
 
+/// Truncates all tables in the database.
+pub fn clear_all_data() -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute("DELETE FROM tokens", [])?;
+        conn.execute("DELETE FROM nfts", [])?;
+        conn.execute("DELETE FROM transactions", [])?;
+        conn.execute("DELETE FROM wallets", [])?;
+        conn.execute("DELETE FROM portfolio_snapshots", [])?;
+        Ok(())
+    })
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortfolioSnapshot {

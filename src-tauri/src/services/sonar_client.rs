@@ -63,8 +63,9 @@ pub async fn search(query: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
         let err_text = resp.text().await.unwrap_or_else(|_| "Unknown error".into());
-        return Err(format!("Sonar API error ({}): {}", resp.status(), err_text));
+        return Err(format!("Sonar API error ({}): {}", status, err_text));
     }
 
     let sonar_resp: SonarResponse = resp.json().await.map_err(|e| e.to_string())?;

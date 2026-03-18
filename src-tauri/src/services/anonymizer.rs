@@ -1,6 +1,6 @@
 //! Privacy-preserving portfolio sanitization for remote AI processing.
 
-use super::tools::{TotalPortfolioValue, TokenValueItem};
+use super::tools::TotalPortfolioValue;
 
 /// Sanitizes portfolio data by removing specific addresses and converting exact 
 /// amounts into relative metrics/weights.
