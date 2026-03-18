@@ -2,6 +2,7 @@ mod chat;
 mod ollama_manager;
 mod portfolio;
 mod session;
+mod settings;
 mod transfer;
 mod wallet;
 mod wallet_sync;

@@ -77,8 +77,7 @@ pub struct TransferBackgroundResult {
 
 #[tauri::command]
 pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, TransferError> {
-    let _ = dotenvy::dotenv();
-    let api_key = std::env::var("ALCHEMY_API_KEY").map_err(|_| TransferError::MissingApiKey)?;
+    let api_key = crate::services::settings::get_alchemy_key_or_env().ok_or(TransferError::MissingApiKey)?;
 
     let from = input.from_address.trim();
     let to = input.to_address.trim();
@@ -165,8 +164,7 @@ pub async fn portfolio_transfer_background(
     app: AppHandle,
     input: TransferInput,
 ) -> Result<TransferBackgroundResult, TransferError> {
-    let _ = dotenvy::dotenv();
-    let api_key = std::env::var("ALCHEMY_API_KEY").map_err(|_| TransferError::MissingApiKey)?;
+    let api_key = crate::services::settings::get_alchemy_key_or_env().ok_or(TransferError::MissingApiKey)?;
 
     let from = input.from_address.trim();
     let to = input.to_address.trim();

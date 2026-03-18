@@ -21,6 +21,8 @@ pub fn run() {
                 let _ = services::local_db::init(&db_path);
             }
             let handle = app.handle().clone();
+            services::shadow_watcher::start(handle.clone());
+
             tauri::async_runtime::spawn(async move {
                 let addresses = commands::get_addresses(&handle);
                 let now = std::time::SystemTime::now()
@@ -60,6 +62,15 @@ pub fn run() {
             commands::session_unlock,
             commands::session_lock,
             commands::session_status,
+            commands::set_perplexity_key,
+            commands::get_perplexity_key,
+            commands::remove_perplexity_key,
+            commands::set_alchemy_key,
+            commands::get_alchemy_key,
+            commands::remove_alchemy_key,
+            commands::set_ollama_key,
+            commands::get_ollama_key,
+            commands::remove_ollama_key,
             commands::portfolio_fetch_balances,
             commands::portfolio_fetch_balances_multi,
             commands::portfolio_fetch_transactions,
