@@ -21,7 +21,7 @@ import { useOllamaStore } from "@/store/useOllamaStore";
 import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
-import { useTxConfirmationListener, useWalletSyncListeners } from "@/store/useWalletSyncStore";
+import { useTxConfirmationListener, useWalletSyncListeners, useShadowAlertListener } from "@/store/useWalletSyncStore";
 
 type SessionStatusResult = { locked: boolean; expiresAtSecs?: number };
 
@@ -91,6 +91,7 @@ export function AppShell() {
 
   useWalletSyncListeners();
   useTxConfirmationListener();
+  useShadowAlertListener();
 
   useEffect(() => {
     const checkOllama = async () => {

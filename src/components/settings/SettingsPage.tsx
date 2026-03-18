@@ -1,8 +1,12 @@
-import packageJson from "../../../package.json";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Key, Save, Trash2, Cpu } from "lucide-react";
 
+import packageJson from "../../../package.json";
 import { ModelSelector } from "@/components/ModelSelector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/useToast";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "system"];
@@ -22,18 +26,303 @@ export function SettingsPage() {
   const toggleDeveloperMode = useUiStore((state) => state.toggleDeveloperMode);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
 
+  const { success, error: toastError } = useToast();
+  
+  const [perplexityKey, setPerplexityKey] = useState("");
+  const [isKeySaved, setIsKeySaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [alchemyKey, setAlchemyKey] = useState("");
+  const [isAlchemyKeySaved, setIsAlchemyKeySaved] = useState(false);
+  const [isSavingAlchemy, setIsSavingAlchemy] = useState(false);
+
+  const [ollamaKey, setOllamaKey] = useState("");
+  const [isOllamaKeySaved, setIsOllamaKeySaved] = useState(false);
+  const [isSavingOllama, setIsSavingOllama] = useState(false);
+
+  useEffect(() => {
+    const fetchKeys = async () => {
+      try {
+        const pResult = await invoke<{ key?: string }>("get_perplexity_key");
+        if (pResult.key) {
+          setPerplexityKey("********");
+          setIsKeySaved(true);
+        }
+        const aResult = await invoke<{ key?: string }>("get_alchemy_key");
+        if (aResult.key) {
+          setAlchemyKey("********");
+          setIsAlchemyKeySaved(true);
+        }
+        const oResult = await invoke<{ key?: string }>("get_ollama_key");
+        if (oResult.key) {
+          setOllamaKey("********");
+          setIsOllamaKeySaved(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch keys:", err);
+      }
+    };
+    void fetchKeys();
+  }, []);
+
+  const handleSaveKey = async () => {
+    if (!perplexityKey || perplexityKey === "********") return;
+    setIsSaving(true);
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "set_perplexity_key",
+        { input: { key: perplexityKey } }
+      );
+      if (result.success) {
+        success("Perplexity API Key saved", "Your Shadow Oracle is now enhanced with real-time web research.");
+        setIsKeySaved(true);
+        setPerplexityKey("********");
+      } else {
+        toastError("Failed to save key", result.error || "Unknown error");
+      }
+    } catch (err) {
+      toastError("Failed to save key", String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveKey = async () => {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>("remove_perplexity_key");
+      if (result.success) {
+        success("Key removed", "Perplexity API key has been cleared from keychain.");
+        setPerplexityKey("");
+        setIsKeySaved(false);
+      }
+    } catch (err) {
+      toastError("Failed to remove key", String(err));
+    }
+  };
+
+  const handleSaveAlchemyKey = async () => {
+    if (!alchemyKey || alchemyKey === "********") return;
+    setIsSavingAlchemy(true);
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "set_alchemy_key",
+        { input: { key: alchemyKey } }
+      );
+      if (result.success) {
+        success("Alchemy API Key saved", "Portfolio data will now be fetched using your secure key.");
+        setIsAlchemyKeySaved(true);
+        setAlchemyKey("********");
+      } else {
+        toastError("Failed to save key", result.error || "Unknown error");
+      }
+    } catch (err) {
+      toastError("Failed to save key", String(err));
+    } finally {
+      setIsSavingAlchemy(false);
+    }
+  };
+
+  const handleRemoveAlchemyKey = async () => {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>("remove_alchemy_key");
+      if (result.success) {
+        success("Key removed", "Alchemy API key has been cleared from keychain.");
+        setAlchemyKey("");
+        setIsAlchemyKeySaved(false);
+      }
+    } catch (err) {
+      toastError("Failed to remove key", String(err));
+    }
+  };
+
+  const handleSaveOllamaKey = async () => {
+    if (!ollamaKey || ollamaKey === "********") return;
+    setIsSavingOllama(true);
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "set_ollama_key",
+        { input: { key: ollamaKey } }
+      );
+      if (result.success) {
+        success("Ollama API Key saved", "Your Ollama requests will now include this key.");
+        setIsOllamaKeySaved(true);
+        setOllamaKey("********");
+      } else {
+        toastError("Failed to save key", result.error || "Unknown error");
+      }
+    } catch (err) {
+      toastError("Failed to save key", String(err));
+    } finally {
+      setIsSavingOllama(false);
+    }
+  };
+
+  const handleRemoveOllamaKey = async () => {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>("remove_ollama_key");
+      if (result.success) {
+        success("Key removed", "Ollama API key has been cleared from keychain.");
+        setOllamaKey("");
+        setIsOllamaKeySaved(false);
+      }
+    } catch (err) {
+      toastError("Failed to remove key", String(err));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-          Account
+          Settings
         </p>
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] text-foreground">
-          Appearance & shortcuts
+          Configuration & Security
         </h1>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
+          <h2 className="text-xl font-semibold text-foreground">Shadow Intelligence</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Configure external intelligence sources for your Shadow Oracle.
+          </p>
+
+          <div className="mt-6 space-y-4">
+            <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Key className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Perplexity (Sonar) API Key</h3>
+                  <p className="text-xs text-muted">Required for real-time web research and market catalysts.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  type="password"
+                  value={perplexityKey}
+                  onChange={(e) => setPerplexityKey(e.target.value)}
+                  placeholder={isKeySaved ? "********" : "pplx-xxxxxxxxxxxxxxxx"}
+                  className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  disabled={isKeySaved && perplexityKey === "********"}
+                />
+                {!isKeySaved || perplexityKey !== "********" ? (
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={handleSaveKey}
+                    disabled={isSaving || !perplexityKey}
+                  >
+                    <Save className="mr-2 size-4" />
+                    Save
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    onClick={handleRemoveKey}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                  <Save className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Alchemy API Key</h3>
+                  <p className="text-xs text-muted">Required for cross-chain portfolio data and token transfers.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  type="password"
+                  value={alchemyKey}
+                  onChange={(e) => setAlchemyKey(e.target.value)}
+                  placeholder={isAlchemyKeySaved ? "********" : "your-alchemy-key"}
+                  className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  disabled={isAlchemyKeySaved && alchemyKey === "********"}
+                />
+                {!isAlchemyKeySaved || alchemyKey !== "********" ? (
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={handleSaveAlchemyKey}
+                    disabled={isSavingAlchemy || !alchemyKey}
+                  >
+                    <Save className="mr-2 size-4" />
+                    Save
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    onClick={handleRemoveAlchemyKey}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400">
+                  <Cpu className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Ollama API Key</h3>
+                  <p className="text-xs text-muted">Optional. Used for authenticated Ollama instances or compatible endpoints.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  type="password"
+                  value={ollamaKey}
+                  onChange={(e) => setOllamaKey(e.target.value)}
+                  placeholder={isOllamaKeySaved ? "********" : "your-ollama-key"}
+                  className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  disabled={isOllamaKeySaved && ollamaKey === "********"}
+                />
+                {!isOllamaKeySaved || ollamaKey !== "********" ? (
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={handleSaveOllamaKey}
+                    disabled={isSavingOllama || !ollamaKey}
+                  >
+                    <Save className="mr-2 size-4" />
+                    Save
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    onClick={handleRemoveOllamaKey}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">Theme</h2>
           <p className="mt-2 text-sm leading-6 text-muted">

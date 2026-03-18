@@ -144,3 +144,32 @@ export function useWalletSyncListeners(): void {
     };
   }, [setSyncing, onWalletDone, addNotification]);
 }
+
+type ShadowAlertPayload = {
+  title: String;
+  message: String;
+  severity: "info" | "warning" | "critical";
+  asset?: String;
+  suggestion?: String;
+};
+
+export function useShadowAlertListener(): void {
+  const addNotification = useUiStore((s) => s.addNotification);
+
+  useEffect(() => {
+    const unsub = listen<ShadowAlertPayload>("shadow_alert", (event) => {
+      const p = event.payload;
+      addNotification({
+        title: String(p.title),
+        description: `${p.message}${p.suggestion ? ` Suggestion: ${p.suggestion}` : ""}`,
+        type: p.severity === "critical" ? "warning" : p.severity === "warning" ? "warning" : "info",
+        createdAtLabel: "Just now",
+        route: "/agent",
+      });
+    });
+
+    return () => {
+      unsub.then((fn) => fn());
+    };
+  }, [addNotification]);
+}
