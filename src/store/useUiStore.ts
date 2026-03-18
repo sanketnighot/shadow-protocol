@@ -53,35 +53,7 @@ type UiStore = {
   clearLastAddedNotification: () => void;
 };
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "notif-1",
-    title: "Strategy executed",
-    description: "Weekly DCA bought 0.01 ETH and stayed inside your guardrails.",
-    type: "success",
-    createdAtLabel: "2m ago",
-    unread: true,
-    route: "/automation",
-  },
-  {
-    id: "notif-2",
-    title: "Approval required",
-    description: "Arbitrage Hunter found a new route on Base waiting for review.",
-    type: "warning",
-    createdAtLabel: "10m ago",
-    unread: true,
-    route: "/agent",
-  },
-  {
-    id: "notif-3",
-    title: "Portfolio synced",
-    description: "Cross-chain balances refreshed across Ethereum, Arbitrum, Base, and Solana.",
-    type: "info",
-    createdAtLabel: "24m ago",
-    unread: false,
-    route: "/portfolio",
-  },
-];
+const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
 
 const DEFAULT_STATE = {
   privacyModeEnabled: true,

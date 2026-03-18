@@ -1,12 +1,9 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 
-import {
-  PORTFOLIO_CHAINS,
-  PORTFOLIO_SERIES,
-  QUICK_ACTIONS,
-} from "@/data/mock";
-import type { Asset } from "@/data/mock";
+import { QUICK_ACTIONS } from "@/data/mock";
+import type { Asset, ChainBalance, PortfolioPoint } from "@/data/mock";
 import type { PortfolioAsset } from "@/types/wallet";
 
 type PortfolioParams = {
@@ -66,22 +63,53 @@ export function usePortfolio(params: PortfolioParams = {}) {
         )
       : [];
 
-  const totalValueLabel =
-    assets.length > 0
-      ? `$${assets
-          .reduce((sum, a) => {
-            const v = Number(a.valueUsd.replace(/[$,]/g, ""));
-            return sum + (Number.isNaN(v) ? 0 : v);
-          }, 0)
-          .toFixed(2)}`
-      : "$0.00";
+  const totalValue = useMemo(() => {
+    if (assets.length === 0) return 0;
+    return assets.reduce((sum, a) => {
+      const v = Number(a.valueUsd.replace(/[$,]/g, ""));
+      return sum + (Number.isNaN(v) ? 0 : v);
+    }, 0);
+  }, [assets]);
+
+  const totalValueLabel = totalValue > 0 ? `$${totalValue.toFixed(2)}` : "$0.00";
+
+  const chains: ChainBalance[] = useMemo(() => {
+    const byChain = new Map<string, { value: number; symbol: string; name: string }>();
+    for (const a of assets) {
+      const v = Number(a.valueUsd.replace(/[$,]/g, ""));
+      if (Number.isNaN(v) || v <= 0) continue;
+      const existing = byChain.get(a.chain);
+      if (existing) {
+        existing.value += v;
+      } else {
+        byChain.set(a.chain, { value: v, symbol: a.chain, name: a.chainName });
+      }
+    }
+    const total = totalValue > 0 ? totalValue : 1;
+    return Array.from(byChain.values())
+      .map((c) => ({
+        symbol: c.symbol,
+        name: c.name,
+        valueLabel: `$${c.value.toFixed(2)}`,
+        allocation: Math.round((c.value / total) * 100),
+      }))
+      .sort((a, b) => b.allocation - a.allocation);
+  }, [assets, totalValue]);
+
+  const series: PortfolioPoint[] = useMemo(() => {
+    if (totalValue <= 0) return [{ day: "Now", value: 0 }];
+    return [
+      { day: "Prev", value: totalValue * 0.98 },
+      { day: "Now", value: totalValue },
+    ];
+  }, [totalValue]);
 
   return {
     assets,
     totalValueLabel,
     dailyChangeLabel: "+0% (24h)",
-    chains: PORTFOLIO_CHAINS,
-    series: PORTFOLIO_SERIES,
+    chains,
+    series,
     quickActions: QUICK_ACTIONS,
     isLoading,
     isFetching,

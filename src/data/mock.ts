@@ -136,7 +136,7 @@ export type GuardrailDefaults = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", description: "Portfolio pulse" },
   { href: "/agent", label: "Agent", description: "DeFi intelligence" },
-  { href: "/strategy", label: "Strategy", description: "Builder canvas" },
+  // { href: "/strategy", label: "Strategy", description: "Builder canvas" },
   { href: "/automation", label: "Auto", description: "Running systems" },
   { href: "/market", label: "Market", description: "Opportunities & yields" },
   { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },
