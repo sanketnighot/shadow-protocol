@@ -1,5 +1,7 @@
 pub mod agent_chat;
 pub mod chain;
+pub mod local_db;
+pub mod wallet_sync;
 pub mod decision_validator;
 pub mod portfolio_advice;
 pub mod portfolio_insights;

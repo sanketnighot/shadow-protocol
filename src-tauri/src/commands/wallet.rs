@@ -84,6 +84,11 @@ fn addresses_path(app: &AppHandle) -> Option<std::path::PathBuf> {
     app.path().app_data_dir().ok().map(|d| d.join("wallets.json"))
 }
 
+/// Returns all wallet addresses. Used by wallet_sync and app startup.
+pub fn get_addresses(app: &AppHandle) -> Vec<String> {
+    load_addresses(app)
+}
+
 fn load_addresses(app: &AppHandle) -> Vec<String> {
     let Some(path) = addresses_path(app) else {
         return Vec::new();

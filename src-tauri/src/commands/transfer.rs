@@ -8,6 +8,7 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::{LocalWallet, Signer};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use tauri::{AppHandle, Emitter};
 
 use crate::session;
 use crate::services::chain;
@@ -65,6 +66,13 @@ pub struct TransferInput {
 #[serde(rename_all = "camelCase")]
 pub struct TransferResult {
     pub tx_hash: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferBackgroundResult {
+    pub tx_hash: String,
+    pub status: String,
 }
 
 #[tauri::command]
@@ -150,4 +158,124 @@ pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, 
 
     let tx_hash = format!("{:?}", receipt.transaction_hash);
     Ok(TransferResult { tx_hash })
+}
+
+#[tauri::command]
+pub async fn portfolio_transfer_background(
+    app: AppHandle,
+    input: TransferInput,
+) -> Result<TransferBackgroundResult, TransferError> {
+    let _ = dotenvy::dotenv();
+    let api_key = std::env::var("ALCHEMY_API_KEY").map_err(|_| TransferError::MissingApiKey)?;
+
+    let from = input.from_address.trim();
+    let to = input.to_address.trim();
+    if from.is_empty() || to.is_empty() || !from.starts_with("0x") || !to.starts_with("0x") {
+        return Err(TransferError::InvalidAddress);
+    }
+    if from.len() != 42 || to.len() != 42 {
+        return Err(TransferError::InvalidAddress);
+    }
+
+    let network = chain::chain_to_network(&input.chain)
+        .ok_or_else(|| TransferError::UnsupportedChain(input.chain.clone()))?;
+
+    let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+
+    let hex_pk = session::get_cached_key(from)
+        .ok_or(TransferError::WalletLocked)?
+        .as_str()
+        .to_string();
+    session::refresh_expiry(from);
+
+    let wallet: LocalWallet = hex_pk
+        .parse()
+        .map_err(|_| TransferError::WalletNotFound)?;
+
+    let provider = Provider::<Http>::try_from(&rpc_url)
+        .map_err(|e| TransferError::TransactionFailed(e.to_string()))?;
+    let chain_id = provider
+        .get_chainid()
+        .await
+        .map_err(|e| TransferError::TransactionFailed(e.to_string()))?;
+    let wallet = wallet.with_chain_id(chain_id.as_u64());
+
+    let client = SignerMiddleware::new(provider, wallet);
+
+    let decimals = input.decimals.unwrap_or(18);
+    let amount_parsed = input
+        .amount
+        .trim()
+        .parse::<f64>()
+        .map_err(|_| TransferError::InvalidAmount)?;
+    if !amount_parsed.is_finite() || amount_parsed <= 0.0 {
+        return Err(TransferError::InvalidAmount);
+    }
+
+    let amount_wei = amount_to_wei(amount_parsed, decimals)?;
+
+    let tx = match input.token_contract.as_deref() {
+        None | Some("") => {
+            TransactionRequest::new()
+                .to(Address::from_str(to).map_err(|_| TransferError::InvalidAddress)?)
+                .value(amount_wei)
+        }
+        Some(contract) => {
+            let to_addr = Address::from_str(to).map_err(|_| TransferError::InvalidAddress)?;
+            let tokens = [
+                Token::Address(to_addr),
+                Token::Uint(amount_wei),
+            ];
+            let mut calldata = ERC20_TRANSFER_SELECTOR.to_vec();
+            calldata.extend(encode(&tokens));
+            TransactionRequest::new()
+                .to(Address::from_str(contract).map_err(|_| TransferError::InvalidAddress)?)
+                .data(calldata)
+        }
+    };
+
+    let pending = client
+        .send_transaction(tx, None)
+        .await
+        .map_err(|e| TransferError::TransactionFailed(e.to_string()))?;
+
+    let tx_hash = format!("{:?}", pending.tx_hash());
+    let tx_hash_emit = tx_hash.clone();
+    let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+
+    let handle = app.clone();
+    tokio::spawn(async move {
+        let hash: ethers::core::types::H256 = tx_hash_emit
+            .trim_matches('"')
+            .parse()
+            .unwrap_or_else(|_| ethers::core::types::H256::zero());
+        let mut receipt = None;
+        if let Ok(provider) = Provider::<Http>::try_from(&rpc_url) {
+            for _ in 0..60 {
+                if let Ok(Some(r)) = provider.get_transaction_receipt(hash).await {
+                    receipt = Some(r);
+                    break;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+
+        let payload = match receipt {
+            Some(_) => serde_json::json!({
+                "txHash": tx_hash_emit,
+                "status": "confirmed"
+            }),
+            None => serde_json::json!({
+                "txHash": tx_hash_emit,
+                "status": "failed",
+                "error": "Transaction dropped or timeout"
+            }),
+        };
+        let _ = handle.emit("tx_confirmation", payload);
+    });
+
+    Ok(TransferBackgroundResult {
+        tx_hash,
+        status: "pending".to_string(),
+    })
 }
