@@ -10,13 +10,12 @@ import { MainContent } from "@/components/layout/MainContent";
 import { MinimalTopBar } from "@/components/layout/MinimalTopBar";
 import { NewUpdateCard } from "@/components/layout/NewUpdateCard";
 import { OllamaSetup } from "@/components/OllamaSetup";
-import { OnboardingModal } from "@/components/layout/OnboardingModal";
+import { InitializationSequence } from "@/components/onboarding/InitializationSequence";
 import { UnlockDialog } from "@/components/wallet/UnlockDialog";
 import { ApprovalModal } from "@/components/shared/ApprovalModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useToast } from "@/hooks/useToast";
 import { checkOllamaStatus } from "@/lib/ollama";
-import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { useOllamaStore } from "@/store/useOllamaStore";
 import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
@@ -44,12 +43,6 @@ export function AppShell() {
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
   const themePreference = useUiStore((state) => state.themePreference);
-  const completeOnboarding = useOnboardingStore(
-    (state) => state.completeOnboarding,
-  );
-  const hasCompletedOnboarding = useOnboardingStore(
-    (state) => state.hasCompletedOnboarding,
-  );
   const { pendingApproval } = useAgentChat();
   const { info, success } = useToast();
   const setupComplete = useOllamaStore((s) => s.setupComplete);
@@ -218,10 +211,7 @@ export function AppShell() {
           address={activeAddress}
         />
       ) : null}
-      <OnboardingModal
-        open={!hasCompletedOnboarding}
-        onComplete={completeOnboarding}
-      />
+      <InitializationSequence />
       <OllamaSetup />
       <AnimatePresence>
         {showApprovalSuccess ? (

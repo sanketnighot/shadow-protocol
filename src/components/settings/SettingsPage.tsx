@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Key, Save, Trash2, Cpu } from "lucide-react";
+import { Key, Save, Trash2, Cpu, AlertTriangle } from "lucide-react";
 
 import packageJson from "../../../package.json";
 import { ModelSelector } from "@/components/ModelSelector";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "system"];
@@ -16,7 +26,6 @@ const APP_ABOUT = {
   tagline: "Private DeFi workstation",
   description:
     "Privacy-first desktop app for DeFi automation. Build strategies, run automations, and manage cross-chain assets with local AI and human-in-the-loop approvals.",
-  identifier: "com.shadow.protocol",
 } as const;
 
 export function SettingsPage() {
@@ -26,8 +35,9 @@ export function SettingsPage() {
   const toggleDeveloperMode = useUiStore((state) => state.toggleDeveloperMode);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
 
-  const { success, error: toastError } = useToast();
-  
+  const { success, warning: toastWarning } = useToast();
+  const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
+
   const [perplexityKey, setPerplexityKey] = useState("");
   const [isKeySaved, setIsKeySaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,10 +88,10 @@ export function SettingsPage() {
         setIsKeySaved(true);
         setPerplexityKey("********");
       } else {
-        toastError("Failed to save key", result.error || "Unknown error");
+        toastWarning("Failed to save key", result.error || "Unknown error");
       }
     } catch (err) {
-      toastError("Failed to save key", String(err));
+      toastWarning("Failed to save key", String(err));
     } finally {
       setIsSaving(false);
     }
@@ -96,7 +106,7 @@ export function SettingsPage() {
         setIsKeySaved(false);
       }
     } catch (err) {
-      toastError("Failed to remove key", String(err));
+      toastWarning("Failed to remove key", String(err));
     }
   };
 
@@ -113,10 +123,10 @@ export function SettingsPage() {
         setIsAlchemyKeySaved(true);
         setAlchemyKey("********");
       } else {
-        toastError("Failed to save key", result.error || "Unknown error");
+        toastWarning("Failed to save key", result.error || "Unknown error");
       }
     } catch (err) {
-      toastError("Failed to save key", String(err));
+      toastWarning("Failed to save key", String(err));
     } finally {
       setIsSavingAlchemy(false);
     }
@@ -131,7 +141,7 @@ export function SettingsPage() {
         setIsAlchemyKeySaved(false);
       }
     } catch (err) {
-      toastError("Failed to remove key", String(err));
+      toastWarning("Failed to remove key", String(err));
     }
   };
 
@@ -148,10 +158,10 @@ export function SettingsPage() {
         setIsOllamaKeySaved(true);
         setOllamaKey("********");
       } else {
-        toastError("Failed to save key", result.error || "Unknown error");
+        toastWarning("Failed to save key", result.error || "Unknown error");
       }
     } catch (err) {
-      toastError("Failed to save key", String(err));
+      toastWarning("Failed to save key", String(err));
     } finally {
       setIsSavingOllama(false);
     }
@@ -159,19 +169,48 @@ export function SettingsPage() {
 
   const handleRemoveOllamaKey = async () => {
     try {
-      const result = await invoke<{ success: boolean; error?: string }>("remove_ollama_key");
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "remove_ollama_key",
+      );
       if (result.success) {
-        success("Key removed", "Ollama API key has been cleared from keychain.");
+        success(
+          "Key removed",
+          "Ollama API key has been cleared from keychain.",
+        );
         setOllamaKey("");
         setIsOllamaKeySaved(false);
       }
     } catch (err) {
-      toastError("Failed to remove key", String(err));
+      toastWarning("Failed to remove key", String(err));
+    }
+  };
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  const handleDeleteAllData = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "delete_all_data",
+      );
+      if (result.success) {
+        success("All data deleted", "The application has been reset.");
+        resetOnboarding();
+        // Force a reload to clear all in-memory state and restart onboarding
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        toastWarning("Deletion failed", result.error || "Unknown error");
+      }
+    } catch (err) {
+      toastWarning("Deletion failed", String(err));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
           Settings
@@ -183,7 +222,9 @@ export function SettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
-          <h2 className="text-xl font-semibold text-foreground">Shadow Intelligence</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            Shadow Intelligence
+          </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Configure external intelligence sources for your Shadow Oracle.
           </p>
@@ -195,8 +236,12 @@ export function SettingsPage() {
                   <Key className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Perplexity (Sonar) API Key</h3>
-                  <p className="text-xs text-muted">Required for real-time web research and market catalysts.</p>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Perplexity (Sonar) API Key
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Required for real-time web research and market catalysts.
+                  </p>
                 </div>
               </div>
 
@@ -205,7 +250,9 @@ export function SettingsPage() {
                   type="password"
                   value={perplexityKey}
                   onChange={(e) => setPerplexityKey(e.target.value)}
-                  placeholder={isKeySaved ? "********" : "pplx-xxxxxxxxxxxxxxxx"}
+                  placeholder={
+                    isKeySaved ? "********" : "pplx-xxxxxxxxxxxxxxxx"
+                  }
                   className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isKeySaved && perplexityKey === "********"}
                 />
@@ -239,8 +286,12 @@ export function SettingsPage() {
                   <Save className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Alchemy API Key</h3>
-                  <p className="text-xs text-muted">Required for cross-chain portfolio data and token transfers.</p>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Alchemy API Key
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Required for cross-chain portfolio data and token transfers.
+                  </p>
                 </div>
               </div>
 
@@ -249,7 +300,9 @@ export function SettingsPage() {
                   type="password"
                   value={alchemyKey}
                   onChange={(e) => setAlchemyKey(e.target.value)}
-                  placeholder={isAlchemyKeySaved ? "********" : "your-alchemy-key"}
+                  placeholder={
+                    isAlchemyKeySaved ? "********" : "your-alchemy-key"
+                  }
                   className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isAlchemyKeySaved && alchemyKey === "********"}
                 />
@@ -283,8 +336,13 @@ export function SettingsPage() {
                   <Cpu className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Ollama API Key</h3>
-                  <p className="text-xs text-muted">Optional. Used for authenticated Ollama instances or compatible endpoints.</p>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Ollama API Key
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Optional. Used for authenticated Ollama instances or
+                    compatible endpoints.
+                  </p>
                 </div>
               </div>
 
@@ -293,7 +351,9 @@ export function SettingsPage() {
                   type="password"
                   value={ollamaKey}
                   onChange={(e) => setOllamaKey(e.target.value)}
-                  placeholder={isOllamaKeySaved ? "********" : "your-ollama-key"}
+                  placeholder={
+                    isOllamaKeySaved ? "********" : "your-ollama-key"
+                  }
                   className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isOllamaKeySaved && ollamaKey === "********"}
                 />
@@ -354,9 +414,12 @@ export function SettingsPage() {
         </section>
 
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
-          <h2 className="text-xl font-semibold text-foreground">Developer mode</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            Developer mode
+          </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Enable to see testnets (Ethereum Sepolia, Base Sepolia, Polygon Amoy) in the Portfolio section.
+            Enable to see testnets (Ethereum Sepolia, Base Sepolia, Polygon
+            Amoy) in the Portfolio section.
           </p>
           <button
             type="button"
@@ -400,7 +463,9 @@ export function SettingsPage() {
         </section>
 
         <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
-          <h2 className="text-xl font-semibold text-foreground">Command palette</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            Command palette
+          </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Open anywhere with <span className="font-mono">Cmd/Ctrl + K</span>.
           </p>
@@ -429,15 +494,57 @@ export function SettingsPage() {
             <dl className="mt-4 grid gap-2 border-t border-white/10 pt-4 text-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-muted">Version</dt>
-                <dd className="font-medium text-foreground">v{packageJson.version}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted">Identifier</dt>
-                <dd className="font-mono text-xs text-foreground">{APP_ABOUT.identifier}</dd>
+                <dd className="font-medium text-foreground">
+                  v{packageJson.version}
+                </dd>
               </div>
             </dl>
           </div>
         </div>
+      </section>
+
+      <section className="glass-panel border-red-500/20 bg-red-500/5 rounded-[24px] border p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="size-5 text-red-400" />
+          <h2 className="text-xl font-semibold text-red-400">Danger Zone</h2>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-red-300/70">
+          Once you delete your account data, there is no going back. This will
+          clear all wallets, transaction history, and API keys from this device.
+        </p>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              className="mt-6 rounded-full border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+            >
+              <Trash2 className="mr-2 size-4" />
+              Delete All Data
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="glass-panel border-white/10 bg-[#0b0b14] sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-400">
+                <AlertTriangle className="size-5" />
+                Absolute Deletion
+              </DialogTitle>
+              <DialogDescription className="text-muted">
+                This action is irreversible. All your local data, including
+                private keys and settings, will be permanently removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-6 flex gap-2">
+              <Button
+                className="rounded-full bg-red-600 text-white hover:bg-red-700"
+                onClick={handleDeleteAllData}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Wiping Data..." : "Yes, Delete Everything"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </section>
     </div>
   );
