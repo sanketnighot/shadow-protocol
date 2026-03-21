@@ -72,7 +72,7 @@ export function Step2Architecture() {
           <motion.div
             key={card.id}
             variants={itemVariants}
-            className="group relative overflow-hidden rounded-[24px] border border-white/10 bg-white/5 p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/10"
+            className="group relative overflow-hidden rounded-[24px] border border-border bg-secondary p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-primary/30 hover:bg-surface-elevated"
           >
             <div className={`mb-6 inline-flex rounded-xl p-3 ${card.bg} ${card.border} border`}>
               <card.icon className={`size-6 ${card.color}`} />
@@ -92,7 +92,7 @@ export function Step2Architecture() {
       >
         <button
           onClick={nextStep}
-          className="group flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white/10"
+          className="group flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
         >
           Acknowledge
           <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />

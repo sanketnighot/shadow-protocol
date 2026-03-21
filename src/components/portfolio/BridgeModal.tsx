@@ -49,7 +49,7 @@ export function BridgeModal({ open, asset, onClose, onSubmit }: BridgeModalProps
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-[-0.03em]">
             Bridge {asset?.symbol ?? "asset"}
@@ -67,7 +67,7 @@ export function BridgeModal({ open, asset, onClose, onSubmit }: BridgeModalProps
               value={amount}
               onChange={(event) => setAmount(event.currentTarget.value)}
               placeholder={`0.00 ${asset?.symbol ?? ""}`}
-              className="h-11 rounded-2xl border-white/10 bg-white/5"
+              className="h-11 rounded-2xl border-border bg-secondary"
             />
           </label>
           <label className="grid gap-2 text-sm text-muted">
@@ -76,7 +76,7 @@ export function BridgeModal({ open, asset, onClose, onSubmit }: BridgeModalProps
               aria-label="Destination chain"
               value={destinationChain}
               onChange={(event) => setDestinationChain(event.currentTarget.value)}
-              className="h-11 rounded-2xl border border-white/10 bg-white/5 px-3 text-foreground outline-none"
+              className="h-11 rounded-2xl border border-border bg-secondary px-3 text-foreground outline-none"
             >
               {DESTINATION_CHAINS.map((chain) => (
                 <option key={chain} value={chain}>
@@ -85,7 +85,7 @@ export function BridgeModal({ open, asset, onClose, onSubmit }: BridgeModalProps
               ))}
             </select>
           </label>
-          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-muted">
+          <div className="rounded-[20px] border border-border bg-secondary p-4 text-sm text-muted">
             Origin: <span className="font-semibold text-foreground">{asset?.chainName ?? "Unknown"}</span>
           </div>
           {validationMessage ? (
@@ -97,7 +97,7 @@ export function BridgeModal({ open, asset, onClose, onSubmit }: BridgeModalProps
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
+            className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={onClose}
           >
             Cancel

@@ -13,7 +13,7 @@ type ApprovalRequestCardProps = {
 
 function SwapDetail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg bg-white/5 px-3 py-2">
+    <div className="flex flex-col gap-0.5 rounded-lg bg-secondary px-3 py-2">
       <span className="font-mono text-[9px] uppercase tracking-wider text-muted">{label}</span>
       <span className="text-xs font-medium text-foreground/90">{value}</span>
     </div>
@@ -33,7 +33,7 @@ export function ApprovalRequestCard({
   const isSwap = name === "execute_token_swap" && swap;
 
   return (
-    <div className="rounded-xl border border-white/12 bg-white/5 px-4 py-4">
+    <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
       <p className="mb-4 text-sm leading-6 text-foreground/85">{message}</p>
 
       {isSwap && (

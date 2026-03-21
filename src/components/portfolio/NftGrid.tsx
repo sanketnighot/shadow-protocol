@@ -27,7 +27,7 @@ export function NftGrid({ nfts, isLoading }: NftGridProps) {
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
-            className="aspect-square animate-pulse rounded-2xl border border-white/10 bg-white/5"
+            className="aspect-square animate-pulse rounded-2xl border border-border bg-secondary"
           />
         ))}
       </div>
@@ -49,9 +49,9 @@ export function NftGrid({ nfts, isLoading }: NftGridProps) {
       {nfts.map((nft) => (
         <div
           key={nft.id}
-          className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#14141a] transition-all hover:border-white/20 hover:shadow-lg"
+          className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-all hover:border-primary/30 hover:shadow-lg"
         >
-          <div className="relative aspect-square overflow-hidden bg-white/5">
+          <div className="relative aspect-square overflow-hidden bg-secondary">
             {nft.imageUrl ? (
               <img
                 src={nft.imageUrl}

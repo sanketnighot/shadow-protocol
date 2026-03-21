@@ -33,7 +33,7 @@ export function HomeDashboard() {
         variants={itemVariants}
       >
         <AgentStatusCard />
-        <div className="glass-panel subtle-grid rounded-[24px] border border-white/10 bg-[#14141a] p-5 transition-colors hover:border-white/15 sm:rounded-[28px] sm:p-6">
+        <div className="glass-panel subtle-grid rounded-[24px] p-5 transition-colors sm:rounded-[28px] sm:p-6">
           <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
             Live posture
           </p>
@@ -44,11 +44,11 @@ export function HomeDashboard() {
             SHADOW is watching volatility, liquidity depth, and execution slippage across your preferred chains.
           </p>
           <div className="mt-8 space-y-3">
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a24] p-4 transition-transform hover:scale-[1.01]">
+            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.01]">
               <p className="text-sm font-semibold text-foreground">Private routing armed</p>
               <p className="mt-1 text-sm text-muted">Transaction privacy defaults to on for agent-assisted flows.</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a24] p-4 transition-transform hover:scale-[1.01]">
+            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.01]">
               <p className="text-sm font-semibold text-foreground">Opportunity score: 82/100</p>
               <p className="mt-1 text-sm text-muted">Most interesting movement is concentrated on Base and Arbitrum.</p>
             </div>

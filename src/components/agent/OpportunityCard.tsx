@@ -37,7 +37,7 @@ export function OpportunityCard({
   };
 
   return (
-    <div className="rounded-[24px] border border-primary/12 bg-[linear-gradient(180deg,rgba(42,25,70,0.42),rgba(20,18,28,0.96))] p-5">
+    <div className="rounded-[24px] border border-border bg-surface-elevated p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
@@ -48,15 +48,15 @@ export function OpportunityCard({
         <ShieldCheck className="size-5 text-primary" />
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-white/8 bg-black/20 p-3">
+        <div className="rounded-2xl border border-border bg-secondary p-3">
           <p className="text-xs tracking-[0.18em] text-muted uppercase">APY</p>
           <p className="mt-1 font-semibold text-foreground">{apy}</p>
         </div>
-        <div className="rounded-2xl border border-white/8 bg-black/20 p-3">
+        <div className="rounded-2xl border border-border bg-secondary p-3">
           <p className="text-xs tracking-[0.18em] text-muted uppercase">TVL</p>
           <p className="mt-1 font-semibold text-foreground">{tvl}</p>
         </div>
-        <div className="rounded-2xl border border-white/8 bg-black/20 p-3">
+        <div className="rounded-2xl border border-border bg-secondary p-3">
           <p className="text-xs tracking-[0.18em] text-muted uppercase">Risk</p>
           <p className="mt-1 font-semibold text-foreground">{risk}</p>
         </div>
@@ -70,7 +70,7 @@ export function OpportunityCard({
         </Button>
         <Button
           variant="outline"
-          className="rounded-full border-white/10 bg-white/3 text-foreground hover:bg-white/8"
+          className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
         >
           Details
           <ArrowRight className="size-4" />

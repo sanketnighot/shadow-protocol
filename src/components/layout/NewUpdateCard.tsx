@@ -10,11 +10,11 @@ const NOTIFICATION_STYLES: Record<
   { icon: typeof Bell; accent: string }
 > = {
   info: { icon: Bell, accent: "text-primary" },
-  success: { icon: CheckCircle2, accent: "text-emerald-300" },
-  warning: { icon: TriangleAlert, accent: "text-amber-300" },
+  success: { icon: CheckCircle2, accent: "text-success" },
+  warning: { icon: TriangleAlert, accent: "text-warning" },
 };
 
-const VISIBLE_MS = 1500;
+const VISIBLE_MS = 2500;
 
 export function NewUpdateCard() {
   const lastAddedNotificationId = useUiStore((s) => s.lastAddedNotificationId);
@@ -43,19 +43,17 @@ export function NewUpdateCard() {
   const { icon: Icon, accent } = NOTIFICATION_STYLES[notification.type];
 
   const variants = {
-    initial: { opacity: 0, y: 8, scale: 0.96 },
+    initial: { opacity: 0, y: 16, scale: 0.95 },
     animate: {
       opacity: 1,
       y: 0,
       scale: 1,
-      transition: { duration: 0.2 },
+      transition: { duration: 0.3, ease: "easeOut" },
     },
     exit: {
-      x: 80,
-      y: -60,
-      scale: 0,
       opacity: 0,
-      transition: { duration: 0.4, ease: [0.42, 0, 1, 1] as const },
+      scale: 0.95,
+      transition: { duration: 0.2 },
     },
   };
 
@@ -69,15 +67,14 @@ export function NewUpdateCard() {
           exit="exit"
           variants={variants}
           className={cn(
-            "fixed bottom-6 right-24 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-[18px] border border-white/10 bg-[#14141a] p-3 shadow-xl",
-            "border-primary/20",
+            "fixed bottom-6 right-24 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-2xl p-3 shadow-2xl glass-panel",
           )}
           style={{ originX: 1, originY: 1 }}
         >
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              "shrink-0 rounded-xl border border-white/10 bg-white/10 p-2",
+              "shrink-0 rounded-xl border border-border bg-surface-elevated p-2",
               accent,
             )}
           >
@@ -89,7 +86,7 @@ export function NewUpdateCard() {
               {notification.description}
             </p>
           </div>
-          <span className="shrink-0 text-[10px] text-muted">
+          <span className="shrink-0 text-[10px] text-muted-foreground">
             {notification.createdAtLabel}
           </span>
         </div>

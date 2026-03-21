@@ -12,7 +12,7 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
   const [guardrails, setGuardrails] = useState(GUARDRAIL_DEFAULTS);
 
   return (
-    <section className="glass-panel rounded-[24px] border border-white/10 p-5">
+    <section className="glass-panel rounded-[24px] p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
@@ -35,7 +35,7 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
                 maxTradeUsd: event.currentTarget.value,
               }))
             }
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-foreground outline-none"
+            className="rounded-2xl border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
         </label>
         <label className="grid gap-2 text-sm text-muted">
@@ -48,7 +48,7 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
                 stopBelowPortfolioUsd: event.currentTarget.value,
               }))
             }
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-foreground outline-none"
+            className="rounded-2xl border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
         </label>
         <label className="grid gap-2 text-sm text-muted">
@@ -61,7 +61,7 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
                 requireApprovalAboveUsd: event.currentTarget.value,
               }))
             }
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-foreground outline-none"
+            className="rounded-2xl border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
         </label>
       </div>
@@ -72,7 +72,7 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
         </Button>
         <Button
           variant="outline"
-          className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10 active:scale-95"
+          className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated active:scale-95"
           onClick={onTestSimulation}
         >
           Test Simulation

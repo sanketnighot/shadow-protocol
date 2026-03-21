@@ -70,7 +70,7 @@ export function TransactionList({ transactions, isLoading }: TransactionListProp
         {[1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
-            className="h-16 animate-pulse rounded-2xl border border-white/10 bg-white/5"
+            className="h-16 animate-pulse rounded-2xl border border-border bg-secondary"
           />
         ))}
       </div>
@@ -95,7 +95,7 @@ export function TransactionList({ transactions, isLoading }: TransactionListProp
           <select
             value={chainFilter}
             onChange={(e) => setChainFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-foreground outline-none"
+            className="rounded-xl border border-border bg-secondary px-3 py-2 text-foreground outline-none"
           >
             <option value="All">All</option>
             {chains.map((c) => (
@@ -110,7 +110,7 @@ export function TransactionList({ transactions, isLoading }: TransactionListProp
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-foreground outline-none"
+            className="rounded-xl border border-border bg-secondary px-3 py-2 text-foreground outline-none"
           >
             <option value="All">All</option>
             {categories.map((c) => (
@@ -129,14 +129,14 @@ export function TransactionList({ transactions, isLoading }: TransactionListProp
             href={tx.blockExplorerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#14141a] px-4 py-3 transition-colors hover:border-white/20 hover:bg-white/5"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-4 py-3 transition-colors hover:border-primary/30 hover:bg-surface-elevated"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-foreground">
                   {categoryLabel(tx.category)}
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-muted">
+                <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[10px] text-muted">
                   {tx.chain}
                 </span>
               </div>

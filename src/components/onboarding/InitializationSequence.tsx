@@ -27,10 +27,10 @@ export function InitializationSequence() {
   if (hasCompleted) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black text-foreground">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-background text-foreground">
       {/* Dynamic Background */}
       <div className="pointer-events-none absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(20,20,30,1)_0%,rgba(0,0,0,1)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--bg-secondary)_0%,var(--bg-primary)_100%)]" />
         <div className="absolute top-1/2 left-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 opacity-30 blur-[120px]" />
         
         {/* Subtle grid pattern */}
@@ -53,7 +53,7 @@ export function InitializationSequence() {
                 ? "w-8 bg-primary shadow-[0_0_8px_rgba(139,92,246,0.8)]"
                 : step < currentStep
                 ? "w-4 bg-primary/40"
-                : "w-2 bg-white/10"
+                : "w-2 bg-secondary"
             }`}
           />
         ))}

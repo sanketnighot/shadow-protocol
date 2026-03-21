@@ -37,7 +37,7 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
   }
 
   return (
-    <div className="h-44 w-full rounded-2xl border border-white/10 bg-[#1a1a24] px-2 py-2">
+    <div className="h-44 w-full rounded-2xl border border-border bg-surface-elevated/50 px-2 py-2">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
           <defs>
@@ -49,13 +49,13 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
           <Tooltip
             cursor={{ stroke: "rgba(139,92,246,0.3)", strokeWidth: 1 }}
             contentStyle={{
-              border: "1px solid rgba(139,92,246,0.18)",
+              border: "1px solid var(--panel-border)",
               borderRadius: "16px",
-              backgroundColor: "rgba(10,10,15,0.94)",
-              boxShadow: "0 20px 48px rgba(0,0,0,0.35)",
+              backgroundColor: "var(--bg-tertiary)",
+              boxShadow: "var(--shadow-glow)",
             }}
             formatter={(value) => [formatTooltipValue(value), "Value"]}
-            labelStyle={{ color: "#94a3b8" }}
+            labelStyle={{ color: "var(--text-secondary)" }}
           />
           <Area
             type="monotone"

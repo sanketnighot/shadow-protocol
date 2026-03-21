@@ -13,7 +13,7 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
 
   return (
     <form
-      className="relative overflow-hidden rounded-full border border-white/10 bg-[#1a1a24]/90 p-1.5 shadow-[0_12px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all focus-within:border-primary/40 focus-within:shadow-[0_12px_48px_rgba(139,92,246,0.15)]"
+      className="relative overflow-hidden rounded-full border border-border bg-surface-elevated p-1.5 shadow-lg backdrop-blur-xl transition-all focus-within:border-primary/40 focus-within:shadow-[0_12px_48px_rgba(139,92,246,0.15)]"
       onSubmit={(event) => {
         event.preventDefault();
         const trimmedValue = value.trim();

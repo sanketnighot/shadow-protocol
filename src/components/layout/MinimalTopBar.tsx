@@ -43,7 +43,7 @@ export function MinimalTopBar() {
   return (
     <header className="shrink-0 pb-3">
       <div
-        className="relative overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,26,0.96),rgba(14,14,20,0.9))] px-4 py-2.5 shadow-[0_20px_56px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-5 lg:px-6"
+        className="relative overflow-hidden rounded-[22px] border border-border bg-surface/90 px-4 py-2.5 shadow-[0_20px_56px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-5 lg:px-6"
         onMouseDown={handlePointerDown}
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(139,92,246,0.16),transparent_42%),linear-gradient(90deg,transparent,rgba(139,92,246,0.08),transparent)]" />
@@ -66,11 +66,11 @@ export function MinimalTopBar() {
             <button
             type="button"
             onClick={openCommandPalette}
-            className="relative z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-muted transition-all hover:border-white/15 hover:bg-white/10 hover:text-foreground"
+            className="relative z-10 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm text-muted transition-all hover:border-primary/30 hover:bg-surface-elevated hover:text-foreground"
           >
             <Search className="size-4" />
             <span className="hidden sm:inline">Search</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs text-muted">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-xs text-muted">
               <Command className="size-3" />
               {commandHint}
             </span>

@@ -19,7 +19,7 @@ export function OnboardingModal({ open, onComplete }: OnboardingModalProps) {
   return (
     <Dialog open={open}>
       <DialogContent
-        className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-2xl sm:p-6"
+        className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-2xl sm:p-6"
         showCloseButton={false}
       >
         <DialogHeader className="text-left">
@@ -35,21 +35,21 @@ export function OnboardingModal({ open, onComplete }: OnboardingModalProps) {
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[22px] border border-border bg-secondary p-4">
             <ShieldCheck className="size-5 text-primary" />
             <p className="mt-4 font-semibold text-foreground">Privacy first</p>
             <p className="mt-2 text-sm leading-6 text-muted">
               Toggle private routing defaults without leaving the desktop app.
             </p>
           </div>
-          <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[22px] border border-border bg-secondary p-4">
             <Sparkles className="size-5 text-primary" />
             <p className="mt-4 font-semibold text-foreground">Agent guidance</p>
             <p className="mt-2 text-sm leading-6 text-muted">
               Ask the local agent for yield, swaps, or strategy ideas with streaming replies.
             </p>
           </div>
-          <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[22px] border border-border bg-secondary p-4">
             <Wallet className="size-5 text-primary" />
             <p className="mt-4 font-semibold text-foreground">Actionable flows</p>
             <p className="mt-2 text-sm leading-6 text-muted">

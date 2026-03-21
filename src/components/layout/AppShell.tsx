@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Toaster } from "sonner";
 
 import { ActivityBell } from "@/components/layout/ActivityBell";
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -49,32 +50,15 @@ export function AppShell() {
   const openOllamaSetup = useOllamaStore((s) => s.openSetupModal);
   const setOllamaLastStatus = useOllamaStore((s) => s.setLastStatus);
 
-  useEffect(() => {
-    const mediaQuery =
-      typeof window.matchMedia === "function"
-        ? window.matchMedia("(prefers-color-scheme: light)")
-        : {
-            matches: false,
-            addEventListener: () => undefined,
-            removeEventListener: () => undefined,
-          };
-
-    const applyTheme = () => {
-      const resolvedTheme =
-        themePreference === "system"
-          ? mediaQuery.matches
-            ? "light"
-            : "dark"
-          : themePreference;
-
-      document.documentElement.dataset.theme = resolvedTheme;
-    };
-
-    applyTheme();
-    mediaQuery.addEventListener("change", applyTheme);
-
-    return () => mediaQuery.removeEventListener("change", applyTheme);
+  const resolvedTheme = useMemo(() => {
+    if (themePreference !== "system") return themePreference;
+    if (typeof window === "undefined") return "dark";
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   }, [themePreference]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
 
   useEffect(() => {
     void refreshWallets();
@@ -194,6 +178,18 @@ export function AppShell() {
       </div>
       <Dock />
       <ActivityBell />
+      <Toaster
+        position="top-right"
+        richColors
+        theme={resolvedTheme as "light" | "dark"}
+        toastOptions={{
+          classNames: {
+            toast: "glass-panel",
+            title: "text-sm font-semibold text-foreground",
+            description: "text-sm text-muted",
+          },
+        }}
+      />
       <NewUpdateCard />
       <ApprovalModal
         open={pendingApprovalId === pendingApproval.id}
@@ -219,7 +215,7 @@ export function AppShell() {
             initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-full border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-semibold text-emerald-200 shadow-[0_18px_40px_rgba(16,185,129,0.22)]"
+            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-full border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success shadow-[0_18px_40px_rgba(16,185,129,0.15)]"
           >
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="size-4" />

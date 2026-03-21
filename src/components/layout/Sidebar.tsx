@@ -15,7 +15,7 @@ export function Sidebar({ className, onNavigate: _onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "glass-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/10 pb-0 pl-3 pr-3 pt-3 sm:pl-4 sm:pr-4 sm:pt-4 lg:rounded-[30px]",
+        "glass-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] pb-0 pl-3 pr-3 pt-3 sm:pl-4 sm:pr-4 sm:pt-4 lg:rounded-[30px]",
         className,
       )}
     >

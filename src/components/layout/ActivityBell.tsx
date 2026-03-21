@@ -24,8 +24,8 @@ const NOTIFICATION_STYLES: Record<
   { icon: typeof Bell; accent: string }
 > = {
   info: { icon: Bell, accent: "text-primary" },
-  success: { icon: CheckCircle2, accent: "text-emerald-300" },
-  warning: { icon: TriangleAlert, accent: "text-amber-300" },
+  success: { icon: CheckCircle2, accent: "text-success" },
+  warning: { icon: TriangleAlert, accent: "text-warning" },
 };
 
 const CLOSE_DELAY_MS = 200;
@@ -48,9 +48,9 @@ function NotificationCard({
       role={hasRoute ? "button" : undefined}
       tabIndex={hasRoute ? 0 : undefined}
       className={cn(
-        "group relative rounded-[18px] border border-white/10 bg-[#14141a] p-3 transition-colors",
-        notification.unread && "border-primary/20 bg-[#18141f]",
-        hasRoute && "cursor-pointer hover:bg-[#1a1a24]",
+        "group relative rounded-[18px] border border-border bg-secondary p-3 transition-colors",
+        notification.unread && "border-primary/30 bg-primary/5",
+        hasRoute && "cursor-pointer hover:bg-surface-elevated",
       )}
       onClick={hasRoute ? onOpen : undefined}
       onKeyDown={
@@ -64,7 +64,7 @@ function NotificationCard({
           : undefined
       }
     >
-      <div className="absolute -right-1 -bottom-1 z-10 flex gap-0.5 rounded-full border border-white/10 bg-background/95 px-0.5 py-0.5 shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="absolute -right-1 -bottom-1 z-10 flex gap-0.5 rounded-full border border-border bg-surface px-0.5 py-0.5 shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         {notification.unread && (
           <Button
             type="button"
@@ -98,7 +98,7 @@ function NotificationCard({
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <div
             className={cn(
-              "shrink-0 rounded-xl border border-white/10 bg-white/10 p-2",
+              "shrink-0 rounded-xl border border-border bg-surface-elevated p-2",
               accent,
             )}
           >
@@ -170,12 +170,12 @@ export function ActivityBell() {
         type="button"
         aria-label="Open updates"
         aria-expanded={isOpen}
-        className="relative flex size-12 items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-foreground shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:bg-black/85 hover:shadow-[0_12px_32px_rgba(0,0,0,0.6)]"
+        className="relative flex size-12 items-center justify-center rounded-2xl border border-border bg-surface/80 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-surface hover:shadow-md"
       >
         <Bell className="size-5" />
         {unreadCount > 0 && (
           <span
-            className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full border border-white/10 bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground"
+            className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full border border-border bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground"
             aria-label={`${unreadCount} unread updates`}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -185,10 +185,10 @@ export function ActivityBell() {
 
       {isOpen && (
         <div
-          className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0e0e14] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-glow"
         >
           {syncStatus === "syncing" && (
-            <div className="shrink-0 border-b border-white/10 px-3 py-2.5">
+            <div className="shrink-0 border-b border-border px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin text-primary" />
                 <span className="text-xs font-medium text-foreground">
@@ -199,7 +199,7 @@ export function ActivityBell() {
             </div>
           )}
           {notifications.length > 0 && (
-            <div className="flex shrink-0 items-center justify-end gap-3 border-b border-white/10 px-3 py-2">
+            <div className="flex shrink-0 items-center justify-end gap-3 border-b border-border px-3 py-2">
               <button
                 type="button"
                 className="text-[10px] text-muted hover:text-foreground"

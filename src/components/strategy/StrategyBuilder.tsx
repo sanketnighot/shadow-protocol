@@ -12,7 +12,7 @@ export function StrategyBuilder() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[24px] border border-white/10 p-5 sm:p-6">
+      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">

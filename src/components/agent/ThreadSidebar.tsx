@@ -132,8 +132,8 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
   };
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#14141a] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-      <div className="shrink-0 border-b border-white/10 px-5 pb-5 pt-6 bg-linear-to-b from-white/[0.02] to-transparent">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-[32px] border border-border bg-surface shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+      <div className="shrink-0 border-b border-border px-5 pb-5 pt-6 bg-linear-to-b from-white/[0.02] to-transparent">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="font-mono text-[11px] font-semibold tracking-[0.2em] text-muted uppercase">
@@ -143,7 +143,7 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
               {threads.length} conversations
             </p>
           </div>
-          <div className="flex size-9 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1a24] text-muted shadow-inner">
+          <div className="flex size-9 items-center justify-center rounded-2xl border border-border bg-surface-elevated text-muted shadow-inner">
             <MessageSquareMore className="size-4" />
           </div>
         </div>

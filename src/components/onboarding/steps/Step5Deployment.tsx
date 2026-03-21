@@ -39,7 +39,7 @@ export function Step5Deployment() {
         </h1>
       </motion.div>
 
-      <div className="w-full max-w-md space-y-4 rounded-[24px] border border-white/10 bg-black/40 p-6 backdrop-blur-md">
+      <div className="w-full max-w-md space-y-4 rounded-[24px] border border-border bg-background p-6 backdrop-blur-md">
         {CHECKS.map((check, i) => (
           <div key={i} className="flex items-center gap-3">
             {i < activeCheck ? (
@@ -55,7 +55,7 @@ export function Step5Deployment() {
                 <div className="size-2 animate-pulse rounded-full bg-primary" />
               </div>
             ) : (
-              <div className="size-5 rounded-full border border-white/10" />
+              <div className="size-5 rounded-full border border-border" />
             )}
             <span
               className={`font-mono text-sm ${

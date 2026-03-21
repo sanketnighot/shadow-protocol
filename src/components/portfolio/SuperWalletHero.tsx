@@ -23,7 +23,7 @@ function chainColor(symbol: string): string {
     BASE: "bg-blue-600",
     POL: "bg-purple-500",
   };
-  return map[symbol] ?? "bg-white/20";
+  return map[symbol] ?? "bg-muted/20";
 }
 
 export function SuperWalletHero({
@@ -34,7 +34,7 @@ export function SuperWalletHero({
   onAction,
 }: SuperWalletHeroProps) {
   return (
-    <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-linear-to-br from-[#1a1a24] to-[#14141a] p-6 sm:p-8">
+    <section className="relative overflow-hidden rounded-[32px] border border-border bg-surface p-6 sm:p-8 shadow-sm">
       {/* Background Glow */}
       <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-primary/20 blur-[100px]" />
 

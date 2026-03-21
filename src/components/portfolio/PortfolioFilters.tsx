@@ -42,7 +42,7 @@ export function PortfolioFilters({
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-1 items-center gap-2 overflow-x-auto pb-2 scrollbar-hide sm:pb-0">
-        <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1a24] p-1 shadow-inner">
+        <div className="flex items-center gap-1.5 rounded-full border border-border bg-secondary p-1 shadow-inner">
           {CHAINS.map((c) => (
             <button
               key={c.value}
@@ -50,7 +50,7 @@ export function PortfolioFilters({
               className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                 chain === c.value
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted hover:bg-white/5 hover:text-foreground"
+                  : "text-muted hover:bg-surface-elevated hover:text-foreground"
               }`}
             >
               {c.label}
@@ -60,15 +60,15 @@ export function PortfolioFilters({
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1a24] p-1 shadow-inner">
+        <div className="flex items-center gap-1.5 rounded-full border border-border bg-secondary p-1 shadow-inner">
           {TYPES.map((t) => (
             <button
               key={t.value}
               onClick={() => onTypeChange(t.value)}
               className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                 type === t.value
-                  ? "bg-white/15 text-foreground shadow-sm"
-                  : "text-muted hover:bg-white/5 hover:text-foreground"
+                  ? "bg-surface-elevated text-foreground shadow-sm"
+                  : "text-muted hover:bg-surface-elevated hover:text-foreground"
               }`}
             >
               {t.label}
@@ -81,7 +81,7 @@ export function PortfolioFilters({
             aria-label="Sort assets"
             value={sort}
             onChange={(event) => onSortChange(event.currentTarget.value)}
-            className="appearance-none rounded-full border border-white/10 bg-[#1a1a24] pl-3.5 pr-8 py-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-white/5"
+            className="appearance-none rounded-full border border-border bg-secondary pl-3.5 pr-8 py-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-surface-elevated"
           >
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>

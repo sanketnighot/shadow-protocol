@@ -158,7 +158,7 @@ export function ModelSelector() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-between rounded-[20px] border-white/10 bg-white/5 text-foreground hover:bg-white/10 sm:w-auto"
+          className="w-full justify-between rounded-[20px] border-border bg-secondary text-foreground hover:bg-surface-elevated sm:w-auto"
           disabled={isPulling}
         >
           {isPulling ? (

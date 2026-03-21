@@ -23,7 +23,7 @@ export function AgentStatusCard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.08 }}
     >
-      <Card className="glass-panel h-full rounded-[24px] border border-white/10 bg-[#14141a] text-foreground transition-colors hover:border-white/15 sm:rounded-[28px]">
+      <Card className="glass-panel h-full rounded-[24px] text-foreground transition-colors sm:rounded-[28px]">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -39,15 +39,15 @@ export function AgentStatusCard() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a24] p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Strategies</p>
               <p className="mt-2 text-lg font-semibold">3 running</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a24] p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Last action</p>
               <p className="mt-2 text-lg font-semibold">2 min ago</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a24] p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Watch status</p>
               <p className="mt-2 text-lg font-semibold">Healthy</p>
             </div>
@@ -65,7 +65,7 @@ export function AgentStatusCard() {
               <Button className="rounded-full px-5">{suggestion.actionLabel}</Button>
               <Button
                 variant="outline"
-                className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
+                className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
                 onClick={() => setPendingApproval("approval-1")}
               >
                 Approve path
@@ -73,12 +73,12 @@ export function AgentStatusCard() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#1a1a24] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-2xl border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <ShieldCheck className="size-5 text-emerald-300" />
               <p className="text-sm text-muted">{latestActivityLabel}</p>
             </div>
-            <Button variant="ghost" className="rounded-full text-foreground hover:bg-white/10">
+            <Button variant="ghost" className="rounded-full text-foreground hover:bg-surface-elevated">
               View activity
               <ArrowRight className="size-4" />
             </Button>

@@ -11,7 +11,7 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
   const walletCount = (unwrapped.walletCount as number) ?? (unwrapped.wallet_count as number) ?? 0;
   const breakdown = Array.isArray(unwrapped.breakdown) ? unwrapped.breakdown : [];
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-secondary p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
@@ -21,7 +21,7 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
             Portfolio Aggregate
           </span>
         </div>
-        <span className="text-[10px] font-semibold text-muted bg-white/5 px-2 py-0.5 rounded-full">
+        <span className="text-[10px] font-semibold text-muted bg-surface-elevated px-2 py-0.5 rounded-full">
           {walletCount} Wallet{walletCount !== 1 ? "s" : ""}
         </span>
       </div>
@@ -35,7 +35,7 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
             const amount = (item.amount as string) ?? "0";
             const value = (item.value as string) ?? "$0";
             return (
-              <div key={i} className="flex items-center justify-between rounded-xl bg-white/[0.03] p-2.5 transition-colors hover:bg-white/[0.06]">
+              <div key={i} className="flex items-center justify-between rounded-xl bg-surface-elevated/50 p-2.5 transition-colors hover:bg-surface-elevated">
                 <div className="flex items-center gap-2">
                   <div className="flex size-8 items-center justify-center rounded-lg bg-white/5 font-bold text-[10px]">
                     {token.slice(0, 2)}
@@ -59,7 +59,7 @@ function BalancesCard({ data }: { data: unknown }) {
   const unwrapped = (data as any)?.Ok ?? data;
   const items = Array.isArray(unwrapped) ? unwrapped : [];
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-2xl border border-border bg-secondary p-4">
       <div className="mb-3 flex items-center gap-2">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
           <Wallet className="size-4" />
@@ -70,7 +70,7 @@ function BalancesCard({ data }: { data: unknown }) {
       </div>
       <div className="grid gap-2">
         {(items as Record<string, unknown>[]).slice(0, 8).map((item, i) => (
-          <div key={i} className="flex items-center justify-between rounded-xl bg-white/[0.03] p-2.5">
+          <div key={i} className="flex items-center justify-between rounded-xl bg-surface-elevated/50 p-2.5">
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-foreground">{(item.token as string) ?? "?"}</span>
               <span className="text-[10px] text-muted">on {(item.chain as string) ?? "?"}</span>
@@ -95,7 +95,7 @@ function PriceCard({ data }: { data: Record<string, unknown> }) {
   const source = (unwrapped.source as string) ?? "Oracle";
   
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex items-center justify-between">
+    <div className="rounded-2xl border border-border bg-secondary p-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-xl bg-primary/20 text-primary shadow-inner">
           <TrendingUp className="size-5" />
@@ -110,7 +110,7 @@ function PriceCard({ data }: { data: Record<string, unknown> }) {
         </div>
       </div>
       <div className="text-right">
-        <span className="text-[9px] font-bold text-muted uppercase tracking-tighter bg-white/5 px-1.5 py-0.5 rounded">
+        <span className="text-[9px] font-bold text-muted uppercase tracking-tighter bg-surface-elevated px-1.5 py-0.5 rounded">
           {source}
         </span>
       </div>
@@ -142,7 +142,7 @@ export function ToolResultCard({ toolName, content }: ToolResultCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+    <div className="rounded-xl border border-border bg-surface-elevated/50 p-3">
       <div className="mb-2 flex items-center gap-2">
         <Database className="size-3.5 text-muted" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">

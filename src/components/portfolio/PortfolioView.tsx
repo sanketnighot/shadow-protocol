@@ -158,7 +158,7 @@ export function PortfolioView() {
           </div>
 
           {/* Portfolio Tabs & Content */}
-          <div className="rounded-[32px] border border-white/10 bg-[#14141a] p-5 sm:p-8">
+          <div className="rounded-[32px] border border-border bg-surface p-5 sm:p-8">
             <PortfolioTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}

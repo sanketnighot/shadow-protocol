@@ -40,7 +40,7 @@ export function ApprovalModal({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-2xl sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-2xl sm:p-6">
         <DialogHeader className="space-y-3 text-left">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-primary/20 bg-primary/10 p-2.5 text-primary">
@@ -58,19 +58,19 @@ export function ApprovalModal({
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[24px] border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Action</p>
             <p className="mt-2 text-base font-semibold">{transaction.action}</p>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[24px] border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Amount</p>
             <p className="mt-2 text-base font-semibold">{transaction.amount}</p>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[24px] border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Chain</p>
             <p className="mt-2 text-base font-semibold">{transaction.chain}</p>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-[24px] border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Slippage / Gas</p>
             <p className="mt-2 text-base font-semibold">
               {transaction.slippage} / {transaction.gas}
@@ -97,7 +97,7 @@ export function ApprovalModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-[24px] border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-[24px] border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
           <PrivacyToggle />
           <div className="inline-flex items-center gap-2 text-sm text-amber-200">
             <TriangleAlert className="size-4" />
@@ -105,7 +105,7 @@ export function ApprovalModal({
           </div>
         </div>
 
-        <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted">
+        <label className="flex items-center gap-3 rounded-2xl border border-border bg-secondary px-4 py-3 text-sm text-muted">
           <input
             type="checkbox"
             checked={skipApproval}
@@ -119,7 +119,7 @@ export function ApprovalModal({
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-white/10 bg-white/5 text-foreground hover:bg-white/10"
+            className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={onReject}
           >
             Reject

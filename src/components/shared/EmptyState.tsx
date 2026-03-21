@@ -18,7 +18,7 @@ export function EmptyState({
   onAction,
 }: EmptyStateProps) {
   return (
-    <div className="glass-panel flex flex-col items-start gap-4 rounded-[24px] border border-white/10 p-6">
+    <div className="glass-panel flex flex-col items-start gap-4 rounded-[24px] p-6">
       <div className="rounded-[22px] border border-primary/15 bg-primary/10 p-3 text-primary">
         {icon}
       </div>

@@ -72,7 +72,7 @@ export function Step3Uplink() {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-[20px] border border-white/10 bg-white/5 p-5 backdrop-blur-md"
+          className="rounded-[20px] border border-border bg-secondary p-5 backdrop-blur-md"
         >
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400">
@@ -88,7 +88,7 @@ export function Step3Uplink() {
             value={alchemyKey}
             onChange={(e) => setAlchemyKey(e.target.value)}
             placeholder="your-alchemy-api-key"
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-foreground focus:border-blue-500/50 focus:outline-none"
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
           />
         </motion.div>
 
@@ -96,7 +96,7 @@ export function Step3Uplink() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-[20px] border border-white/10 bg-white/5 p-5 backdrop-blur-md"
+          className="rounded-[20px] border border-border bg-secondary p-5 backdrop-blur-md"
         >
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400">
@@ -112,7 +112,7 @@ export function Step3Uplink() {
             value={perplexityKey}
             onChange={(e) => setPerplexityKey(e.target.value)}
             placeholder="pplx-xxxxxxxxxxxxxxxx"
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-foreground focus:border-purple-500/50 focus:outline-none"
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
           />
         </motion.div>
 

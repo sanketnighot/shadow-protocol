@@ -37,10 +37,10 @@ export function SmartOpportunities() {
         {opportunities.map((opp) => (
           <div
             key={opp.id}
-            className="flex w-[280px] shrink-0 flex-col justify-between rounded-2xl border border-white/10 bg-linear-to-br from-white/[0.03] to-transparent p-4 transition-all hover:bg-white/[0.05]"
+            className="flex w-[280px] shrink-0 flex-col justify-between rounded-2xl border border-border bg-surface-elevated p-4 transition-all hover:border-primary/30 hover:shadow-lg"
           >
             <div>
-              <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-white/5">
+              <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-secondary">
                 {opp.icon}
               </div>
               <h3 className="font-medium text-foreground">{opp.title}</h3>

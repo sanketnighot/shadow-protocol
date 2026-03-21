@@ -169,7 +169,7 @@ export function OllamaSetup() {
     <Dialog open={showSetupModal} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={isReady}
-        className="glass-panel max-w-md rounded-[28px] border-white/10 bg-background p-6"
+        className="glass-panel max-w-md rounded-[28px] bg-background p-6"
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-[-0.03em]">
@@ -208,7 +208,7 @@ export function OllamaSetup() {
                         "flex items-center justify-between rounded-[16px] border px-4 py-3 text-left transition-all hover:-translate-y-0.5",
                         recommended
                           ? "border-primary/30 bg-primary/12 text-foreground"
-                          : "border-white/10 bg-white/5 text-muted hover:bg-white/8"
+                          : "border-border bg-secondary text-muted hover:bg-surface-elevated"
                       )}
                     >
                       <div>
@@ -233,7 +233,7 @@ export function OllamaSetup() {
                   placeholder="Or type any model (e.g. mistral, codellama:7b)"
                   value={customModelInput}
                   onChange={(e) => setCustomModelInput(e.target.value)}
-                  className="h-9 flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-1 text-sm outline-none placeholder:text-muted focus:border-primary/50"
+                  className="h-9 flex-1 rounded-md border border-border bg-secondary px-3 py-1 text-sm outline-none placeholder:text-muted focus:border-primary/50"
                   onKeyDown={(e) => {
                     const name = customModelInput.trim();
                     if (e.key === "Enter" && name) {

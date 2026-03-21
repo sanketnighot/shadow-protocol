@@ -14,18 +14,19 @@
   --color-muted: var(--text-secondary);
   --color-muted-foreground: var(--text-tertiary);
   --color-primary: var(--accent-purple);
-  --color-primary-foreground: var(--text-primary);
+  --color-primary-foreground: #ffffff;
   --color-accent: var(--accent-blue);
-  --color-accent-foreground: var(--text-primary);
-  --color-secondary: rgba(255, 255, 255, 0.06);
+  --color-accent-foreground: #ffffff;
+  --color-secondary: var(--bg-tertiary);
   --color-secondary-foreground: var(--text-primary);
-  --color-card: rgba(20, 20, 26, 0.8);
+  --color-card: var(--bg-secondary);
   --color-card-foreground: var(--text-primary);
-  --color-border: rgba(148, 163, 184, 0.12);
-  --color-input: rgba(255, 255, 255, 0.06);
-  --color-ring: rgba(139, 92, 246, 0.32);
+  --color-border: var(--panel-border);
+  --color-input: var(--bg-tertiary);
+  --color-ring: var(--panel-border-strong);
   --color-destructive: var(--accent-red);
   --color-success: var(--accent-green);
+  --color-warning: var(--accent-amber);
   --color-danger: var(--accent-red);
   --radius-xl: var(--radius-xl);
   --radius-2xl: var(--radius-2xl);
@@ -44,6 +45,7 @@
       radial-gradient(circle at top, rgba(139, 92, 246, 0.18), transparent 30%),
       linear-gradient(180deg, #0b0b11 0%, #09090d 100%);
     color-scheme: dark;
+    transition: background-color 0.3s ease;
   }
 
   html[data-theme="light"] {

@@ -31,7 +31,7 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
   const confidence = safeStr(decision.confidence).toLowerCase();
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+    <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
         <Target className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -63,13 +63,13 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
       </div>
 
       {allocList.length > 0 && (
-        <div className="mb-2 border-t border-white/5 pt-1.5">
+        <div className="mb-2 border-t border-border pt-1.5">
           <p className="mb-1.5 text-[10px] text-muted">Allocations</p>
           <div className="flex flex-wrap gap-2">
             {allocList.map((a, i) => (
               <span
                 key={i}
-                className="rounded bg-white/5 px-2 py-0.5 font-mono text-[10px] text-foreground/85"
+                className="rounded bg-secondary px-2 py-0.5 font-mono text-[10px] text-foreground/85"
               >
                 {safeStr(a.token)} {typeof a.percentage === "number" ? `${a.percentage.toFixed(1)}%` : ""}
               </span>

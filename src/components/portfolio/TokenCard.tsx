@@ -61,7 +61,7 @@ export function TokenCard({ asset }: TokenCardProps) {
         role="button"
         tabIndex={0}
         onClick={() => setPopupOpen(true)}
-        className="group relative flex w-full flex-col items-center gap-4 overflow-hidden rounded-[24px] border border-white/10 bg-linear-to-b from-[#1a1a24] to-[#14141a] p-5 text-left transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-primary/5 active:scale-[0.98]"
+        className="group relative flex w-full flex-col items-center gap-4 overflow-hidden rounded-[24px] border border-border bg-surface-elevated p-5 text-left transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] hover:shadow-primary/5 active:scale-[0.98]"
       >
         {/* APY Badge */}
         {apy && (
@@ -79,7 +79,7 @@ export function TokenCard({ asset }: TokenCardProps) {
             {asset.symbol.slice(0, 2)}
           </div>
           <div
-            className="absolute -bottom-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full border-2 border-[#14141a] bg-muted/90 text-[9px] font-bold text-foreground shadow-sm"
+            className="absolute -bottom-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full border-2 border-surface bg-muted/90 text-[9px] font-bold text-foreground shadow-sm"
             title={asset.chainName}
           >
             {chainBadgeLabel(asset.chain)}
@@ -123,7 +123,7 @@ export function TokenCard({ asset }: TokenCardProps) {
       </div>
 
       <Dialog open={popupOpen} onOpenChange={setPopupOpen}>
-        <DialogContent className="max-w-[calc(100%-2rem)] rounded-[32px] border border-white/10 bg-[#14141a] p-6 sm:max-w-sm sm:p-8">
+        <DialogContent className="max-w-[calc(100%-2rem)] rounded-[32px] border border-border bg-surface p-6 sm:max-w-sm sm:p-8">
           <div className="flex flex-col items-center gap-6">
             <div className="relative">
               <div

@@ -12,6 +12,7 @@ import {
   type Node,
 } from "@xyflow/react";
 import { Plus, RotateCcw } from "lucide-react";
+import { useMemo } from "react";
 import "@xyflow/react/dist/style.css";
 
 import {
@@ -21,6 +22,7 @@ import {
 import { ActionNode } from "@/components/strategy/nodes/ActionNode";
 import { ConditionNode } from "@/components/strategy/nodes/ConditionNode";
 import { TriggerNode } from "@/components/strategy/nodes/TriggerNode";
+import { useUiStore } from "@/store/useUiStore";
 
 const nodeTypes = {
   action: ActionNode,
@@ -138,6 +140,14 @@ const STEP_META = {
 export function StrategyCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const themePreference = useUiStore((s) => s.themePreference);
+
+  const resolvedTheme = useMemo(() => {
+    if (themePreference !== "system") return themePreference;
+    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  }, [themePreference]);
 
   const handleConnect = (connection: Connection) => {
     setEdges((currentEdges) =>
@@ -195,13 +205,13 @@ export function StrategyCanvas() {
   };
 
   return (
-    <div className="glass-panel rounded-[24px] border border-white/10">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="glass-panel rounded-[24px]">
+      <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => handleAddStep("trigger")}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-white/10 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add trigger
@@ -209,7 +219,7 @@ export function StrategyCanvas() {
           <button
             type="button"
             onClick={() => handleAddStep("condition")}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-white/10 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add condition
@@ -217,7 +227,7 @@ export function StrategyCanvas() {
           <button
             type="button"
             onClick={() => handleAddStep("action")}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-white/10 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add action
@@ -225,7 +235,7 @@ export function StrategyCanvas() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+          <label className="flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-muted uppercase">
             Template
             <select
               aria-label="Strategy template"
@@ -246,7 +256,7 @@ export function StrategyCanvas() {
               setNodes([]);
               setEdges([]);
             }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-white/10 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <RotateCcw className="size-3.5" />
             Clear
@@ -255,7 +265,7 @@ export function StrategyCanvas() {
       </div>
       <div className="h-[380px] sm:h-[420px] lg:h-[500px]">
       <ReactFlow
-        colorMode="dark"
+        colorMode={resolvedTheme as "light" | "dark"}
         fitView
         nodes={nodes}
         edges={edges}
