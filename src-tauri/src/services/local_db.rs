@@ -65,6 +65,25 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON portfolio_snapshots(timestamp);
+
+CREATE TABLE IF NOT EXISTS target_allocations (
+  symbol TEXT PRIMARY KEY,
+  percentage REAL NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS active_strategies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  summary TEXT,
+  status TEXT NOT NULL,
+  trigger_json TEXT NOT NULL,
+  action_json TEXT NOT NULL,
+  guardrails_json TEXT NOT NULL,
+  last_run_at INTEGER,
+  next_run_at INTEGER,
+  created_at INTEGER NOT NULL
+);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -197,8 +216,137 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM transactions", [])?;
         conn.execute("DELETE FROM wallets", [])?;
         conn.execute("DELETE FROM portfolio_snapshots", [])?;
+        conn.execute("DELETE FROM target_allocations", [])?;
+        conn.execute("DELETE FROM active_strategies", [])?;
         Ok(())
     })
+}
+
+/// Set target allocations (replaces existing list).
+#[allow(dead_code)]
+pub fn set_target_allocations(allocations: Vec<TargetAllocation>) -> Result<(), DbError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    with_connection(|conn| {
+        conn.execute("DELETE FROM target_allocations", [])?;
+        for a in allocations {
+            conn.execute(
+                "INSERT INTO target_allocations (symbol, percentage, updated_at) VALUES (?1, ?2, ?3)",
+                params![a.symbol, a.percentage, now],
+            )?;
+        }
+        Ok(())
+    })
+}
+
+/// Get target allocations.
+pub fn get_target_allocations() -> Result<Vec<TargetAllocation>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT symbol, percentage FROM target_allocations")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TargetAllocation {
+                symbol: row.get(0)?,
+                percentage: row.get(1)?,
+            })
+        })?;
+
+        let mut all = Vec::new();
+        for r in rows {
+            all.push(r?);
+        }
+        Ok(all)
+    })
+}
+
+/// Upsert active strategy.
+#[allow(dead_code)]
+pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    with_connection(|conn| {
+        conn.execute(
+            r#"
+            INSERT INTO active_strategies (id, name, summary, status, trigger_json, action_json, guardrails_json, last_run_at, next_run_at, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              summary = excluded.summary,
+              status = excluded.status,
+              trigger_json = excluded.trigger_json,
+              action_json = excluded.action_json,
+              guardrails_json = excluded.guardrails_json,
+              last_run_at = excluded.last_run_at,
+              next_run_at = excluded.next_run_at
+            "#,
+            params![
+                strategy.id,
+                strategy.name,
+                strategy.summary,
+                strategy.status,
+                strategy.trigger_json,
+                strategy.action_json,
+                strategy.guardrails_json,
+                strategy.last_run_at,
+                strategy.next_run_at,
+                now,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+/// Get all active strategies.
+#[allow(dead_code)]
+pub fn get_strategies() -> Result<Vec<ActiveStrategy>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT id, name, summary, status, trigger_json, action_json, guardrails_json, last_run_at, next_run_at FROM active_strategies")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ActiveStrategy {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                summary: row.get(2)?,
+                status: row.get(3)?,
+                trigger_json: row.get(4)?,
+                action_json: row.get(5)?,
+                guardrails_json: row.get(6)?,
+                last_run_at: row.get(7)?,
+                next_run_at: row.get(8)?,
+            })
+        })?;
+
+        let mut all = Vec::new();
+        for r in rows {
+            all.push(r?);
+        }
+        Ok(all)
+    })
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TargetAllocation {
+    pub symbol: String,
+    pub percentage: f64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveStrategy {
+    pub id: String,
+    pub name: String,
+    pub summary: Option<String>,
+    pub status: String,
+    pub trigger_json: String,
+    pub action_json: String,
+    pub guardrails_json: String,
+    pub last_run_at: Option<i64>,
+    pub next_run_at: Option<i64>,
 }
 
 #[derive(Debug, serde::Serialize)]

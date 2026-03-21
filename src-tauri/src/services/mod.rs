@@ -7,6 +7,8 @@ pub mod ollama_client;
 pub mod portfolio_service;
 pub mod settings;
 pub mod shadow_watcher;
+pub mod harvester;
+pub mod alpha_service;
 pub mod sonar_client;
 pub mod tool_registry;
 pub mod tool_router;

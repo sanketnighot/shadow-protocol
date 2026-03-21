@@ -22,6 +22,8 @@ pub fn run() {
             }
             let handle = app.handle().clone();
             services::shadow_watcher::start(handle.clone());
+            services::harvester::start(handle.clone());
+            services::alpha_service::start(handle.clone());
 
             tauri::async_runtime::spawn(async move {
                 let addresses = commands::get_addresses(&handle);

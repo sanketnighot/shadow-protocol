@@ -6,6 +6,7 @@ use super::tool_registry;
 use super::tools::{
     get_total_portfolio_value, get_total_portfolio_value_multi, get_token_price,
     get_wallet_balances, get_wallet_balances_multi, prepare_swap_preview,
+    prepare_strategy_proposal, calculate_drift, build_panic_routes,
 };
 use super::local_db;
 use super::sonar_client;
@@ -156,6 +157,52 @@ pub async fn route_and_execute(
             Ok(ToolResult::ApprovalRequired {
                 tool_name: def.name.to_string(),
                 payload,
+            })
+        }
+        "create_automation_strategy" => {
+            let name = call.parameters.get("name").and_then(|v| v.as_str()).unwrap_or("New Strategy");
+            let summary = call.parameters.get("summary").and_then(|v| v.as_str()).unwrap_or("");
+            let trigger = call.parameters.get("trigger").cloned().unwrap_or(serde_json::json!({}));
+            let action = call.parameters.get("action").cloned().unwrap_or(serde_json::json!({}));
+            let guardrails = call.parameters.get("guardrails").cloned().unwrap_or(serde_json::json!({}));
+
+            let proposal = prepare_strategy_proposal(name.to_string(), summary.to_string(), trigger, action, guardrails)?;
+            let payload = serde_json::to_value(&proposal).unwrap_or(serde_json::json!({}));
+
+            Ok(ToolResult::ApprovalRequired {
+                tool_name: def.name.to_string(),
+                payload,
+            })
+        }
+        "calculate_portfolio_drift" => {
+            let target_allocs = if let Some(arr) = call.parameters.get("targetAllocations").and_then(|v| v.as_array()) {
+                arr.iter().filter_map(|v| {
+                    let symbol = v.get("symbol")?.as_str()?.to_string();
+                    let percentage = v.get("percentage")?.as_f64()?;
+                    Some(local_db::TargetAllocation { symbol, percentage })
+                }).collect()
+            } else {
+                local_db::get_target_allocations().map_err(|e| e.to_string())?
+            };
+
+            let res = calculate_drift(target_allocs, wallet_addresses).await?;
+            let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
+            Ok(ToolResult::ToolOutput {
+                tool_name: def.name.to_string(),
+                content,
+            })
+        }
+        "build_emergency_eject_route" => {
+            let assets = call.parameters.get("assets").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            let destination = call.parameters.get("destination").and_then(|v| v.as_str()).unwrap_or("USDC");
+
+            let res = build_panic_routes(assets, destination.to_string(), wallet_addresses).await?;
+            let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
+            Ok(ToolResult::ToolOutput {
+                tool_name: def.name.to_string(),
+                content,
             })
         }
         _ => Err(format!("Unknown tool: {}", def.name)),
