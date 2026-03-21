@@ -40,10 +40,10 @@ export function ApprovalModal({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-2xl sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm bg-background p-5 text-foreground sm:max-w-2xl sm:p-6">
         <DialogHeader className="space-y-3 text-left">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-primary/20 bg-primary/10 p-2.5 text-primary">
+            <div className="rounded-sm border border-primary/20 bg-primary/10 p-2.5 text-primary">
               <ShieldAlert className="size-5" />
             </div>
             <div>
@@ -58,19 +58,19 @@ export function ApprovalModal({
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-[24px] border border-border bg-secondary p-4">
+          <div className="rounded-sm border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Action</p>
             <p className="mt-2 text-base font-semibold">{transaction.action}</p>
           </div>
-          <div className="rounded-[24px] border border-border bg-secondary p-4">
+          <div className="rounded-sm border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Amount</p>
             <p className="mt-2 text-base font-semibold">{transaction.amount}</p>
           </div>
-          <div className="rounded-[24px] border border-border bg-secondary p-4">
+          <div className="rounded-sm border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Chain</p>
             <p className="mt-2 text-base font-semibold">{transaction.chain}</p>
           </div>
-          <div className="rounded-[24px] border border-border bg-secondary p-4">
+          <div className="rounded-sm border border-border bg-secondary p-4">
             <p className="text-xs tracking-[0.18em] text-muted uppercase">Slippage / Gas</p>
             <p className="mt-2 text-base font-semibold">
               {transaction.slippage} / {transaction.gas}
@@ -78,14 +78,14 @@ export function ApprovalModal({
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-primary/15 bg-primary/8 p-4">
+        <div className="rounded-sm border border-primary/15 bg-primary/8 p-4">
           <p className="text-xs tracking-[0.18em] text-muted uppercase">Reason</p>
           <p className="mt-2 text-sm leading-6 text-foreground/90">{transaction.reason}</p>
         </div>
 
-        <div className="rounded-[24px] border border-emerald-400/15 bg-emerald-400/8 p-4">
+        <div className="rounded-sm border border-emerald-400/15 bg-emerald-400/8 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 p-2.5 text-emerald-300">
+            <div className="rounded-sm border border-emerald-400/15 bg-emerald-400/12 p-2.5 text-emerald-300">
               <CheckCircle2 className="size-5" />
             </div>
             <div>
@@ -97,7 +97,7 @@ export function ApprovalModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-[24px] border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-sm border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
           <PrivacyToggle />
           <div className="inline-flex items-center gap-2 text-sm text-amber-200">
             <TriangleAlert className="size-4" />
@@ -105,7 +105,7 @@ export function ApprovalModal({
           </div>
         </div>
 
-        <label className="flex items-center gap-3 rounded-2xl border border-border bg-secondary px-4 py-3 text-sm text-muted">
+        <label className="flex items-center gap-3 rounded-sm border border-border bg-secondary px-4 py-3 text-sm text-muted">
           <input
             type="checkbox"
             checked={skipApproval}
@@ -119,14 +119,14 @@ export function ApprovalModal({
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+            className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={onReject}
           >
             Reject
           </Button>
           <Button
             type="button"
-            className="rounded-full px-6"
+            className="rounded-sm px-6"
             onClick={() => {
               setSkipApprovalForStrategy(transaction.strategyId, skipApproval);
               onApprove();

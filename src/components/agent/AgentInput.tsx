@@ -13,7 +13,7 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
 
   return (
     <form
-      className="relative overflow-hidden rounded-full border border-border bg-surface-elevated p-1.5 shadow-lg backdrop-blur-xl transition-all focus-within:border-primary/40 focus-within:shadow-[0_12px_48px_rgba(139,92,246,0.15)]"
+      className="relative overflow-hidden rounded-sm border border-border bg-surface-elevated p-1.5 backdrop-blur-xl transition-all focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/40"
       onSubmit={(event) => {
         event.preventDefault();
         const trimmedValue = value.trim();
@@ -32,16 +32,16 @@ export function AgentInput({ disabled = false, onSubmit }: AgentInputProps) {
             aria-label="Agent instruction"
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
-            placeholder="Type your instruction..."
+            placeholder="Type command..."
             disabled={disabled}
-            className="h-12 w-full bg-transparent px-2 text-base text-foreground placeholder:text-muted focus:outline-none disabled:opacity-50"
+            className="font-mono h-12 w-full bg-transparent px-2 text-sm text-foreground placeholder:text-muted/60 focus:outline-none disabled:opacity-50"
           />
         </div>
         <Button
           type="submit"
           size="icon-lg"
           disabled={disabled || value.trim().length === 0}
-          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:scale-105 hover:bg-primary/90 disabled:opacity-50 disabled:hover:scale-100"
+          className="size-10 rounded-sm bg-primary text-primary-foreground shadow-none transition-transform hover:bg-primary/90 disabled:opacity-50"
         >
           <ArrowUpRight className="size-5" />
         </Button>

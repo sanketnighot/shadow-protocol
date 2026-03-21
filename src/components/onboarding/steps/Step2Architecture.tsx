@@ -72,14 +72,14 @@ export function Step2Architecture() {
           <motion.div
             key={card.id}
             variants={itemVariants}
-            className="group relative overflow-hidden rounded-[24px] border border-border bg-secondary p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-primary/30 hover:bg-surface-elevated"
+            className="group relative overflow-hidden rounded-sm border border-border bg-secondary p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-primary/30 hover:bg-surface-elevated"
           >
-            <div className={`mb-6 inline-flex rounded-xl p-3 ${card.bg} ${card.border} border`}>
+            <div className={`mb-6 inline-flex rounded-sm p-3 ${card.bg} ${card.border} border`}>
               <card.icon className={`size-6 ${card.color}`} />
             </div>
             <h3 className="mb-2 text-lg font-semibold text-foreground">{card.title}</h3>
             <p className="text-sm leading-relaxed text-muted">{card.description}</p>
-            <div className={`absolute -inset-1 z-[-1] opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-30 ${card.bg}`} />
+            <div className={`absolute -inset-1 z-[-1] opacity-0 blur-2xl transition-opacity duration-100 ease-out group-hover:opacity-30 ${card.bg}`} />
           </motion.div>
         ))}
       </motion.div>
@@ -92,7 +92,7 @@ export function Step2Architecture() {
       >
         <button
           onClick={nextStep}
-          className="group flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
+          className="group flex items-center gap-2 rounded-sm px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated"
         >
           Acknowledge
           <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />

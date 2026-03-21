@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export function CreateStrategyButton() {
   return (
-    <Button asChild className="rounded-full px-5">
+    <Button asChild className="rounded-sm px-5">
       <Link to="/strategy" aria-label="Create new strategy">
         <Plus className="size-4" />
         Create New Strategy

@@ -72,10 +72,10 @@ export function Step3Uplink() {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-[20px] border border-border bg-secondary p-5 backdrop-blur-md"
+          className="rounded-sm border border-border bg-secondary p-5 backdrop-blur-md"
         >
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-blue-500/20 text-blue-400">
               <Key className="size-4" />
             </div>
             <div>
@@ -88,7 +88,7 @@ export function Step3Uplink() {
             value={alchemyKey}
             onChange={(e) => setAlchemyKey(e.target.value)}
             placeholder="your-alchemy-api-key"
-            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+            className="w-full rounded-sm border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
           />
         </motion.div>
 
@@ -96,10 +96,10 @@ export function Step3Uplink() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-[20px] border border-border bg-secondary p-5 backdrop-blur-md"
+          className="rounded-sm border border-border bg-secondary p-5 backdrop-blur-md"
         >
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-purple-500/20 text-purple-400">
               <Key className="size-4" />
             </div>
             <div>
@@ -112,7 +112,7 @@ export function Step3Uplink() {
             value={perplexityKey}
             onChange={(e) => setPerplexityKey(e.target.value)}
             placeholder="pplx-xxxxxxxxxxxxxxxx"
-            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+            className="w-full rounded-sm border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
           />
         </motion.div>
 
@@ -123,7 +123,7 @@ export function Step3Uplink() {
             transition={{ delay: 0.4 }}
             className="mt-4 flex items-center justify-center gap-2 text-xs text-muted"
           >
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="inline-block h-2 w-2 rounded-sm bg-emerald-500 animate-pulse" />
             System scan complete. Recommended local model: <strong className="text-foreground">{recommendedModel}</strong>
           </motion.div>
         )}
@@ -152,7 +152,7 @@ export function Step3Uplink() {
           <button
             onClick={handleConnect}
             disabled={isSaving || (!alchemyKey && !perplexityKey)}
-            className="group flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+            className="group flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             {isSaving ? "Connecting..." : "Connect"}
             {!isSaving && <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />}

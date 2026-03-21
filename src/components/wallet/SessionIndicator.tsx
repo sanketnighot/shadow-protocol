@@ -88,7 +88,7 @@ export function SessionIndicator() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 rounded-full text-xs text-muted hover:text-foreground"
+            className="h-7 rounded-sm text-xs text-muted hover:text-foreground"
             onClick={() => openUnlockDialog()}
           >
             Unlock
@@ -104,7 +104,7 @@ export function SessionIndicator() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 rounded-full text-xs text-muted hover:text-foreground"
+            className="h-7 rounded-sm text-xs text-muted hover:text-foreground"
             onClick={() => void handleLock()}
           >
             Lock

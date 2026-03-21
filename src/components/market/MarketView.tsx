@@ -36,7 +36,7 @@ export function MarketView() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+      <section className="glass-panel rounded-sm p-5 sm:p-6">
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
           Market
         </p>
@@ -55,7 +55,7 @@ export function MarketView() {
                 type="button"
                 onClick={() => setCategory(filter.value)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all active:scale-95",
+                  "rounded-sm border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all active:scale-95",
                   category === filter.value
                     ? "border-primary/30 bg-primary/12 text-primary"
                     : "border-border bg-secondary text-muted hover:bg-surface-elevated",
@@ -73,7 +73,7 @@ export function MarketView() {
                 type="button"
                 onClick={() => setChain(filter)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all active:scale-95",
+                  "rounded-sm border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all active:scale-95",
                   chain === filter
                     ? "border-primary/30 bg-surface-elevated text-foreground"
                     : "border-border bg-secondary text-muted hover:bg-surface-elevated",

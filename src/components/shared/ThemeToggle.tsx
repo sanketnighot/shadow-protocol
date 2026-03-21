@@ -33,7 +33,7 @@ export function ThemeToggle() {
       aria-label={`Theme: ${label}. Switch to ${THEME_META[nextTheme].label}.`}
       onClick={() => setThemePreference(nextTheme)}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase text-foreground transition-all hover:bg-white/10 active:scale-95",
+        "inline-flex items-center gap-2 rounded-sm border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase text-foreground transition-all hover:bg-white/10 active:scale-95",
       )}
     >
       <Icon className="size-3.5" />

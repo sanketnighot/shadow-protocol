@@ -39,7 +39,7 @@ export function Step5Deployment() {
         </h1>
       </motion.div>
 
-      <div className="w-full max-w-md space-y-4 rounded-[24px] border border-border bg-background p-6 backdrop-blur-md">
+      <div className="w-full max-w-md space-y-4 rounded-sm border border-border bg-background p-6 backdrop-blur-md">
         {CHECKS.map((check, i) => (
           <div key={i} className="flex items-center gap-3">
             {i < activeCheck ? (
@@ -52,10 +52,10 @@ export function Step5Deployment() {
               </motion.div>
             ) : i === activeCheck ? (
               <div className="flex size-5 items-center justify-center">
-                <div className="size-2 animate-pulse rounded-full bg-primary" />
+                <div className="size-2 animate-pulse rounded-sm bg-primary" />
               </div>
             ) : (
-              <div className="size-5 rounded-full border border-border" />
+              <div className="size-5 rounded-sm border border-border" />
             )}
             <span
               className={`font-mono text-sm ${
@@ -81,13 +81,13 @@ export function Step5Deployment() {
         <button
           onClick={completeOnboarding}
           disabled={!allDone}
-          className="group relative flex items-center gap-3 overflow-hidden rounded-full border border-primary/30 bg-primary/10 px-10 py-4 text-primary transition-all hover:bg-primary/20 hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] active:scale-95 disabled:pointer-events-none"
+          className="group relative flex items-center gap-3 overflow-hidden rounded-sm border border-primary/30 bg-primary/10 px-10 py-4 text-primary transition-all hover:bg-primary/20 hover:shadow-none border border-white/5 active:scale-95 disabled:pointer-events-none"
         >
           <span className="relative z-10 font-mono font-bold tracking-widest uppercase">
             Enter The Shadows
           </span>
           <ChevronRight className="relative z-10 size-5 transition-transform group-hover:translate-x-1" />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-hover:animate-[scanline_2s_linear_infinite]" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100 group-hover:animate-[scanline_2s_linear_infinite]" />
         </button>
       </motion.div>
     </div>

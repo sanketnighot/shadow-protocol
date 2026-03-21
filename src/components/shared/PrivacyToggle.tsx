@@ -18,9 +18,9 @@ export function PrivacyToggle({ enabled }: PrivacyToggleProps) {
       aria-label={isEnabled ? "Private" : "Public"}
       onClick={enabled === undefined ? togglePrivacyMode : undefined}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all",
+        "inline-flex items-center gap-2 rounded-sm border px-3 py-1.5 text-xs font-semibold tracking-[0.18em] uppercase transition-all",
         isEnabled
-          ? "border-primary/40 bg-primary/15 text-primary shadow-[0_0_28px_rgba(139,92,246,0.28)]"
+          ? "border-primary/40 bg-primary/15 text-primary shadow-none border border-white/5"
           : "border-border bg-secondary text-muted",
       )}
     >

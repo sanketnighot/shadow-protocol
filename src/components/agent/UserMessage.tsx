@@ -12,11 +12,11 @@ export function UserMessage({ content }: UserMessageProps) {
         <span className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">
           You
         </span>
-        <div className="flex size-5 items-center justify-center rounded-full bg-primary/20 text-primary">
+        <div className="flex size-5 items-center justify-center rounded-sm bg-primary/20 text-primary">
           <User className="size-3" />
         </div>
       </div>
-      <div className="rounded-[24px] rounded-tr-[8px] bg-linear-to-br from-primary to-[#5b21b6] px-5 py-3.5 text-sm leading-relaxed text-white shadow-lg shadow-primary/20">
+      <div className="border-r-2 border-white/20 bg-transparent pr-4 sm:pr-5 font-mono text-sm leading-relaxed text-foreground/80">
         <FormattedText content={content} />
       </div>
     </div>

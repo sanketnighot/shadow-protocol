@@ -59,7 +59,7 @@ export function UnlockDialog({ open, onOpenChange, onUnlocked, address }: Unlock
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 sm:max-w-md sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm border-white/10 bg-background p-5 sm:max-w-md sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-[-0.03em]">
             Unlock wallet
@@ -74,14 +74,14 @@ export function UnlockDialog({ open, onOpenChange, onUnlocked, address }: Unlock
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-white/10 bg-white/5"
+            className="rounded-sm border-white/10 bg-white/5"
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <Button
             type="button"
-            className="gap-2 rounded-full px-6"
+            className="gap-2 rounded-sm px-6"
             disabled={isUnlocking}
             onClick={() => void handleUnlock()}
           >

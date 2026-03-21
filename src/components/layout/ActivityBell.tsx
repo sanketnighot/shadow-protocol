@@ -48,9 +48,9 @@ function NotificationCard({
       role={hasRoute ? "button" : undefined}
       tabIndex={hasRoute ? 0 : undefined}
       className={cn(
-        "group relative rounded-[18px] border border-border bg-secondary p-3 transition-colors",
-        notification.unread && "border-primary/30 bg-primary/5",
-        hasRoute && "cursor-pointer hover:bg-surface-elevated",
+        "group relative rounded-sm border border-white/5 bg-secondary/50 p-4 transition-colors",
+        notification.unread && "border-primary/40 bg-primary/5",
+        hasRoute && "cursor-pointer hover:bg-white/5",
       )}
       onClick={hasRoute ? onOpen : undefined}
       onKeyDown={
@@ -64,14 +64,14 @@ function NotificationCard({
           : undefined
       }
     >
-      <div className="absolute -right-1 -bottom-1 z-10 flex gap-0.5 rounded-full border border-border bg-surface px-0.5 py-0.5 shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="absolute -right-1 -bottom-1 z-10 flex gap-0.5 rounded-sm border border-border bg-surface px-0.5 py-0.5 shadow-none border border-white/5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         {notification.unread && (
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
             aria-label="Mark read"
-            className="size-6 rounded-full"
+            className="size-6 rounded-sm"
             onClick={(e) => {
               e.stopPropagation();
               onMarkRead();
@@ -85,7 +85,7 @@ function NotificationCard({
           variant="ghost"
           size="icon-xs"
           aria-label="Archive"
-          className="size-6 rounded-full"
+          className="size-6 rounded-sm"
           onClick={(e) => {
             e.stopPropagation();
             onArchive();
@@ -98,7 +98,7 @@ function NotificationCard({
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <div
             className={cn(
-              "shrink-0 rounded-xl border border-border bg-surface-elevated p-2",
+              "shrink-0 rounded-sm border border-border bg-surface-elevated p-2",
               accent,
             )}
           >
@@ -170,12 +170,12 @@ export function ActivityBell() {
         type="button"
         aria-label="Open updates"
         aria-expanded={isOpen}
-        className="relative flex size-12 items-center justify-center rounded-2xl border border-border bg-surface/80 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-surface hover:shadow-md"
+        className="relative flex size-12 items-center justify-center rounded-sm border border-white/10 bg-black text-foreground shadow-none transition-colors hover:bg-white/5"
       >
         <Bell className="size-5" />
         {unreadCount > 0 && (
           <span
-            className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full border border-border bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground"
+            className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-sm border border-border bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground"
             aria-label={`${unreadCount} unread updates`}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -185,24 +185,24 @@ export function ActivityBell() {
 
       {isOpen && (
         <div
-          className="absolute bottom-full right-0 mb-2 flex max-h-[50vh] w-[min(22rem,90vw)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-glow"
+          className="absolute bottom-full right-0 mb-3 flex max-h-[60vh] w-[24rem] flex-col overflow-hidden rounded-sm border border-white/10 bg-black shadow-none"
         >
           {syncStatus === "syncing" && (
-            <div className="shrink-0 border-b border-border px-3 py-2.5">
-              <div className="flex items-center gap-2">
+            <div className="shrink-0 border-b border-white/5 bg-white/5 px-4 py-3">
+              <div className="flex items-center gap-3">
                 <Loader2 className="size-4 animate-spin text-primary" />
-                <span className="text-xs font-medium text-foreground">
-                  Syncing {syncWalletCount > 1 ? `${syncWalletCount} wallets` : "wallet"}… {syncStep}
+                <span className="font-mono text-[10px] font-bold tracking-wider text-foreground uppercase">
+                  Syncing {syncWalletCount > 1 ? `${syncWalletCount} wallets` : "wallet"}
                 </span>
               </div>
-              <Progress value={syncProgress} className="mt-2 h-1.5" />
+              <Progress value={syncProgress} className="mt-3 h-1 rounded-none bg-white/5" />
             </div>
           )}
           {notifications.length > 0 && (
-            <div className="flex shrink-0 items-center justify-end gap-3 border-b border-border px-3 py-2">
+            <div className="flex shrink-0 items-center justify-end gap-4 border-b border-white/5 bg-black px-4 py-2">
               <button
                 type="button"
-                className="text-[10px] text-muted hover:text-foreground"
+                className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase hover:text-foreground"
                 onClick={archiveAllNotifications}
               >
                 Archive all
@@ -210,7 +210,7 @@ export function ActivityBell() {
               {unreadCount > 0 && (
                 <button
                   type="button"
-                  className="text-[10px] text-muted hover:text-foreground"
+                  className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase hover:text-foreground"
                   onClick={markNotificationsRead}
                 >
                   Mark all read

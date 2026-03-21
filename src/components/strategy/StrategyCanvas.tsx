@@ -205,13 +205,13 @@ export function StrategyCanvas() {
   };
 
   return (
-    <div className="glass-panel rounded-[24px]">
+    <div className="glass-panel rounded-sm">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => handleAddStep("trigger")}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
+            className="inline-flex items-center gap-2 rounded-sm border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add trigger
@@ -219,7 +219,7 @@ export function StrategyCanvas() {
           <button
             type="button"
             onClick={() => handleAddStep("condition")}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
+            className="inline-flex items-center gap-2 rounded-sm border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add condition
@@ -227,7 +227,7 @@ export function StrategyCanvas() {
           <button
             type="button"
             onClick={() => handleAddStep("action")}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
+            className="inline-flex items-center gap-2 rounded-sm border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <Plus className="size-3.5" />
             Add action
@@ -235,7 +235,7 @@ export function StrategyCanvas() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+          <label className="flex items-center gap-2 rounded-sm border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-muted uppercase">
             Template
             <select
               aria-label="Strategy template"
@@ -256,7 +256,7 @@ export function StrategyCanvas() {
               setNodes([]);
               setEdges([]);
             }}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
+            className="inline-flex items-center gap-2 rounded-sm border border-border bg-secondary px-3 py-2 text-xs font-semibold tracking-[0.18em] text-foreground uppercase transition-all hover:bg-surface-elevated active:scale-95"
           >
             <RotateCcw className="size-3.5" />
             Clear

@@ -59,10 +59,10 @@ function ThreadItem({
       role="button"
       tabIndex={0}
       className={cn(
-        "group relative flex cursor-pointer items-start gap-3 rounded-[24px] border px-4 py-3.5 text-left transition-all duration-300",
+        "group relative flex cursor-pointer items-start gap-3 rounded-sm border px-4 py-3.5 text-left transition-all duration-100 ease-out",
         isActive
-          ? "border-primary/20 bg-primary/10 shadow-[0_8px_30px_rgba(139,92,246,0.12)]"
-          : "border-transparent bg-transparent hover:border-white/10 hover:bg-white/5 hover:shadow-lg",
+          ? "border-primary/20 bg-primary/10 shadow-none border border-white/5"
+          : "border-transparent bg-transparent hover:border-white/10 hover:bg-white/5 hover:shadow-none border border-white/5",
       )}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -75,7 +75,7 @@ function ThreadItem({
       <div
         className={cn(
           "absolute inset-y-3 left-0 w-1 rounded-r-full bg-transparent transition-colors",
-          isActive && "bg-primary shadow-[0_0_12px_rgba(139,92,246,0.8)]",
+          isActive && "bg-primary shadow-none border border-white/5",
         )}
       />
       <div className="min-w-0 flex-1 pl-1">
@@ -97,7 +97,7 @@ function ThreadItem({
           variant="ghost"
           size="icon-xs"
           aria-label="Delete thread"
-          className="size-6 shrink-0 rounded-full opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+          className="size-6 shrink-0 rounded-sm opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -132,7 +132,7 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
   };
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-[32px] border border-border bg-surface shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-sm border border-border bg-surface shadow-none border border-white/5">
       <div className="shrink-0 border-b border-border px-5 pb-5 pt-6 bg-linear-to-b from-white/[0.02] to-transparent">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -143,13 +143,13 @@ export function ThreadSidebar({ onClose }: ThreadSidebarProps) {
               {threads.length} conversations
             </p>
           </div>
-          <div className="flex size-9 items-center justify-center rounded-2xl border border-border bg-surface-elevated text-muted shadow-inner">
+          <div className="flex size-9 items-center justify-center rounded-sm border border-border bg-surface-elevated text-muted shadow-none border border-white/5">
             <MessageSquareMore className="size-4" />
           </div>
         </div>
         <Button
           type="button"
-          className="mt-5 h-12 w-full justify-start gap-3 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all hover:-translate-y-0.5"
+          className="mt-5 h-12 w-full justify-start gap-3 rounded-sm bg-primary text-primary-foreground font-semibold shadow-none border border-white/5 shadow-primary/20 hover:bg-primary/90 transition-all hover:-translate-y-0.5"
           onClick={handleCreate}
         >
           <MessageSquarePlus className="size-4" />

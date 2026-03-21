@@ -43,35 +43,34 @@ export function MinimalTopBar() {
   return (
     <header className="shrink-0 pb-3">
       <div
-        className="relative overflow-hidden rounded-[22px] border border-border bg-surface/90 px-4 py-2.5 shadow-[0_20px_56px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-5 lg:px-6"
+        className="relative overflow-hidden rounded-sm border border-white/10 bg-black px-4 py-2.5 shadow-none backdrop-blur-md sm:px-5 lg:px-6"
         onMouseDown={handlePointerDown}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(139,92,246,0.16),transparent_42%),linear-gradient(90deg,transparent,rgba(139,92,246,0.08),transparent)]" />
         <div className="relative flex min-h-12 items-center justify-between gap-4">
           <div
-            className={`flex min-w-0 items-center gap-3 ${
+            className={`flex min-w-0 items-center gap-4 ${
               isMac ? "pl-[72px] sm:pl-20" : ""
             }`}
           >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/12 text-xs font-black tracking-[0.24em] text-primary shadow-[0_0_24px_rgba(139,92,246,0.16)] sm:size-9">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-white/10 bg-white/5 text-xs font-black tracking-[0.24em] text-foreground shadow-none">
               S
             </div>
-            <p className="truncate font-mono text-[11px] tracking-[0.28em] text-muted uppercase">
+            <p className="truncate font-mono text-[10px] tracking-[0.3em] text-muted-foreground uppercase">
               SHADOW
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <SessionIndicator />
             <button
             type="button"
             onClick={openCommandPalette}
-            className="relative z-10 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm text-muted transition-all hover:border-primary/30 hover:bg-surface-elevated hover:text-foreground"
+            className="relative z-10 inline-flex items-center gap-3 rounded-sm border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-mono text-muted-foreground transition-all hover:border-white/20 hover:bg-white/10 hover:text-foreground"
           >
-            <Search className="size-4" />
-            <span className="hidden sm:inline">Search</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-xs text-muted">
-              <Command className="size-3" />
+            <Search className="size-3.5" />
+            <span className="hidden sm:inline tracking-wider">SEARCH</span>
+            <span className="inline-flex items-center gap-1 rounded-sm border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] text-muted">
+              <Command className="size-2.5" />
               {commandHint}
             </span>
           </button>

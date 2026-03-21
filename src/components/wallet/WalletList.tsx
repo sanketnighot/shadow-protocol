@@ -41,7 +41,7 @@ export function WalletList() {
       {addresses.map((addr) => (
         <li
           key={addr}
-          className="flex items-center justify-between gap-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-sm border border-white/10 bg-white/5 px-4 py-3"
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="font-mono text-sm text-foreground">
@@ -51,7 +51,7 @@ export function WalletList() {
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8 shrink-0 rounded-full"
+              className="size-8 shrink-0 rounded-sm"
               onClick={() => handleCopy(addr)}
               title="Copy address"
             >
@@ -62,7 +62,7 @@ export function WalletList() {
             type="button"
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0 rounded-full text-muted hover:text-destructive"
+            className="size-8 shrink-0 rounded-sm text-muted hover:text-destructive"
             onClick={() => void handleRemove(addr)}
             title="Remove wallet"
           >

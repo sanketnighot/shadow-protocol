@@ -27,7 +27,7 @@ export function NftGrid({ nfts, isLoading }: NftGridProps) {
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
-            className="aspect-square animate-pulse rounded-2xl border border-border bg-secondary"
+            className="aspect-square animate-pulse rounded-sm border border-border bg-secondary"
           />
         ))}
       </div>
@@ -49,7 +49,7 @@ export function NftGrid({ nfts, isLoading }: NftGridProps) {
       {nfts.map((nft) => (
         <div
           key={nft.id}
-          className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-all hover:border-primary/30 hover:shadow-lg"
+          className="group flex flex-col overflow-hidden rounded-sm border border-border bg-surface transition-all hover:border-primary/30 hover:shadow-none border border-white/5"
         >
           <div className="relative aspect-square overflow-hidden bg-secondary">
             {nft.imageUrl ? (
@@ -64,7 +64,7 @@ export function NftGrid({ nfts, isLoading }: NftGridProps) {
               </div>
             )}
             <div
-              className="absolute bottom-1 right-1 flex size-6 items-center justify-center rounded-full border border-background bg-muted/90 font-mono text-[10px] font-semibold text-foreground"
+              className="absolute bottom-1 right-1 flex size-6 items-center justify-center rounded-sm border border-background bg-muted/90 font-mono text-[10px] font-semibold text-foreground"
               title={nft.chainName}
             >
               {chainBadge(nft.chain)}

@@ -13,7 +13,7 @@ type ApprovalRequestCardProps = {
 
 function SwapDetail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg bg-secondary px-3 py-2">
+    <div className="flex flex-col gap-0.5 rounded-sm bg-secondary px-3 py-2">
       <span className="font-mono text-[9px] uppercase tracking-wider text-muted">{label}</span>
       <span className="text-xs font-medium text-foreground/90">{value}</span>
     </div>
@@ -33,7 +33,7 @@ export function ApprovalRequestCard({
   const isSwap = name === "execute_token_swap" && swap;
 
   return (
-    <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
+    <div className="rounded-sm border border-border bg-surface-elevated p-4 shadow-none border border-white/5">
       <p className="mb-4 text-sm leading-6 text-foreground/85">{message}</p>
 
       {isSwap && (
@@ -60,7 +60,7 @@ export function ApprovalRequestCard({
         <button
           onClick={onApprove}
           disabled={isPending}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-500/15 px-4 py-2 text-xs font-semibold text-green-400 transition hover:bg-green-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-green-500/15 px-4 py-2 text-xs font-semibold text-green-400 transition hover:bg-green-500/25 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <CheckCircle className="size-3.5" />
           Approve
@@ -68,7 +68,7 @@ export function ApprovalRequestCard({
         <button
           onClick={onReject}
           disabled={isPending}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/22 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/22 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <XCircle className="size-3.5" />
           Reject

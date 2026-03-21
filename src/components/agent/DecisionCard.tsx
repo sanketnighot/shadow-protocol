@@ -31,7 +31,7 @@ export function DecisionCard({ insights, decision, simulated }: DecisionCardProp
   const confidence = safeStr(decision.confidence).toLowerCase();
 
   return (
-    <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm">
+    <div className="rounded-sm border border-border bg-surface-elevated p-4 shadow-none border border-white/5">
       <div className="mb-2 flex items-center gap-2">
         <Target className="size-3.5 text-primary/80" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">

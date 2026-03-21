@@ -100,10 +100,10 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] border-white/10 bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm border-white/10 bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
         <DialogHeader className="space-y-3 text-left">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-primary/20 bg-primary/10 p-2.5 text-primary">
+            <div className="rounded-sm border border-primary/20 bg-primary/10 p-2.5 text-primary">
               <KeyRound className="size-5" />
             </div>
             <div>
@@ -118,11 +118,11 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex rounded-full border border-white/10 bg-white/5 p-1">
+          <div className="flex rounded-sm border border-white/10 bg-white/5 p-1">
             <button
               type="button"
               onClick={() => setTab("mnemonic")}
-              className={`flex-1 rounded-full px-4 py-2 text-sm transition-all ${
+              className={`flex-1 rounded-sm px-4 py-2 text-sm transition-all ${
                 tab === "mnemonic"
                   ? "bg-primary/20 text-foreground"
                   : "text-muted hover:text-foreground"
@@ -133,7 +133,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
             <button
               type="button"
               onClick={() => setTab("private_key")}
-              className={`flex-1 rounded-full px-4 py-2 text-sm transition-all ${
+              className={`flex-1 rounded-sm px-4 py-2 text-sm transition-all ${
                 tab === "private_key"
                   ? "bg-primary/20 text-foreground"
                   : "text-muted hover:text-foreground"
@@ -149,7 +149,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
               onChange={(e) => setMnemonic(e.target.value)}
               placeholder="abandon abandon abandon ..."
               rows={4}
-              className="w-full rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-sm border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           ) : (
             <input
@@ -157,7 +157,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
               value={privateKey}
               onChange={(e) => setPrivateKey(e.target.value)}
               placeholder="0x..."
-              className="w-full rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-sm border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           )}
 
@@ -167,7 +167,7 @@ export function ImportWalletModal({ open, onOpenChange }: ImportWalletModalProps
         <DialogFooter>
           <Button
             type="button"
-            className="rounded-full"
+            className="rounded-sm"
             onClick={() => void handleImport()}
             disabled={isLoading}
           >

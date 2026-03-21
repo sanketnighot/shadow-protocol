@@ -56,7 +56,7 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? (setSubmitError(null), onClose()) : undefined)}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-[-0.03em]">
             Send {asset?.symbol ?? "asset"}
@@ -74,7 +74,7 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
               value={amount}
               onChange={(event) => setAmount(event.currentTarget.value)}
               placeholder={`0.00 ${asset?.symbol ?? ""}`}
-              className="h-11 rounded-2xl border-border bg-secondary"
+              className="h-11 rounded-sm border-border bg-secondary"
             />
           </label>
           <label className="grid gap-2 text-sm text-muted">
@@ -83,10 +83,10 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
               value={address}
               onChange={(event) => setAddress(event.currentTarget.value)}
               placeholder="0x... or supported address"
-              className="h-11 rounded-2xl border-border bg-secondary"
+              className="h-11 rounded-sm border-border bg-secondary"
             />
           </label>
-          <div className="rounded-[20px] border border-border bg-secondary p-4 text-sm text-muted">
+          <div className="rounded-sm border border-border bg-secondary p-4 text-sm text-muted">
             Network: <span className="font-semibold text-foreground">{asset?.chainName ?? "Unknown"}</span>
           </div>
           {displayError ? (
@@ -98,14 +98,14 @@ export function SendModal({ open, asset, fromAddress, onClose, onSubmit, onWalle
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+            className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={onClose}
           >
             Cancel
           </Button>
           <Button
             type="button"
-            className="rounded-full px-6"
+            className="rounded-sm px-6"
             disabled={validationMessage.length > 0 || !asset || !fromAddress || isSubmitting}
             onClick={async () => {
               if (!asset || validationMessage || !fromAddress) return;

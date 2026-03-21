@@ -83,7 +83,7 @@ export function WalletSelectorDropdown() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="flex h-10 w-auto items-center justify-between gap-3 rounded-full border-border bg-secondary px-4 py-2 hover:bg-surface-elevated hover:text-foreground"
+            className="flex h-10 w-auto items-center justify-between gap-3 rounded-sm border-border bg-secondary px-4 py-2 hover:bg-surface-elevated hover:text-foreground"
           >
             <div className="flex items-center gap-2">
               {activeAddress === null ? (
@@ -99,20 +99,20 @@ export function WalletSelectorDropdown() {
 
         <DropdownMenuContent
           align="end"
-          className="w-[280px] rounded-2xl border-border bg-surface-elevated p-2 shadow-2xl"
+          className="w-[280px] rounded-sm border-border bg-surface-elevated p-2 shadow-none border border-white/5"
         >
           <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-muted uppercase">
             Aggregated View
           </DropdownMenuLabel>
           <DropdownMenuItem
             onClick={() => setActiveAddress(null)}
-            className={`cursor-pointer rounded-xl px-3 py-2.5 ${
+            className={`cursor-pointer rounded-sm px-3 py-2.5 ${
               activeAddress === null ? "bg-primary/10" : "hover:bg-secondary"
             }`}
           >
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-primary">
+                <div className="flex size-8 items-center justify-center rounded-sm bg-primary/20 text-primary">
                   <Layers className="size-4" />
                 </div>
                 <span className="font-medium text-foreground">All Wallets</span>
@@ -134,7 +134,7 @@ export function WalletSelectorDropdown() {
               return (
                 <div
                   key={addr}
-                  className={`group relative flex items-center justify-between rounded-xl px-2 py-2 transition-colors ${
+                  className={`group relative flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${
                     isActive ? "bg-primary/10" : "hover:bg-secondary"
                   }`}
                 >
@@ -143,7 +143,7 @@ export function WalletSelectorDropdown() {
                     onClick={() => setActiveAddress(addr)}
                   >
                     <div
-                      className={`flex size-8 items-center justify-center rounded-full ${
+                      className={`flex size-8 items-center justify-center rounded-sm ${
                         isActive
                           ? "bg-primary/20 text-primary"
                           : "bg-white/10 text-muted group-hover:text-foreground"
@@ -172,7 +172,7 @@ export function WalletSelectorDropdown() {
                           <Pencil className="size-3.5" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                      <DropdownMenuContent align="end" className="w-40 rounded-sm">
                         <DropdownMenuItem onClick={(e) => openRename(addr, e as any)}>
                           <Pencil className="mr-2 size-4" /> Rename
                         </DropdownMenuItem>
@@ -195,7 +195,7 @@ export function WalletSelectorDropdown() {
       </DropdownMenu>
 
       <Dialog open={!!renameAddr} onOpenChange={(open) => !open && setRenameAddr(null)}>
-        <DialogContent className="rounded-2xl border-border bg-surface">
+        <DialogContent className="rounded-sm border-border bg-surface">
           <DialogHeader>
             <DialogTitle>Rename wallet</DialogTitle>
           </DialogHeader>
@@ -205,13 +205,13 @@ export function WalletSelectorDropdown() {
             placeholder="Wallet name"
             onKeyDown={(e) => e.key === "Enter" && submitRename()}
             maxLength={32}
-            className="rounded-xl border-border bg-secondary"
+            className="rounded-sm border-border bg-secondary"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameAddr(null)} className="rounded-xl">
+            <Button variant="outline" onClick={() => setRenameAddr(null)} className="rounded-sm">
               Cancel
             </Button>
-            <Button onClick={submitRename} className="rounded-xl">Save</Button>
+            <Button onClick={submitRename} className="rounded-sm">Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -31,7 +31,7 @@ export function InitializationSequence() {
       {/* Dynamic Background */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--bg-secondary)_0%,var(--bg-primary)_100%)]" />
-        <div className="absolute top-1/2 left-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 opacity-30 blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-primary/10 opacity-30 blur-[120px]" />
         
         {/* Subtle grid pattern */}
         <div 
@@ -48,9 +48,9 @@ export function InitializationSequence() {
         {[0, 1, 2, 3, 4].map((step) => (
           <div
             key={step}
-            className={`h-1 rounded-full transition-all duration-500 ${
+            className={`h-1 rounded-sm transition-all duration-100 ease-out ${
               step === currentStep
-                ? "w-8 bg-primary shadow-[0_0_8px_rgba(139,92,246,0.8)]"
+                ? "w-8 bg-primary shadow-none border border-white/5"
                 : step < currentStep
                 ? "w-4 bg-primary/40"
                 : "w-2 bg-secondary"

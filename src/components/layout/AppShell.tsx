@@ -171,7 +171,7 @@ export function AppShell() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-3 py-3 text-foreground sm:px-5 sm:py-5 lg:h-screen lg:px-6 lg:py-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_70%_0%,rgba(139,92,246,0.18),transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-0 noise-overlay" />
       <div className="relative mx-auto flex max-w-[1600px] min-w-0 flex-1 flex-col lg:h-full lg:min-h-0">
         <MinimalTopBar />
         <MainContent />
@@ -215,7 +215,7 @@ export function AppShell() {
             initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-full border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success shadow-[0_18px_40px_rgba(16,185,129,0.15)]"
+            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-sm border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success shadow-none border border-white/5"
           >
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="size-4" />

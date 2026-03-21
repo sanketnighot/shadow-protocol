@@ -18,7 +18,7 @@ export function EmptyState({
   onAction,
 }: EmptyStateProps) {
   return (
-    <div className="glass-panel flex flex-col items-start gap-4 rounded-[24px] p-6">
+    <div className="glass-panel flex flex-col items-start gap-4 rounded-sm p-6">
       <div className="rounded-[22px] border border-primary/15 bg-primary/10 p-3 text-primary">
         {icon}
       </div>
@@ -27,7 +27,7 @@ export function EmptyState({
         <p className="mt-3 max-w-xl text-sm leading-6 text-muted">{description}</p>
       </div>
       {actionLabel && onAction ? (
-        <Button type="button" className="rounded-full px-5" onClick={onAction}>
+        <Button type="button" className="rounded-sm px-5" onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}

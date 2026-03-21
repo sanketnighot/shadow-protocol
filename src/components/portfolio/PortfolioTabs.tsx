@@ -25,22 +25,22 @@ export function PortfolioTabs({
       onValueChange={(v) => onTabChange(v as TabId)}
       className="w-full"
     >
-      <TabsList className="mb-6 h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-secondary p-1">
+      <TabsList className="mb-6 h-auto w-full flex-wrap justify-start gap-1 rounded-sm border border-border bg-secondary p-1">
         <TabsTrigger
           value="tokens"
-          className="rounded-xl px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
+          className="rounded-sm px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
         >
           Tokens
         </TabsTrigger>
         <TabsTrigger
           value="nfts"
-          className="rounded-xl px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
+          className="rounded-sm px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
         >
           NFTs
         </TabsTrigger>
         <TabsTrigger
           value="transactions"
-          className="rounded-xl px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
+          className="rounded-sm px-4 py-2.5 data-[state=active]:bg-surface-elevated data-[state=active]:text-foreground"
         >
           Transactions
         </TabsTrigger>

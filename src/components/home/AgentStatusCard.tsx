@@ -23,7 +23,7 @@ export function AgentStatusCard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.08 }}
     >
-      <Card className="glass-panel h-full rounded-[24px] text-foreground transition-colors sm:rounded-[28px]">
+      <Card className="glass-panel h-full rounded-sm text-foreground transition-colors sm:rounded-sm">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -39,21 +39,21 @@ export function AgentStatusCard() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Strategies</p>
               <p className="mt-2 text-lg font-semibold">3 running</p>
             </div>
-            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Last action</p>
               <p className="mt-2 text-lg font-semibold">2 min ago</p>
             </div>
-            <div className="rounded-2xl border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
+            <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Watch status</p>
               <p className="mt-2 text-lg font-semibold">Healthy</p>
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-primary/15 bg-primary/8 p-5">
+          <div className="rounded-sm border border-primary/15 bg-primary/8 p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-primary">
               <Sparkles className="size-4" />
               {suggestion.title}
@@ -62,10 +62,10 @@ export function AgentStatusCard() {
               {suggestion.summary}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Button className="rounded-full px-5">{suggestion.actionLabel}</Button>
+              <Button className="rounded-sm px-5">{suggestion.actionLabel}</Button>
               <Button
                 variant="outline"
-                className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+                className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
                 onClick={() => setPendingApproval("approval-1")}
               >
                 Approve path
@@ -73,12 +73,12 @@ export function AgentStatusCard() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-sm border border-border bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <ShieldCheck className="size-5 text-emerald-300" />
               <p className="text-sm text-muted">{latestActivityLabel}</p>
             </div>
-            <Button variant="ghost" className="rounded-full text-foreground hover:bg-surface-elevated">
+            <Button variant="ghost" className="rounded-sm text-foreground hover:bg-surface-elevated">
               View activity
               <ArrowRight className="size-4" />
             </Button>

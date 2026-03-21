@@ -200,7 +200,7 @@ export function ChatModelPicker() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-foreground hover:bg-white/10"
+          className="gap-2 rounded-sm border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-foreground hover:bg-white/10"
           disabled={isPulling}
         >
           {isPulling ? (
@@ -248,7 +248,7 @@ export function ChatModelPicker() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 rounded-full px-2 text-xs"
+                      className="h-7 rounded-sm px-2 text-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         void handleSelect(m);
@@ -261,7 +261,7 @@ export function ChatModelPicker() {
                     variant="ghost"
                     size="sm"
                     className={cn(
-                      "h-7 gap-1 rounded-full px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive",
+                      "h-7 gap-1 rounded-sm px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive",
                       deletingModel === m && "opacity-50"
                     )}
                     disabled={deletingModel !== null}
@@ -309,7 +309,7 @@ export function ChatModelPicker() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 rounded-full px-2 text-xs"
+                  className="h-7 gap-1 rounded-sm px-2 text-xs"
                   disabled={isPulling}
                   onClick={(e) => {
                     e.stopPropagation();

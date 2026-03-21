@@ -19,7 +19,7 @@ export function OnboardingModal({ open, onComplete }: OnboardingModalProps) {
   return (
     <Dialog open={open}>
       <DialogContent
-        className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-2xl sm:p-6"
+        className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm bg-background p-5 text-foreground sm:max-w-2xl sm:p-6"
         showCloseButton={false}
       >
         <DialogHeader className="text-left">
@@ -60,7 +60,7 @@ export function OnboardingModal({ open, onComplete }: OnboardingModalProps) {
 
         <DialogFooter className="gap-3 sm:justify-between">
           <p className="text-sm text-muted">You can revisit these preferences later in Account.</p>
-          <Button type="button" className="rounded-full px-6" onClick={onComplete}>
+          <Button type="button" className="rounded-sm px-6" onClick={onComplete}>
             Enter workspace
           </Button>
         </DialogFooter>

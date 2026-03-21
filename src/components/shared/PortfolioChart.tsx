@@ -20,7 +20,7 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
 
   if (isTest) {
     return (
-      <div className="h-44 w-full rounded-[24px] border border-white/10 bg-white/5 p-4">
+      <div className="h-44 w-full rounded-sm border border-white/10 bg-white/5 p-4">
         <div className="flex h-full items-end gap-2">
           {data.map((point) => (
             <div key={point.day} className="flex flex-1 flex-col items-center gap-2">
@@ -37,7 +37,7 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
   }
 
   return (
-    <div className="h-44 w-full rounded-2xl border border-border bg-surface-elevated/50 px-2 py-2">
+    <div className="h-44 w-full rounded-sm border border-border bg-surface-elevated/50 px-2 py-2">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
           <defs>
@@ -52,7 +52,7 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
               border: "1px solid var(--panel-border)",
               borderRadius: "16px",
               backgroundColor: "var(--bg-tertiary)",
-              boxShadow: "var(--shadow-glow)",
+              boxShadow: "var(--shadow-none border border-white/5)",
             }}
             formatter={(value) => [formatTooltipValue(value), "Value"]}
             labelStyle={{ color: "var(--text-secondary)" }}

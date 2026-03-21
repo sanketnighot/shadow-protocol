@@ -29,7 +29,7 @@ export function WalletEmptyState({
         <Button
           type="button"
           variant="outline"
-          className="rounded-full border-white/10 bg-white/5"
+          className="rounded-sm border-white/10 bg-white/5"
           onClick={onImport}
         >
           Import wallet

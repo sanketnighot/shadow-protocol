@@ -49,11 +49,11 @@ export function QuickActions() {
             aria-label={action.label}
             onClick={() => handleAction(action.label)}
             className={cn(
-              "glass-panel group rounded-[24px] px-5 py-4 text-left transition-transform duration-200 hover:-translate-y-1 active:scale-[0.99]",
+              "glass-panel group rounded-sm px-5 py-4 text-left transition-transform duration-200 hover:-translate-y-1 active:scale-[0.99]",
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-primary/15 bg-primary/10 p-2.5 text-primary">
+              <div className="rounded-sm border border-primary/15 bg-primary/10 p-2.5 text-primary">
                 <Icon className="size-4" />
               </div>
               <div>

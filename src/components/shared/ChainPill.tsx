@@ -21,7 +21,7 @@ export function ChainPill({
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       className={cn(
-        "min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3 transition-transform",
+        "min-w-0 rounded-sm border border-border bg-secondary px-4 py-3 transition-transform",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export function ChainPill({
           </p>
           <p className="mt-2 text-sm font-semibold text-foreground">{valueLabel}</p>
         </div>
-        <div className="rounded-full border border-border bg-surface-elevated px-2 py-1 font-mono text-[11px] text-muted">
+        <div className="rounded-sm border border-border bg-surface-elevated px-2 py-1 font-mono text-[11px] text-muted">
           {allocation}%
         </div>
       </div>

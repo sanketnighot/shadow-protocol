@@ -15,14 +15,14 @@ export function Sidebar({ className, onNavigate: _onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "glass-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] pb-0 pl-3 pr-3 pt-3 sm:pl-4 sm:pr-4 sm:pt-4 lg:rounded-[30px]",
+        "glass-panel flex h-full min-h-0 flex-col overflow-hidden rounded-sm pb-0 pl-3 pr-3 pt-3 sm:pl-4 sm:pr-4 sm:pt-4 lg:rounded-[30px]",
         className,
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <div className="shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/12 text-base font-black tracking-[0.24em] text-primary">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-sm border border-primary/20 bg-primary/12 text-base font-black tracking-[0.24em] text-primary">
               S
             </div>
             <div className="min-w-0">

@@ -22,13 +22,13 @@ function Progress({
       data-max={max}
       data-state={pct >= 100 ? "complete" : "loading"}
       className={cn(
-        "relative h-2 w-full overflow-hidden rounded-full bg-primary/20",
+        "relative h-2 w-full overflow-hidden rounded-sm bg-primary/20",
         className,
       )}
       {...props}
     >
       <div
-        className="h-full bg-primary transition-all duration-300 ease-in-out"
+        className="h-full bg-primary transition-all duration-100 ease-out ease-in-out"
         style={{ width: `${pct}%` }}
       />
     </div>

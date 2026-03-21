@@ -29,9 +29,9 @@ export function AgentChat() {
   }, [messages, isStreaming]);
 
   return (
-    <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[32px] border border-border bg-surface shadow-[0_32px_100px_rgba(0,0,0,0.28)]">
+    <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-border bg-surface shadow-none border border-white/5">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,color-mix(in_srgb,var(--accent-purple)_10%,transparent),transparent_50%)]" />
-      
+
       <div className="relative z-10 shrink-0 border-b border-border bg-white/[0.02] px-5 py-4 sm:px-6 sm:py-5 backdrop-blur-md">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1 flex flex-col gap-1">
@@ -43,21 +43,31 @@ export function AgentChat() {
               {activeTitle}
             </p>
           </div>
-          <ChatModelPicker />
+          {/* <ChatModelPicker /> */}
         </div>
       </div>
 
-      <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+      <div
+        ref={scrollRef}
+        className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8"
+      >
         <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-20 sm:pb-24">
           {messages.length > 0 ? (
             <>
               {messages.map((message, index) => (
                 <motion.div
                   key={message.id}
-                  ref={index === messages.length - 1 ? lastMessageRef : undefined}
+                  ref={
+                    index === messages.length - 1 ? lastMessageRef : undefined
+                  }
                   initial={{ opacity: 0, y: 12, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.2, type: "spring", stiffness: 300, damping: 25 }}
+                  transition={{
+                    duration: 0.2,
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25,
+                  }}
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {message.role === "user" ? (
@@ -71,8 +81,12 @@ export function AgentChat() {
                   ) : (
                     <AgentMessage
                       blocks={message.blocks}
-                      onApproveAction={pendingAgentAction ? approveAction : undefined}
-                      onRejectAction={pendingAgentAction ? rejectAction : undefined}
+                      onApproveAction={
+                        pendingAgentAction ? approveAction : undefined
+                      }
+                      onRejectAction={
+                        pendingAgentAction ? rejectAction : undefined
+                      }
                       isApprovePending={isApprovePending}
                     />
                   )}
@@ -81,12 +95,15 @@ export function AgentChat() {
             </>
           ) : (
             <div className="flex min-h-[400px] flex-col items-center justify-center py-10">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-primary/10 text-primary shadow-inner shadow-primary/20 ring-1 ring-border mb-6">
+              <div className="flex size-16 items-center justify-center rounded-sm bg-primary/10 text-primary shadow-none border border-white/5 shadow-primary/20 ring-1 ring-border mb-6">
                 <Sparkles className="size-8" />
               </div>
-              <h3 className="text-2xl font-bold tracking-tight text-foreground mb-2">How can I help you today?</h3>
+              <h3 className="text-2xl font-bold tracking-tight text-foreground mb-2">
+                How can I help you today?
+              </h3>
               <p className="text-sm text-muted text-center max-w-[300px] leading-relaxed">
-                Ask SHADOW for yield strategies, portfolio rebalancing, or to execute cross-chain actions.
+                Ask SHADOW for yield strategies, portfolio rebalancing, or to
+                execute cross-chain actions.
               </p>
             </div>
           )}

@@ -12,7 +12,7 @@ export function StrategyBuilder() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+      <section className="glass-panel rounded-sm p-5 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
@@ -22,7 +22,7 @@ export function StrategyBuilder() {
               Visual no-code orchestration for DeFi automation.
             </h1>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-sm text-primary">
+          <div className="inline-flex items-center gap-2 rounded-sm border border-primary/15 bg-primary/10 px-4 py-2 text-sm text-primary">
             <Sparkles className="size-4" />
             Trigger → Condition → Action
           </div>

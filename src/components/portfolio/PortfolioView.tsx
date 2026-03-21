@@ -105,7 +105,7 @@ export function PortfolioView() {
             type="button"
             variant="ghost"
             size="sm"
-            className="rounded-full bg-white/5 hover:bg-white/10"
+            className="rounded-sm bg-white/5 hover:bg-white/10"
             onClick={() => void refetch()}
             disabled={isFetching}
           >
@@ -119,7 +119,7 @@ export function PortfolioView() {
           type="button"
           variant="outline"
           size="sm"
-          className="rounded-full border-white/10 bg-white/5 hover:bg-white/10"
+          className="rounded-sm border-white/10 bg-white/5 hover:bg-white/10"
           onClick={() => setCreateOpen(true)}
         >
           <Plus className="mr-2 size-4" />
@@ -129,7 +129,7 @@ export function PortfolioView() {
           type="button"
           variant="outline"
           size="sm"
-          className="rounded-full border-white/10 bg-transparent hover:bg-white/5"
+          className="rounded-sm border-white/10 bg-transparent hover:bg-white/5"
           onClick={() => setImportOpen(true)}
         >
           Import
@@ -158,7 +158,7 @@ export function PortfolioView() {
           </div>
 
           {/* Portfolio Tabs & Content */}
-          <div className="rounded-[32px] border border-border bg-surface p-5 sm:p-8">
+          <div className="rounded-sm border border-border bg-surface p-5 sm:p-8">
             <PortfolioTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}
@@ -166,7 +166,7 @@ export function PortfolioView() {
                 <div className="mt-4">
                   <SmartOpportunities />
 
-                  <div className="mb-6 rounded-2xl bg-white/[0.02] p-2">
+                  <div className="mb-6 rounded-sm bg-white/[0.02] p-2">
                     <PortfolioFilters
                       chain={chain}
                       sort={sort}
@@ -180,7 +180,7 @@ export function PortfolioView() {
                   {isLoading ? (
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <Skeleton key={i} className="h-[220px] w-full rounded-[24px]" />
+                        <Skeleton key={i} className="h-[220px] w-full rounded-sm" />
                       ))}
                     </div>
                   ) : balanceError ? (

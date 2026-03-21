@@ -43,7 +43,7 @@ export function StrategyEditorModal({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
-      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-xl sm:p-6">
+      <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm bg-background p-5 text-foreground sm:max-w-xl sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-[-0.03em]">
             Edit strategy
@@ -59,7 +59,7 @@ export function StrategyEditorModal({
             <Input
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
-              className="h-11 rounded-2xl border-border bg-secondary"
+              className="h-11 rounded-sm border-border bg-secondary"
             />
           </label>
           <label className="grid gap-2 text-sm text-muted">
@@ -68,7 +68,7 @@ export function StrategyEditorModal({
               value={summary}
               onChange={(event) => setSummary(event.currentTarget.value)}
               rows={4}
-              className="rounded-2xl border border-border bg-secondary px-3 py-2 text-foreground outline-none"
+              className="rounded-sm border border-border bg-secondary px-3 py-2 text-foreground outline-none"
             />
           </label>
           <label className="grid gap-2 text-sm text-muted">
@@ -76,7 +76,7 @@ export function StrategyEditorModal({
             <Input
               value={nextRun}
               onChange={(event) => setNextRun(event.currentTarget.value)}
-              className="h-11 rounded-2xl border-border bg-secondary"
+              className="h-11 rounded-sm border-border bg-secondary"
             />
           </label>
         </div>
@@ -85,14 +85,14 @@ export function StrategyEditorModal({
           <Button
             type="button"
             variant="outline"
-            className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+            className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={onClose}
           >
             Cancel
           </Button>
           <Button
             type="button"
-            className="rounded-full px-6"
+            className="rounded-sm px-6"
             disabled={isDisabled}
             onClick={() => {
               if (!strategy || isDisabled) {

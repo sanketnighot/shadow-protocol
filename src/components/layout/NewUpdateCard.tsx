@@ -48,7 +48,7 @@ export function NewUpdateCard() {
       opacity: 1,
       y: 0,
       scale: 1,
-      transition: { duration: 0.3, ease: "easeOut" },
+      transition: { duration: 0.3, ease: "easeOut" as const },
     },
     exit: {
       opacity: 0,
@@ -67,14 +67,14 @@ export function NewUpdateCard() {
           exit="exit"
           variants={variants}
           className={cn(
-            "fixed bottom-6 right-24 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-2xl p-3 shadow-2xl glass-panel",
+            "fixed bottom-6 right-24 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-sm p-3 shadow-none border border-white/5 glass-panel",
           )}
           style={{ originX: 1, originY: 1 }}
         >
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              "shrink-0 rounded-xl border border-border bg-surface-elevated p-2",
+              "shrink-0 rounded-sm border border-border bg-surface-elevated p-2",
               accent,
             )}
           >

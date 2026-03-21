@@ -72,22 +72,22 @@ export function Step4Vault() {
       <button
         onClick={handleGenerate}
         disabled={isProcessing}
-        className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[24px] border border-border bg-secondary p-8 backdrop-blur-md transition-all hover:border-emerald-500/30 hover:bg-emerald-500/10"
+        className="group relative flex flex-col items-center justify-center overflow-hidden rounded-sm border border-border bg-secondary p-8 backdrop-blur-md transition-all hover:border-emerald-500/30 hover:bg-emerald-500/10"
       >
-        <div className="mb-4 rounded-full bg-emerald-500/20 p-4 text-emerald-400">
+        <div className="mb-4 rounded-sm bg-emerald-500/20 p-4 text-emerald-400">
           <CheckCircle2 className="size-8" />
         </div>
         <h3 className="text-xl font-bold text-foreground">Generate New Identity</h3>
         <p className="mt-2 text-center text-sm text-muted">Create a secure, local 12-word seed phrase. Never stored in the cloud.</p>
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent to-emerald-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent to-emerald-500/5 opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100" />
       </button>
 
       <button
         onClick={() => setMode("import")}
-        className="group flex items-center justify-between rounded-[20px] border border-border bg-secondary p-5 transition-all hover:bg-surface-elevated"
+        className="group flex items-center justify-between rounded-sm border border-border bg-secondary p-5 transition-all hover:bg-surface-elevated"
       >
         <div className="flex items-center gap-4">
-          <div className="rounded-lg bg-surface-elevated p-2 text-muted">
+          <div className="rounded-sm bg-surface-elevated p-2 text-muted">
             <Download className="size-5" />
           </div>
           <div className="text-left">
@@ -134,7 +134,7 @@ export function Step4Vault() {
       <div className="mt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
         <button
           onClick={handleCopy}
-          className="flex items-center gap-2 rounded-full border border-border bg-secondary px-6 py-2.5 text-sm font-medium text-foreground transition-hover hover:bg-surface-elevated"
+          className="flex items-center gap-2 rounded-sm border border-border bg-secondary px-6 py-2.5 text-sm font-medium text-foreground transition-hover hover:bg-surface-elevated"
         >
           {copied ? <CheckCircle2 className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
           {copied ? "Copied" : "Copy to clipboard"}
@@ -161,20 +161,20 @@ export function Step4Vault() {
       exit={{ opacity: 0, x: -20 }}
       className="w-full max-w-md space-y-4"
     >
-      <div className="rounded-[20px] border border-border bg-secondary p-5 backdrop-blur-md">
+      <div className="rounded-sm border border-border bg-secondary p-5 backdrop-blur-md">
         <h3 className="mb-4 text-sm font-semibold text-foreground">Seed Phrase or Private Key</h3>
         <textarea
           value={importKey}
           onChange={(e) => setImportKey(e.target.value)}
           placeholder="Enter 12/24 words or a hex private key..."
-          className="h-32 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm font-mono text-foreground focus:border-primary/50 focus:outline-none"
+          className="h-32 w-full resize-none rounded-sm border border-border bg-background px-4 py-3 text-sm font-mono text-foreground focus:border-primary/50 focus:outline-none"
         />
       </div>
       <div className="flex justify-end">
         <button
           onClick={handleImport}
           disabled={isProcessing || !importKey}
-          className="flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-sm bg-primary px-8 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
         >
           {isProcessing ? "Decrypting..." : "Import Identity"}
         </button>
@@ -229,7 +229,7 @@ export function Step4Vault() {
           <button
             onClick={nextStep}
             disabled={!acknowledged}
-            className="group flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+            className="group flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             Seal Vault
             <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />

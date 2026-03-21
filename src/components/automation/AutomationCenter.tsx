@@ -114,7 +114,7 @@ export function AutomationCenter() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+      <section className="glass-panel rounded-sm p-5 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
@@ -165,7 +165,7 @@ export function AutomationCenter() {
         open={pendingRemovalStrategyId !== null}
         onOpenChange={(nextOpen) => (!nextOpen ? setPendingRemovalStrategyId(null) : undefined)}
       >
-        <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-[28px] bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
+        <DialogContent className="glass-panel max-w-[calc(100%-1.5rem)] rounded-sm bg-background p-5 text-foreground sm:max-w-lg sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold tracking-[-0.03em]">
               Remove strategy
@@ -178,7 +178,7 @@ export function AutomationCenter() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+              className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
               onClick={() => setPendingRemovalStrategyId(null)}
             >
               Cancel
@@ -186,7 +186,7 @@ export function AutomationCenter() {
             <Button
               type="button"
               variant="destructive"
-              className="rounded-full px-6"
+              className="rounded-sm px-6"
               onClick={() => {
                 if (!pendingRemovalStrategyId) {
                   return;

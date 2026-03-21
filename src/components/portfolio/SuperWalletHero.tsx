@@ -34,9 +34,9 @@ export function SuperWalletHero({
   onAction,
 }: SuperWalletHeroProps) {
   return (
-    <section className="relative overflow-hidden rounded-[32px] border border-border bg-surface p-6 sm:p-8 shadow-sm">
+    <section className="relative overflow-hidden rounded-sm border border-border bg-surface p-6 sm:p-8 shadow-none border border-white/5">
       {/* Background Glow */}
-      <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-primary/20 blur-[100px]" />
+      <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-sm bg-primary/20 blur-[100px]" />
 
       <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
         {/* Left: Net Worth & Chains */}
@@ -49,10 +49,10 @@ export function SuperWalletHero({
               </p>
             </div>
             <div className="mt-4 flex items-baseline gap-3">
-              <h1 className="text-5xl font-extrabold tracking-tight text-foreground sm:text-6xl">
+              <h1 className="font-mono text-5xl font-extrabold tracking-tighter text-foreground sm:text-6xl">
                 {totalValueLabel}
               </h1>
-              <span className="text-sm font-semibold text-emerald-400">
+              <span className="font-mono text-sm font-semibold tracking-wider text-emerald-500">
                 {dailyChangeLabel}
               </span>
             </div>
@@ -62,34 +62,34 @@ export function SuperWalletHero({
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => onAction("receive")}
-              className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 active:scale-95"
+              className="flex items-center gap-2 rounded-sm bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-none border border-primary/50 transition-transform hover:-translate-y-0.5 active:scale-95"
             >
               <Download className="size-4" />
               Receive
             </button>
             <button
               onClick={() => onAction("send")}
-              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
+              className="flex items-center gap-2 rounded-sm bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
             >
               <ArrowRight className="size-4" />
               Send
             </button>
             <button
               onClick={() => onAction("swap")}
-              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
+              className="flex items-center gap-2 rounded-sm bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
             >
               <Repeat className="size-4" />
               Swap
             </button>
             <button
               onClick={() => onAction("bridge")}
-              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
+              className="flex items-center gap-2 rounded-sm bg-white/10 px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-white/15 active:scale-95"
             >
               <ArrowLeftRight className="size-4" />
               Bridge
             </button>
             <button
-              className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95"
+              className="flex items-center gap-2 rounded-sm border border-primary/30 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95"
               onClick={() => alert("Earn strategies coming soon!")}
             >
               <Sparkles className="size-4" />
@@ -103,7 +103,7 @@ export function SuperWalletHero({
               <div className="mb-2 flex items-center justify-between text-xs font-medium text-muted">
                 <span>Network Distribution</span>
               </div>
-              <div className="flex h-2 w-full overflow-hidden rounded-full bg-white/5">
+              <div className="flex h-2 w-full overflow-hidden rounded-sm bg-white/5">
                 {chains.map((c) => (
                   <div
                     key={c.symbol}
@@ -116,7 +116,7 @@ export function SuperWalletHero({
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                 {chains.map((c) => (
                   <div key={c.symbol} className="flex items-center gap-1.5">
-                    <div className={`size-2 rounded-full ${chainColor(c.symbol)}`} />
+                    <div className={`size-2 rounded-sm ${chainColor(c.symbol)}`} />
                     <span className="text-[11px] font-medium text-muted">
                       {c.name} {c.allocation}%
                     </span>

@@ -211,7 +211,7 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+      <section className="glass-panel rounded-sm p-5 sm:p-6">
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
           Settings
         </p>
@@ -221,7 +221,7 @@ export function SettingsPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+        <section className="glass-panel rounded-sm p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">
             Shadow Intelligence
           </h2>
@@ -230,9 +230,9 @@ export function SettingsPage() {
           </p>
 
           <div className="mt-6 space-y-4">
-            <div className="rounded-[20px] border border-border bg-secondary p-4">
+            <div className="rounded-sm border border-border bg-secondary p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
                   <Key className="size-5" />
                 </div>
                 <div>
@@ -253,13 +253,13 @@ export function SettingsPage() {
                   placeholder={
                     isKeySaved ? "********" : "pplx-xxxxxxxxxxxxxxxx"
                   }
-                  className="flex-1 rounded-full border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  className="flex-1 rounded-sm border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isKeySaved && perplexityKey === "********"}
                 />
                 {!isKeySaved || perplexityKey !== "********" ? (
                   <Button
                     size="sm"
-                    className="rounded-full"
+                    className="rounded-sm"
                     onClick={handleSaveKey}
                     disabled={isSaving || !perplexityKey}
                   >
@@ -270,7 +270,7 @@ export function SettingsPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    className="rounded-sm border-red-500/20 text-red-400 hover:bg-red-500/10"
                     onClick={handleRemoveKey}
                   >
                     <Trash2 className="mr-2 size-4" />
@@ -280,9 +280,9 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-border bg-secondary p-4">
+            <div className="rounded-sm border border-border bg-secondary p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-blue-500/10 text-blue-400">
                   <Save className="size-5" />
                 </div>
                 <div>
@@ -303,13 +303,13 @@ export function SettingsPage() {
                   placeholder={
                     isAlchemyKeySaved ? "********" : "your-alchemy-key"
                   }
-                  className="flex-1 rounded-full border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  className="flex-1 rounded-sm border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isAlchemyKeySaved && alchemyKey === "********"}
                 />
                 {!isAlchemyKeySaved || alchemyKey !== "********" ? (
                   <Button
                     size="sm"
-                    className="rounded-full"
+                    className="rounded-sm"
                     onClick={handleSaveAlchemyKey}
                     disabled={isSavingAlchemy || !alchemyKey}
                   >
@@ -320,7 +320,7 @@ export function SettingsPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    className="rounded-sm border-red-500/20 text-red-400 hover:bg-red-500/10"
                     onClick={handleRemoveAlchemyKey}
                   >
                     <Trash2 className="mr-2 size-4" />
@@ -330,9 +330,9 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-border bg-secondary p-4">
+            <div className="rounded-sm border border-border bg-secondary p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400">
+                <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-orange-500/10 text-orange-400">
                   <Cpu className="size-5" />
                 </div>
                 <div>
@@ -354,13 +354,13 @@ export function SettingsPage() {
                   placeholder={
                     isOllamaKeySaved ? "********" : "your-ollama-key"
                   }
-                  className="flex-1 rounded-full border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  className="flex-1 rounded-sm border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                   disabled={isOllamaKeySaved && ollamaKey === "********"}
                 />
                 {!isOllamaKeySaved || ollamaKey !== "********" ? (
                   <Button
                     size="sm"
-                    className="rounded-full"
+                    className="rounded-sm"
                     onClick={handleSaveOllamaKey}
                     disabled={isSavingOllama || !ollamaKey}
                   >
@@ -371,7 +371,7 @@ export function SettingsPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    className="rounded-sm border-red-500/20 text-red-400 hover:bg-red-500/10"
                     onClick={handleRemoveOllamaKey}
                   >
                     <Trash2 className="mr-2 size-4" />
@@ -383,7 +383,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+        <section className="glass-panel rounded-sm p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">Theme</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Choose the theme that matches your environment.
@@ -396,9 +396,9 @@ export function SettingsPage() {
                 type="button"
                 onClick={() => setThemePreference(option)}
                 className={cn(
-                  "rounded-[20px] border px-4 py-4 text-left transition-all hover:-translate-y-0.5 active:scale-95",
+                  "rounded-sm border px-4 py-4 text-left transition-all hover:-translate-y-0.5 active:scale-95",
                   themePreference === option
-                    ? "border-primary/30 bg-primary/12 text-foreground shadow-[0_16px_32px_rgba(139,92,246,0.14)]"
+                    ? "border-primary/30 bg-primary/12 text-foreground shadow-none border border-white/5"
                     : "border-border bg-secondary text-muted hover:bg-surface-elevated",
                 )}
               >
@@ -413,7 +413,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+        <section className="glass-panel rounded-sm p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">
             Developer mode
           </h2>
@@ -425,7 +425,7 @@ export function SettingsPage() {
             type="button"
             onClick={toggleDeveloperMode}
             className={cn(
-              "mt-4 flex w-fit items-center gap-3 rounded-[20px] border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-95",
+              "mt-4 flex w-fit items-center gap-3 rounded-sm border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-95",
               developerModeEnabled
                 ? "border-primary/30 bg-primary/12 text-foreground"
                 : "border-border bg-secondary text-muted hover:bg-surface-elevated",
@@ -433,7 +433,7 @@ export function SettingsPage() {
           >
             <span
               className={cn(
-                "flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors",
+                "flex h-6 w-11 shrink-0 items-center rounded-sm border transition-colors",
                 developerModeEnabled
                   ? "border-primary/50 bg-primary/30 justify-end"
                   : "border-white/20 bg-white/10 justify-start",
@@ -441,7 +441,7 @@ export function SettingsPage() {
             >
               <span
                 className={cn(
-                  "block h-5 w-5 shrink-0 rounded-full bg-white shadow transition-transform",
+                  "block h-5 w-5 shrink-0 rounded-sm bg-white shadow transition-transform",
                   developerModeEnabled ? "mr-1" : "ml-1",
                 )}
               />
@@ -452,7 +452,7 @@ export function SettingsPage() {
           </button>
         </section>
 
-        <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+        <section className="glass-panel rounded-sm p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">AI Model</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Local model for the AI agent. Requires Ollama to be set up.
@@ -462,7 +462,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+        <section className="glass-panel rounded-sm p-5 sm:p-6">
           <h2 className="text-xl font-semibold text-foreground">
             Command palette
           </h2>
@@ -472,7 +472,7 @@ export function SettingsPage() {
           <Button
             type="button"
             variant="outline"
-            className="mt-4 rounded-full border-border bg-secondary text-foreground hover:bg-surface-elevated"
+            className="mt-4 rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated"
             onClick={openCommandPalette}
           >
             Open command palette
@@ -480,10 +480,10 @@ export function SettingsPage() {
         </section>
       </div>
 
-      <section className="glass-panel rounded-[24px] p-5 sm:p-6">
+      <section className="glass-panel rounded-sm p-5 sm:p-6">
         <h2 className="text-xl font-semibold text-foreground">About</h2>
         <div className="mt-5 space-y-4">
-          <div className="rounded-[20px] border border-border bg-secondary p-4 max-w-md">
+          <div className="rounded-sm border border-border bg-secondary p-4 max-w-md">
             <p className="font-mono text-[11px] tracking-[0.2em] text-muted uppercase">
               {APP_ABOUT.name}
             </p>
@@ -503,7 +503,7 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section className="glass-panel border-red-500/20 bg-red-500/5 rounded-[24px] border p-5 sm:p-6">
+      <section className="glass-panel border-red-500/20 bg-red-500/5 rounded-sm border p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <AlertTriangle className="size-5 text-red-400" />
           <h2 className="text-xl font-semibold text-red-400">Danger Zone</h2>
@@ -517,7 +517,7 @@ export function SettingsPage() {
           <DialogTrigger asChild>
             <Button
               variant="outline"
-              className="mt-6 rounded-full border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+              className="mt-6 rounded-sm border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
             >
               <Trash2 className="mr-2 size-4" />
               Delete All Data
@@ -536,7 +536,7 @@ export function SettingsPage() {
             </DialogHeader>
             <DialogFooter className="mt-6 flex gap-2">
               <Button
-                className="rounded-full bg-red-600 text-white hover:bg-red-700"
+                className="rounded-sm bg-red-600 text-white hover:bg-red-700"
                 onClick={handleDeleteAllData}
                 disabled={isDeleting}
               >

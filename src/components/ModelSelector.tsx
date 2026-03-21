@@ -158,7 +158,7 @@ export function ModelSelector() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-between rounded-[20px] border-border bg-secondary text-foreground hover:bg-surface-elevated sm:w-auto"
+          className="w-full justify-between rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated sm:w-auto"
           disabled={isPulling}
         >
           {isPulling ? (
@@ -201,7 +201,7 @@ export function ModelSelector() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 rounded-full px-2 text-xs"
+                    className="h-7 rounded-sm px-2 text-xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       void handleSelect(m);
@@ -242,7 +242,7 @@ export function ModelSelector() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 rounded-full px-2 text-xs"
+                  className="h-7 gap-1 rounded-sm px-2 text-xs"
                   disabled={isPulling}
                   onClick={(e) => {
                     e.stopPropagation();

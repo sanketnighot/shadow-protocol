@@ -10,14 +10,14 @@ export function ActionNode({ data }: NodeProps) {
   const nodeData = data as StrategyNodeData;
 
   return (
-    <div className="min-w-[220px] rounded-[24px] border border-emerald-400/20 bg-background/95 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.35)]">
+    <div className="min-w-[220px] rounded-sm border border-emerald-400/20 bg-background/95 p-4 shadow-none border border-white/5">
       <Handle
         type="target"
         position={Position.Left}
         className="bg-emerald-400!"
       />
       <div className="flex items-center gap-3">
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-2 text-emerald-300">
+        <div className="rounded-sm border border-emerald-400/20 bg-emerald-400/10 p-2 text-emerald-300">
           <ArrowRightLeft className="size-4" />
         </div>
         <div>

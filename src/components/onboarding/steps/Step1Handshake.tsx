@@ -18,7 +18,7 @@ export function Step1Handshake() {
         <img
           src="/icons/shadow.png"
           alt="SHADOW Protocol"
-          className="relative z-10 h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]"
+          className="relative z-10 h-32 w-32 object-contain drop-shadow-none border border-white/5"
         />
       </motion.div>
 
@@ -36,13 +36,13 @@ export function Step1Handshake() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 2.5, duration: 0.8 }}
         onClick={nextStep}
-        className="group relative flex items-center gap-3 overflow-hidden rounded-full border border-primary/30 bg-primary/10 px-8 py-4 text-primary transition-all hover:bg-primary/20 hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] active:scale-95"
+        className="group relative flex items-center gap-3 overflow-hidden rounded-sm border border-primary/30 bg-primary/10 px-8 py-4 text-primary transition-all hover:bg-primary/20 hover:shadow-none border border-white/5 active:scale-95"
       >
         <span className="relative z-10 font-mono text-sm tracking-widest uppercase">
           Initiate Sequence
         </span>
         <ChevronRight className="relative z-10 size-4 transition-transform group-hover:translate-x-1" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-hover:animate-[scanline_2s_linear_infinite]" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100 group-hover:animate-[scanline_2s_linear_infinite]" />
       </motion.button>
     </div>
   );

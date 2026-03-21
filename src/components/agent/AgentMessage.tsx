@@ -5,6 +5,7 @@ import { DecisionCard } from "@/components/agent/DecisionCard";
 import { FormattedText } from "@/components/agent/FormattedText";
 import { OpportunityCard } from "@/components/agent/OpportunityCard";
 import { ToolResultCard } from "@/components/agent/ToolResultCard";
+import { ThinkingLoader } from "@/components/agent/ThinkingLoader";
 
 type AgentMessageProps = {
   blocks: AgentMessageBlock[];
@@ -17,15 +18,15 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
   return (
     <div className="flex max-w-[95%] sm:max-w-[85%] flex-col items-start gap-2">
       <div className="flex items-center gap-2 px-1">
-        <div className="flex size-6 items-center justify-center rounded-full bg-white/10 text-foreground ring-1 ring-white/20 shadow-inner">
+        <div className="flex size-6 items-center justify-center rounded-sm border border-white/5 bg-white/10 text-foreground ring-1 ring-white/20 shadow-none border border-white/5">
           <Bot className="size-3.5" />
         </div>
         <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-foreground uppercase">
           Shadow
         </span>
       </div>
-      
-      <div className="mt-1 flex w-full flex-col gap-3 rounded-[24px] rounded-tl-[8px] border border-white/10 bg-[#1a1a24] p-4 sm:p-5 shadow-xl shadow-black/20">
+
+      <div className="mt-1 flex w-full flex-col gap-3 border-l-2 border-primary/50 bg-transparent pl-4 sm:pl-5">
         {[...blocks]
           .sort((a, b) => {
             const order = (t: string) =>
@@ -39,13 +40,9 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
           .map((block, index) => {
           if (block.type === "text") {
             return block.content === "Thinking…" ? (
-              <div key={`${block.type}-${index}`} className="flex h-6 items-center gap-1.5 px-2">
-                <span className="size-1.5 animate-pulse rounded-full bg-primary/80" />
-                <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:150ms]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-primary/80 [animation-delay:300ms]" />
-              </div>
+              <ThinkingLoader key={`${block.type}-${index}`} />
             ) : (
-              <div key={`${block.type}-${index}`} className="text-sm leading-relaxed text-foreground/90">
+              <div key={`${block.type}-${index}`} className="font-mono text-sm leading-relaxed text-foreground/90">
                 <FormattedText content={block.content} />
               </div>
             );

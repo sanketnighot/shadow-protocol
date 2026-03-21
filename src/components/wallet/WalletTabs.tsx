@@ -87,7 +87,7 @@ export function WalletTabs() {
               <TabsTrigger
                 key={addr}
                 value={addr}
-                className="group flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 data-[state=active]:border-white/20 data-[state=active]:bg-white/10"
+                className="group flex shrink-0 items-center gap-2 rounded-sm border border-white/10 bg-white/5 px-4 py-2.5 data-[state=active]:border-white/20 data-[state=active]:bg-white/10"
               >
                 <span className="font-mono text-sm">{label}</span>
                 <DropdownMenu>
@@ -96,7 +96,7 @@ export function WalletTabs() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="size-7 shrink-0 rounded-full opacity-60 hover:opacity-100"
+                      className="size-7 shrink-0 rounded-sm opacity-60 hover:opacity-100"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <MoreHorizontal className="size-4" />

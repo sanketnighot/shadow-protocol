@@ -18,13 +18,13 @@ export function AgentWorkspace() {
         <ThreadSidebar />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-[#14141a] px-4 py-3 md:hidden">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-sm border border-white/10 bg-[#14141a] px-4 py-3 md:hidden">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             aria-label="Open thread list"
-            className="gap-2 rounded-full border border-white/10 bg-white/5 px-4 text-foreground hover:bg-white/10 transition-colors"
+            className="gap-2 rounded-sm border border-white/10 bg-white/5 px-4 text-foreground hover:bg-white/10 transition-colors"
             onClick={() => setDrawerOpen(true)}
           >
             <MessageSquare className="size-4" />

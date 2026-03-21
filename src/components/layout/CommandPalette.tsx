@@ -160,7 +160,7 @@ export function CommandPalette() {
   return (
     <Dialog open={isCommandPaletteOpen} onOpenChange={(open) => (!open ? closeCommandPalette() : undefined)}>
       <DialogContent
-        className="glass-panel left-1/2! top-4! z-50 max-w-[calc(100%-1.5rem)] -translate-x-1/2! translate-y-0! rounded-[28px] border-white/10 bg-background p-0 text-foreground sm:max-w-2xl"
+        className="glass-panel left-1/2! top-4! z-50 max-w-[calc(100%-1.5rem)] -translate-x-1/2! translate-y-0! rounded-sm border-white/10 bg-background p-0 text-foreground sm:max-w-2xl"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
@@ -171,7 +171,7 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search navigation, actions, and theme..."
-            className="h-12 rounded-2xl border-white/10 bg-white/5 text-foreground placeholder:text-muted"
+            className="h-12 rounded-sm border-white/10 bg-white/5 text-foreground placeholder:text-muted"
           />
         </div>
 
@@ -192,7 +192,7 @@ export function CommandPalette() {
                     "flex w-full items-center gap-3 rounded-[22px] border border-transparent px-4 py-3 text-left transition-all hover:border-white/10 hover:bg-white/5 active:scale-[0.99]",
                   )}
                 >
-                  <div className="rounded-2xl border border-primary/15 bg-primary/10 p-2.5 text-primary">
+                  <div className="rounded-sm border border-primary/15 bg-primary/10 p-2.5 text-primary">
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0">

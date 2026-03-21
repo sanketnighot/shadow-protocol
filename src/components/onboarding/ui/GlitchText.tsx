@@ -65,7 +65,7 @@ export function GlitchText({
         <motion.span
           animate={{ opacity: [1, 0] }}
           transition={{ repeat: Infinity, duration: 0.6, ease: "linear" }}
-          className="inline-block w-2 h-4 ml-1 bg-primary/70 align-middle shadow-[0_0_8px_rgba(139,92,246,0.6)]"
+          className="inline-block w-2 h-4 ml-1 bg-primary/70 align-middle shadow-none border border-white/5"
         />
       )}
     </MotionComponent>

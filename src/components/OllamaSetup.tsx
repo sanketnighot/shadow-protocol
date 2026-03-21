@@ -169,7 +169,7 @@ export function OllamaSetup() {
     <Dialog open={showSetupModal} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={isReady}
-        className="glass-panel max-w-md rounded-[28px] bg-background p-6"
+        className="glass-panel max-w-md rounded-sm bg-background p-6"
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-[-0.03em]">
@@ -186,7 +186,7 @@ export function OllamaSetup() {
 
         <div className="mt-4 space-y-3">
           {isError && errorMessage && (
-            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            <p className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
               {errorMessage}
             </p>
           )}
@@ -218,7 +218,7 @@ export function OllamaSetup() {
                         </span>
                       </div>
                       {recommended && (
-                        <span className="flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                        <span className="flex items-center gap-1 rounded-sm bg-primary/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
                           <Sparkles className="size-3" />
                           Recommended
                         </span>
@@ -269,7 +269,7 @@ export function OllamaSetup() {
             </>
           )}
           {isReady && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+            <div className="flex items-center gap-2 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
               <CheckCircle2 className="size-4 shrink-0" />
               Ready! You can start chatting.
             </div>
@@ -280,7 +280,7 @@ export function OllamaSetup() {
           {isReady ? (
             <Button
               type="button"
-              className="rounded-full"
+              className="rounded-sm"
               onClick={() => closeSetupModal()}
             >
               Continue
@@ -289,7 +289,7 @@ export function OllamaSetup() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-full"
+              className="rounded-sm"
               onClick={() => void runSetup()}
             >
               Retry

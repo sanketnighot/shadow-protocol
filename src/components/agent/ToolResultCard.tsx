@@ -11,17 +11,17 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
   const walletCount = (unwrapped.walletCount as number) ?? (unwrapped.wallet_count as number) ?? 0;
   const breakdown = Array.isArray(unwrapped.breakdown) ? unwrapped.breakdown : [];
   return (
-    <div className="rounded-2xl border border-border bg-secondary p-4 shadow-sm">
+    <div className="rounded-sm border border-border bg-secondary p-4 shadow-none border border-white/5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
+          <div className="flex size-7 items-center justify-center rounded-sm bg-primary/20 text-primary">
             <PieChart className="size-4" />
           </div>
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
             Portfolio Aggregate
           </span>
         </div>
-        <span className="text-[10px] font-semibold text-muted bg-surface-elevated px-2 py-0.5 rounded-full">
+        <span className="text-[10px] font-semibold text-muted bg-surface-elevated px-2 py-0.5 rounded-sm">
           {walletCount} Wallet{walletCount !== 1 ? "s" : ""}
         </span>
       </div>
@@ -35,9 +35,9 @@ function PortfolioCard({ data }: { data: Record<string, unknown> }) {
             const amount = (item.amount as string) ?? "0";
             const value = (item.value as string) ?? "$0";
             return (
-              <div key={i} className="flex items-center justify-between rounded-xl bg-surface-elevated/50 p-2.5 transition-colors hover:bg-surface-elevated">
+              <div key={i} className="flex items-center justify-between rounded-sm bg-surface-elevated/50 p-2.5 transition-colors hover:bg-surface-elevated">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-white/5 font-bold text-[10px]">
+                  <div className="flex size-8 items-center justify-center rounded-sm bg-white/5 font-bold text-[10px]">
                     {token.slice(0, 2)}
                   </div>
                   <div className="flex flex-col">
@@ -59,9 +59,9 @@ function BalancesCard({ data }: { data: unknown }) {
   const unwrapped = (data as any)?.Ok ?? data;
   const items = Array.isArray(unwrapped) ? unwrapped : [];
   return (
-    <div className="rounded-2xl border border-border bg-secondary p-4">
+    <div className="rounded-sm border border-border bg-secondary p-4">
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
+        <div className="flex size-7 items-center justify-center rounded-sm bg-primary/20 text-primary">
           <Wallet className="size-4" />
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
@@ -70,7 +70,7 @@ function BalancesCard({ data }: { data: unknown }) {
       </div>
       <div className="grid gap-2">
         {(items as Record<string, unknown>[]).slice(0, 8).map((item, i) => (
-          <div key={i} className="flex items-center justify-between rounded-xl bg-surface-elevated/50 p-2.5">
+          <div key={i} className="flex items-center justify-between rounded-sm bg-surface-elevated/50 p-2.5">
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-foreground">{(item.token as string) ?? "?"}</span>
               <span className="text-[10px] text-muted">on {(item.chain as string) ?? "?"}</span>
@@ -95,9 +95,9 @@ function PriceCard({ data }: { data: Record<string, unknown> }) {
   const source = (unwrapped.source as string) ?? "Oracle";
   
   return (
-    <div className="rounded-2xl border border-border bg-secondary p-4 flex items-center justify-between">
+    <div className="rounded-sm border border-border bg-secondary p-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/20 text-primary shadow-inner">
+        <div className="flex size-10 items-center justify-center rounded-sm bg-primary/20 text-primary shadow-none border border-white/5">
           <TrendingUp className="size-5" />
         </div>
         <div>
@@ -142,7 +142,7 @@ export function ToolResultCard({ toolName, content }: ToolResultCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface-elevated/50 p-3">
+    <div className="rounded-sm border border-border bg-surface-elevated/50 p-3">
       <div className="mb-2 flex items-center gap-2">
         <Database className="size-3.5 text-muted" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
