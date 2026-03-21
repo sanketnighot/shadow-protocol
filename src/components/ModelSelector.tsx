@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Download, Loader2, Search } from "lucide-react";
+import { Check, ChevronDown, Download, Loader2, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   checkOllamaStatus,
   getSystemInfo,
   listenOllamaProgress,
+  deleteModel,
 } from "@/lib/ollama";
 import { isRecommended, MODEL_OPTIONS } from "@/lib/modelOptions";
 import { useOllamaStore } from "@/store/useOllamaStore";
@@ -39,6 +40,7 @@ export function ModelSelector() {
   const openSetupModal = useOllamaStore((s) => s.openSetupModal);
 
   const [isPulling, setIsPulling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState(0);
   const [customModelQuery, setCustomModelQuery] = useState("");
   const [systemInfo, setSystemInfo] = useState<{
@@ -65,6 +67,31 @@ export function ModelSelector() {
       .then((si) => setSystemInfo(si))
       .catch(() => setSystemInfo(null));
   }, []);
+
+  const handleDelete = useCallback(
+    async (name: string) => {
+      if (isDeleting) return;
+      setIsDeleting(name);
+      try {
+        await deleteModel(name);
+        const status = await refreshStatus();
+        if (selectedModel === name) {
+          if (status && status.models.length > 0) {
+            setSelectedModel(status.models[0]);
+          } else {
+            setSelectedModel("");
+          }
+        }
+        success("Model deleted", `Removed ${name}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        info("Delete failed", msg);
+      } finally {
+        setIsDeleting(null);
+      }
+    },
+    [isDeleting, refreshStatus, selectedModel, setSelectedModel, success, info],
+  );
 
   const handlePull = useCallback(
     async (modelId: string) => {
@@ -191,25 +218,45 @@ export function ModelSelector() {
               <DropdownMenuItem
                 key={m}
                 onClick={() => void handleSelect(m)}
-                disabled={isPulling}
+                disabled={isPulling || isDeleting === m}
                 className="flex items-center justify-between gap-2 py-2"
               >
-                <span className="font-medium">{m}</span>
-                {selectedModel === m ? (
-                  <Check className="size-4 text-primary" />
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 rounded-sm px-2 text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleSelect(m);
-                    }}
-                  >
-                    Use
-                  </Button>
-                )}
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">{m}</span>
+                  {selectedModel === m && (
+                    <Check className="size-3 text-primary shrink-0" />
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {isDeleting === m ? (
+                    <Loader2 className="size-3 animate-spin text-muted" />
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-7 rounded-sm text-muted hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDelete(m);
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
+                  {selectedModel !== m && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-sm px-2 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleSelect(m);
+                      }}
+                    >
+                      Use
+                    </Button>
+                  )}
+                </div>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
