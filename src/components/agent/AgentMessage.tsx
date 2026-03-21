@@ -6,6 +6,7 @@ import { FormattedText } from "@/components/agent/FormattedText";
 import { OpportunityCard } from "@/components/agent/OpportunityCard";
 import { ToolResultCard } from "@/components/agent/ToolResultCard";
 import { ThinkingLoader } from "@/components/agent/ThinkingLoader";
+import { StrategyProposalCard } from "@/components/agent/StrategyProposalCard";
 
 type AgentMessageProps = {
   blocks: AgentMessageBlock[];
@@ -32,9 +33,11 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
             const order = (t: string) =>
               t === "text"
                 ? 0
-                : t === "opportunity" || t === "toolResult" || t === "decisionResult"
+                : t === "strategyProposal"
                   ? 1
-                  : 2;
+                  : t === "opportunity" || t === "toolResult" || t === "decisionResult"
+                    ? 2
+                    : 3;
             return order(a.type) - order(b.type);
           })
           .map((block, index) => {
@@ -45,6 +48,11 @@ export function AgentMessage({ blocks, onApproveAction, onRejectAction, isApprov
               <div key={`${block.type}-${index}`} className="font-mono text-sm leading-relaxed text-foreground/90">
                 <FormattedText content={block.content} />
               </div>
+            );
+          }
+          if (block.type === "strategyProposal") {
+            return (
+              <StrategyProposalCard key={`${block.type}-${index}`} proposal={block.proposal} />
             );
           }
           if (block.type === "opportunity") {

@@ -10,6 +10,7 @@ export function Step3Uplink() {
 
   const [alchemyKey, setAlchemyKey] = useState("");
   const [perplexityKey, setPerplexityKey] = useState("");
+  const [ollamaKey, setOllamaKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [systemInfo, setSystemInfo] = useState<{ totalMemoryGb: number; cpuCount: number } | null>(null);
 
@@ -34,6 +35,9 @@ export function Step3Uplink() {
       }
       if (perplexityKey) {
         await invoke("set_perplexity_key", { input: { key: perplexityKey } });
+      }
+      if (ollamaKey) {
+        await invoke("set_ollama_key", { input: { key: ollamaKey } });
       }
       // Short delay for "connecting" effect
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -116,6 +120,30 @@ export function Step3Uplink() {
           />
         </motion.div>
 
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+          className="rounded-sm border border-border bg-secondary p-5 backdrop-blur-md"
+        >
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-orange-500/20 text-orange-400">
+              <Key className="size-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Ollama API Key</h3>
+              <p className="text-xs text-muted">Optional: For authenticated Ollama endpoints</p>
+            </div>
+          </div>
+          <input
+            type="password"
+            value={ollamaKey}
+            onChange={(e) => setOllamaKey(e.target.value)}
+            placeholder="ollama-api-key (if required)"
+            className="w-full rounded-sm border border-border bg-background px-4 py-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+          />
+        </motion.div>
+
         {systemInfo && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -151,7 +179,7 @@ export function Step3Uplink() {
           </button>
           <button
             onClick={handleConnect}
-            disabled={isSaving || (!alchemyKey && !perplexityKey)}
+            disabled={isSaving || (!alchemyKey && !perplexityKey && !ollamaKey)}
             className="group flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             {isSaving ? "Connecting..." : "Connect"}

@@ -195,6 +195,8 @@ export function SettingsPage() {
       if (result.success) {
         success("All data deleted", "The application has been reset.");
         resetOnboarding();
+        // Clear all persisted state in localStorage
+        localStorage.clear();
         // Force a reload to clear all in-memory state and restart onboarding
         setTimeout(() => {
           window.location.reload();

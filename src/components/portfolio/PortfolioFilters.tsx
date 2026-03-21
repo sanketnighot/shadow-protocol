@@ -4,6 +4,7 @@ type PortfolioFiltersProps = {
   chain: string;
   sort: string;
   type: string;
+  developerModeEnabled?: boolean;
   onChainChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onTypeChange: (value: string) => void;
@@ -14,9 +15,9 @@ const CHAINS = [
   { label: "Ethereum", value: "ETH" },
   { label: "Base", value: "BASE" },
   { label: "Polygon", value: "POL" },
-  { label: "ETH Sepolia", value: "ETH-SEP" },
-  { label: "Base Sepolia", value: "BASE-SEP" },
-  { label: "Polygon Amoy", value: "POL-AMOY" },
+  { label: "ETH Sepolia", value: "ETH-SEP", testnet: true },
+  { label: "Base Sepolia", value: "BASE-SEP", testnet: true },
+  { label: "Polygon Amoy", value: "POL-AMOY", testnet: true },
 ];
 
 const TYPES = [
@@ -35,15 +36,23 @@ export function PortfolioFilters({
   chain,
   sort,
   type,
+  developerModeEnabled = false,
   onChainChange,
   onSortChange,
   onTypeChange,
 }: PortfolioFiltersProps) {
+  const filteredChains = CHAINS.filter((c) => {
+    if ("testnet" in c && c.testnet) {
+      return developerModeEnabled;
+    }
+    return true;
+  });
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-1 items-center gap-2 overflow-x-auto pb-2 scrollbar-hide sm:pb-0">
         <div className="flex items-center gap-1.5 rounded-sm border border-border bg-secondary p-1 shadow-none border border-white/5">
-          {CHAINS.map((c) => (
+          {filteredChains.map((c) => (
             <button
               key={c.value}
               onClick={() => onChainChange(c.value)}

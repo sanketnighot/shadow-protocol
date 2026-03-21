@@ -14,6 +14,7 @@ type SuperWalletHeroProps = {
   dailyChangeLabel: string;
   chains: ChainBalance[];
   series: PortfolioPoint[];
+  targetSeries?: PortfolioPoint[];
   onAction: (action: "send" | "swap" | "bridge" | "receive") => void;
 };
 
@@ -31,6 +32,7 @@ export function SuperWalletHero({
   dailyChangeLabel,
   chains,
   series,
+  targetSeries,
   onAction,
 }: SuperWalletHeroProps) {
   return (
@@ -129,7 +131,7 @@ export function SuperWalletHero({
 
         {/* Right: Portfolio Chart */}
         <div className="h-[240px] w-full lg:w-[40%] xl:w-[45%]">
-          <PortfolioChart data={series} />
+          <PortfolioChart data={series} targetData={targetSeries} />
         </div>
       </div>
     </section>

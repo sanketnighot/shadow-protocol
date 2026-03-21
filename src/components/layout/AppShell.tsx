@@ -10,6 +10,8 @@ import { Dock } from "@/components/layout/Dock";
 import { MainContent } from "@/components/layout/MainContent";
 import { MinimalTopBar } from "@/components/layout/MinimalTopBar";
 import { NewUpdateCard } from "@/components/layout/NewUpdateCard";
+import { PanicModal } from "@/components/shared/PanicModal";
+import { ShadowBriefSheet } from "@/components/layout/ShadowBriefSheet";
 import { OllamaSetup } from "@/components/OllamaSetup";
 import { InitializationSequence } from "@/components/onboarding/InitializationSequence";
 import { UnlockDialog } from "@/components/wallet/UnlockDialog";
@@ -27,6 +29,7 @@ type SessionStatusResult = { locked: boolean; expiresAtSecs?: number };
 
 export function AppShell() {
   const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
+  const [showBrief, setShowBrief] = useState(false);
 
   const addresses = useWalletStore((s) => s.addresses);
   const activeAddress = useWalletStore((s) => s.activeAddress);
@@ -43,8 +46,10 @@ export function AppShell() {
   );
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
+  const activeSignalPayload = useUiStore((state) => state.activeSignalPayload);
+  const activeSignalToolName = useUiStore((state) => state.activeSignalToolName);
   const themePreference = useUiStore((state) => state.themePreference);
-  const { pendingApproval } = useAgentChat();
+  const { pendingApproval, approveAction, rejectAction } = useAgentChat();
   const { info, success } = useToast();
   const setupComplete = useOllamaStore((s) => s.setupComplete);
   const openOllamaSetup = useOllamaStore((s) => s.openSetupModal);
@@ -131,6 +136,7 @@ export function AppShell() {
   const handleUnlocked = (expiresAt: number) => {
     setUnlocked(expiresAt);
     closeUnlockDialog();
+    setShowBrief(true);
   };
 
   useEffect(() => {
@@ -158,16 +164,52 @@ export function AppShell() {
   }, [openCommandPalette]);
 
   const handleReject = () => {
-    clearPendingApproval();
+    if (pendingApprovalId === "signal-action") {
+      clearPendingApproval();
+    } else {
+      rejectAction();
+    }
     info("Transaction rejected", "The strategy remains in monitoring mode.");
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (pendingApprovalId === "signal-action") {
+      try {
+        await invoke("approve_agent_action", {
+          input: {
+            toolName: activeSignalToolName,
+            payload: activeSignalPayload,
+          },
+        });
+        clearPendingApproval();
+      } catch (err) {
+        info("Execution failed", String(err));
+        return;
+      }
+    } else {
+      await approveAction();
+    }
     success("Transaction approved", "SHADOW will execute the private route now.");
-    clearPendingApproval();
     setShowApprovalSuccess(true);
     window.setTimeout(() => setShowApprovalSuccess(false), 1200);
   };
+
+  const modalTransaction = useMemo(() => {
+    if (pendingApprovalId === "signal-action" && activeSignalPayload) {
+      return {
+        id: "signal-action",
+        strategyId: "signal",
+        action: activeSignalPayload.action || "Execute Signal",
+        amount: activeSignalPayload.amount || "N/A",
+        chain: activeSignalPayload.chain || "N/A",
+        slippage: activeSignalPayload.slippage || "0.5%",
+        gas: activeSignalPayload.gasEstimate || "Low",
+        reason: activeSignalPayload.reason || "Autonomous signal triggered by ShadowWatcher.",
+        executionWindow: "2 mins",
+      };
+    }
+    return pendingApproval;
+  }, [pendingApprovalId, activeSignalPayload, pendingApproval]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-3 py-3 text-foreground sm:px-5 sm:py-5 lg:h-screen lg:px-6 lg:py-6">
@@ -191,9 +233,11 @@ export function AppShell() {
         }}
       />
       <NewUpdateCard />
+      <PanicModal />
+      <ShadowBriefSheet open={showBrief} onOpenChange={setShowBrief} />
       <ApprovalModal
-        open={pendingApprovalId === pendingApproval.id}
-        transaction={pendingApproval}
+        open={!!pendingApprovalId}
+        transaction={modalTransaction}
         onClose={clearPendingApproval}
         onReject={handleReject}
         onApprove={handleApprove}

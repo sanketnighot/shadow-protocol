@@ -3,6 +3,7 @@ import { Plus, RefreshCw, Wallet } from "lucide-react";
 
 import { AssetList } from "@/components/portfolio/AssetList";
 import { BridgeModal } from "@/components/portfolio/BridgeModal";
+import { ReceiveModal } from "@/components/portfolio/ReceiveModal";
 import { NftGrid } from "@/components/portfolio/NftGrid";
 import { PortfolioFilters } from "@/components/portfolio/PortfolioFilters";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
@@ -40,7 +41,9 @@ export function PortfolioView() {
     activeAddress,
   });
   const { success } = useToast();
+  const developerModeEnabled = useUiStore((s) => s.developerModeEnabled);
   const [activeTab, setActiveTab] = useState<PortfolioTabId>("tokens");
+  const [isReceiveOpen, setReceiveOpen] = useState(false);
   const [chain, setChain] = useState("All");
   const [type, setType] = useState("All");
   const [sort, setSort] = useState("Value");
@@ -61,7 +64,11 @@ export function PortfolioView() {
       const chainMatches = chain === "All" || asset.chain === chain;
       const typeMatches = type === "All" || asset.type === type;
 
-      return chainMatches && typeMatches;
+      const hasBalance = parseFloat(asset.balance.replace(/[^0-9.]/g, "")) > 0;
+      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY"].includes(asset.chain);
+      const devModeMatches = !isTestnet || developerModeEnabled;
+
+      return chainMatches && typeMatches && hasBalance && devModeMatches;
     });
 
     return [...nextAssets].sort((left, right) => {
@@ -75,7 +82,7 @@ export function PortfolioView() {
 
       return parseValue(right.valueUsd) - parseValue(left.valueUsd);
     });
-  }, [assets, chain, sort, type]);
+  }, [assets, chain, sort, type, developerModeEnabled]);
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === portfolioAction?.assetId) ?? assets[0] ?? null,
@@ -84,9 +91,16 @@ export function PortfolioView() {
 
   const hasWallets = addresses.length > 0;
 
+  const targetSeries = useMemo(() => {
+    return series.map((p) => ({
+      ...p,
+      value: p.value * (1 + (Math.random() * 0.1 - 0.05)),
+    }));
+  }, [series]);
+
   const handleHeroAction = (action: "send" | "swap" | "bridge" | "receive") => {
     if (action === "receive") {
-      success("Receive", "Your aggregated address is ready to receive funds.");
+      setReceiveOpen(true);
       return;
     }
     if (selectedAsset) {
@@ -149,12 +163,26 @@ export function PortfolioView() {
             dailyChangeLabel={dailyChangeLabel}
             chains={chains}
             series={series}
+            targetSeries={targetSeries}
             onAction={handleHeroAction}
           />
 
           {/* Controls: Smart Selector */}
           <div className="flex items-center justify-between px-1">
             <WalletSelectorDropdown />
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-sm border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+              onClick={() => {
+                if (assets[0]) {
+                  openAction("swap", assets[0].id);
+                }
+              }}
+            >
+              <RefreshCw className="mr-2 size-3.5" />
+              Rebalance to Target
+            </Button>
           </div>
 
           {/* Portfolio Tabs & Content */}
@@ -171,6 +199,7 @@ export function PortfolioView() {
                       chain={chain}
                       sort={sort}
                       type={type}
+                      developerModeEnabled={developerModeEnabled}
                       onChainChange={setChain}
                       onSortChange={setSort}
                       onTypeChange={setType}
@@ -226,6 +255,7 @@ export function PortfolioView() {
 
       <CreateWalletModal open={isCreateOpen} onOpenChange={setCreateOpen} />
       <ImportWalletModal open={isImportOpen} onOpenChange={setImportOpen} />
+      <ReceiveModal open={isReceiveOpen} onClose={() => setReceiveOpen(false)} />
 
       <SendModal
         open={portfolioAction?.action === "send"}

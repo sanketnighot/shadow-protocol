@@ -43,6 +43,8 @@ function NotificationCard({
 }) {
   const { icon: Icon, accent } = NOTIFICATION_STYLES[notification.type];
   const hasRoute = notification.route != null && notification.route !== "";
+  const openSignalApproval = useUiStore((s) => s.openSignalApproval);
+
   return (
     <article
       role={hasRoute ? "button" : undefined}
@@ -94,26 +96,44 @@ function NotificationCard({
           <Archive className="size-3" />
         </Button>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div
-            className={cn(
-              "shrink-0 rounded-sm border border-border bg-surface-elevated p-2",
-              accent,
-            )}
-          >
-            <Icon className="size-4" />
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div
+              className={cn(
+                "shrink-0 rounded-sm border border-border bg-surface-elevated p-2",
+                accent,
+              )}
+            >
+              <Icon className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">{notification.title}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
+                {notification.description}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground">{notification.title}</p>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
-              {notification.description}
-            </p>
-          </div>
+          <span className="shrink-0 text-[10px] text-muted">
+            {notification.createdAtLabel}
+          </span>
         </div>
-        <span className="shrink-0 text-[10px] text-muted">
-          {notification.createdAtLabel}
-        </span>
+
+        {notification.payload && notification.toolName && (
+          <div className="flex justify-end pt-1">
+            <Button
+              variant="outline"
+              size="xs"
+              className="rounded-sm border-primary/30 bg-primary/5 text-[10px] font-bold tracking-widest text-primary uppercase hover:bg-primary/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                openSignalApproval(notification.toolName!, notification.payload);
+              }}
+            >
+              Approve & Route
+            </Button>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -128,7 +148,6 @@ export function ActivityBell() {
   const markNotificationRead = useUiStore((s) => s.markNotificationRead);
   const syncStatus = useWalletSyncStore((s) => s.syncStatus);
   const syncProgress = useWalletSyncStore((s) => s.progress);
-  const syncStep = useWalletSyncStore((s) => s.currentStep);
   const syncWalletCount = useWalletSyncStore((s) => s.walletCount);
   const markNotificationsRead = useUiStore((s) => s.markNotificationsRead);
   const archiveNotification = useUiStore((s) => s.archiveNotification);

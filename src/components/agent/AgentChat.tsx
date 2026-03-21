@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 
 import { AgentInput } from "@/components/agent/AgentInput";
 import { AgentMessage } from "@/components/agent/AgentMessage";
-import { ChatModelPicker } from "@/components/agent/ChatModelPicker";
 import { UserMessage } from "@/components/agent/UserMessage";
 import { useAgentChat } from "@/hooks/useAgentChat";
 

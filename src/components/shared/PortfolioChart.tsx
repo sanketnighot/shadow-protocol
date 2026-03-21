@@ -4,9 +4,10 @@ import type { PortfolioPoint } from "@/data/mock";
 
 type PortfolioChartProps = {
   data: PortfolioPoint[];
+  targetData?: PortfolioPoint[];
 };
 
-export function PortfolioChart({ data }: PortfolioChartProps) {
+export function PortfolioChart({ data, targetData }: PortfolioChartProps) {
   const isTest = typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent);
   const formatTooltipValue = (
     value: number | string | ReadonlyArray<number | string> | undefined,
@@ -45,18 +46,34 @@ export function PortfolioChart({ data }: PortfolioChartProps) {
               <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.6} />
               <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
             </linearGradient>
+            <linearGradient id="target-glow" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="5%" stopColor="rgba(255,255,255,0.2)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="rgba(255,255,255,0.2)" stopOpacity={0} />
+            </linearGradient>
           </defs>
           <Tooltip
             cursor={{ stroke: "rgba(139,92,246,0.3)", strokeWidth: 1 }}
             contentStyle={{
               border: "1px solid var(--panel-border)",
-              borderRadius: "16px",
+              borderRadius: "4px",
               backgroundColor: "var(--bg-tertiary)",
-              boxShadow: "var(--shadow-none border border-white/5)",
+              boxShadow: "none",
             }}
             formatter={(value) => [formatTooltipValue(value), "Value"]}
             labelStyle={{ color: "var(--text-secondary)" }}
           />
+          {targetData && (
+            <Area
+              type="monotone"
+              data={targetData}
+              dataKey="value"
+              stroke="rgba(255,255,255,0.2)"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              fill="url(#target-glow)"
+              activeDot={false}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="value"
