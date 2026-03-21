@@ -20,6 +20,16 @@ export type ResponseBlock =
   | { type: "text"; content: string }
   | { type: "toolResult"; toolName: string; content: string }
   | {
+      type: "strategyProposal";
+      proposal: {
+        name: string;
+        summary: string;
+        trigger: any;
+        action: any;
+        guardrails: any;
+      };
+    }
+  | {
       type: "decisionResult";
       insights: Record<string, unknown>;
       decision: Record<string, unknown>;

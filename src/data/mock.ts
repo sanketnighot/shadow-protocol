@@ -52,6 +52,16 @@ export type AgentMessageBlock =
       simulated: boolean;
     }
   | {
+      type: "strategyProposal";
+      proposal: {
+        name: string;
+        summary: string;
+        trigger: any;
+        action: any;
+        guardrails: any;
+      };
+    }
+  | {
       type: "approvalRequest";
       toolName: string;
       payload: unknown;

@@ -283,10 +283,16 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                     simulated: b.simulated,
                   };
                 }
+                if (b.type === "strategyProposal") {
+                  return {
+                    type: "strategyProposal" as const,
+                    proposal: b.proposal,
+                  };
+                }
                 return {
                   type: "toolResult" as const,
-                  toolName: b.toolName,
-                  content: b.content,
+                  toolName: (b as any).toolName,
+                  content: (b as any).content,
                 };
               });
               if (blocks.length === 0 && response.content) {

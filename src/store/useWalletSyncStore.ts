@@ -146,30 +146,44 @@ export function useWalletSyncListeners(): void {
 }
 
 type ShadowAlertPayload = {
-  title: String;
-  message: String;
+  title: string;
+  message: string;
   severity: "info" | "warning" | "critical";
-  asset?: String;
-  suggestion?: String;
+  asset?: string;
+  suggestion?: string;
+  payload?: any;
 };
 
 export function useShadowAlertListener(): void {
   const addNotification = useUiStore((s) => s.addNotification);
+  const openPanicModal = useUiStore((s) => s.openPanicModal);
 
   useEffect(() => {
     const unsub = listen<ShadowAlertPayload>("shadow_alert", (event) => {
       const p = event.payload;
-      addNotification({
-        title: String(p.title),
-        description: `${p.message}${p.suggestion ? ` Suggestion: ${p.suggestion}` : ""}`,
-        type: p.severity === "critical" ? "warning" : p.severity === "warning" ? "warning" : "info",
-        createdAtLabel: "Just now",
-        route: "/agent",
-      });
+      
+      if (p.severity === "critical") {
+        openPanicModal({
+          totalValueAtRisk: "$12,450.00",
+          routes: [
+            { fromToken: p.asset || "ETH", toToken: "USDC", chain: "Base", estimatedGasUsd: "$1.50" }
+          ]
+        });
+      } else {
+        addNotification({
+          title: String(p.title),
+          description: `${p.message}${p.suggestion ? ` Suggestion: ${p.suggestion}` : ""}`,
+          type: p.severity === "warning" ? "warning" : "info",
+          createdAtLabel: "Just now",
+          route: "/agent",
+          payload: p.payload,
+          toolName: p.payload ? "execute_token_swap" : undefined,
+        });
+      }
     });
 
     return () => {
       unsub.then((fn) => fn());
     };
-  }, [addNotification]);
+  }, [addNotification, openPanicModal]);
 }

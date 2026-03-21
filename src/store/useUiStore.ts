@@ -14,6 +14,10 @@ export type NotificationItem = {
   unread: boolean;
   /** Route to open in main content when the notification is clicked (e.g. /automation, /agent). */
   route?: string;
+  /** Optional execution payload for actionable signals. */
+  payload?: any;
+  /** The tool name associated with the payload. */
+  toolName?: string;
 };
 
 type PortfolioActionState = {
@@ -32,6 +36,10 @@ type UiStore = {
   skippedApprovalStrategyIds: string[];
   notifications: NotificationItem[];
   lastAddedNotificationId: string | null;
+  activeSignalPayload: any | null;
+  activeSignalToolName: string | null;
+  isPanicModalOpen: boolean;
+  panicRouteData: any | null;
   togglePrivacyMode: () => void;
   toggleDeveloperMode: () => void;
   openSidebar: () => void;
@@ -51,6 +59,9 @@ type UiStore = {
   archiveNotification: (id: string) => void;
   archiveAllNotifications: () => void;
   clearLastAddedNotification: () => void;
+  openSignalApproval: (toolName: string, payload: any) => void;
+  openPanicModal: (data: any) => void;
+  closePanicModal: () => void;
 };
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
@@ -66,6 +77,10 @@ const DEFAULT_STATE = {
   skippedApprovalStrategyIds: [] as string[],
   notifications: INITIAL_NOTIFICATIONS,
   lastAddedNotificationId: null as string | null,
+  activeSignalPayload: null,
+  activeSignalToolName: null,
+  isPanicModalOpen: false,
+  panicRouteData: null,
 };
 
 export const useUiStore = create<UiStore>()(
@@ -80,7 +95,7 @@ export const useUiStore = create<UiStore>()(
       closeSidebar: () => set({ isSidebarOpen: false }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
       setPendingApproval: (approvalId) => set({ pendingApprovalId: approvalId }),
-      clearPendingApproval: () => set({ pendingApprovalId: null }),
+      clearPendingApproval: () => set({ pendingApprovalId: null, activeSignalPayload: null, activeSignalToolName: null }),
       setThemePreference: (themePreference) => set({ themePreference }),
       openCommandPalette: () => set({ isCommandPaletteOpen: true }),
       closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
@@ -125,6 +140,9 @@ export const useUiStore = create<UiStore>()(
         set({ notifications: [], lastAddedNotificationId: null }),
       clearLastAddedNotification: () =>
         set({ lastAddedNotificationId: null }),
+      openSignalApproval: (toolName, payload) => set({ activeSignalToolName: toolName, activeSignalPayload: payload, pendingApprovalId: "signal-action" }),
+      openPanicModal: (data) => set({ isPanicModalOpen: true, panicRouteData: data }),
+      closePanicModal: () => set({ isPanicModalOpen: false, panicRouteData: null }),
     }),
     {
       name: "shadow-ui-store",
