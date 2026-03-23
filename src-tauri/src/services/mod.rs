@@ -1,7 +1,9 @@
 pub mod agent_chat;
+pub mod agent_state;
 pub mod anonymizer;
 pub mod chain;
 pub mod local_db;
+pub mod heartbeat;
 pub mod wallet_sync;
 pub mod ollama_client;
 pub mod portfolio_service;

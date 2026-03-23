@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use super::ollama_client;
 use super::tool_router::{self, AgentContext, ToolResult};
+use super::agent_state::{read_soul, read_memory};
+use tauri::AppHandle;
 
 const MAX_TOOL_ROUNDS: u32 = 5;
 
@@ -164,7 +166,7 @@ fn build_approval_message(tool_name: &str, payload: &serde_json::Value) -> Strin
     }
 }
 
-pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, String> {
+pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAgentResponse, String> {
     let wallet = input.wallet_address.as_deref();
     let wallet_addresses: Vec<String> = input
         .wallet_addresses
@@ -188,7 +190,29 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
         all_addresses: wallet_addresses.clone(),
     };
 
-    let tools_prompt = tool_router::tools_system_prompt(&agent_ctx);
+    let base_tools_prompt = tool_router::tools_system_prompt(&agent_ctx);
+    
+    // Inject Soul and Memory
+    let soul = read_soul(app).unwrap_or_default();
+    let memory = read_memory(app).unwrap_or_default();
+    
+    let mut memory_facts = String::new();
+    if !memory.facts.is_empty() {
+        memory_facts.push_str("\n\nUser Profile & Memory Facts:\n");
+        for fact in memory.facts {
+            memory_facts.push_str(&format!("- {}\n", fact.fact));
+        }
+    }
+
+    let tools_prompt = format!(
+        "{}\n\nAgent Soul / Persona:\n{}\nRisk Appetite: {}\nPreferred Chains: {}{}",
+        base_tools_prompt,
+        soul.persona,
+        soul.risk_appetite,
+        soul.preferred_chains.join(", "),
+        memory_facts
+    );
+
     let mut built_messages: Vec<(String, String)> = vec![("system".into(), tools_prompt)];
     
     // Add existing conversation history
@@ -221,45 +245,55 @@ pub async fn run_agent(input: ChatAgentInput) -> Result<ChatAgentResponse, Strin
         // Add the assistant's "Thought" or "Tool Call" to the history
         built_messages.push(("assistant".into(), response.clone()));
 
-        let result = tool_router::route_and_execute(&response, wallet, &wallet_addresses).await?;
+        let results = tool_router::route_and_execute(&response, wallet, &wallet_addresses).await?;
 
-        match result {
-            ToolResult::AssistantMessage { content } => {
-                // This is the final answer or a plain text response
-                blocks.push(ResponseBlock::Text { content: content.clone() });
-                return Ok(ChatAgentResponse::AssistantMessage {
-                    content,
-                    blocks,
-                });
-            }
-            ToolResult::ToolOutput { tool_name, content } => {
-                // Format for the user to see
-                let summary = format_tool_result(&tool_name, &content);
-                blocks.push(ResponseBlock::Text { content: summary.clone() });
-                blocks.push(ResponseBlock::ToolResult {
-                    tool_name: tool_name.clone(),
-                    content: content.clone(),
-                });
+        let mut has_tools = false;
+        let mut final_content = String::new();
 
-                // Add observation to LLM history for next turn
-                let observation = format!("Observation from {}: {}", tool_name, content);
-                built_messages.push(("user".into(), observation));
-                
-                // Continue loop for next "Thought"
+        for result in results {
+            match result {
+                ToolResult::AssistantMessage { content } => {
+                    blocks.push(ResponseBlock::Text { content: content.clone() });
+                    if final_content.is_empty() {
+                        final_content = content;
+                    } else {
+                        final_content = format!("{}\n\n{}", final_content, content);
+                    }
+                }
+                ToolResult::ToolOutput { tool_name, content } => {
+                    has_tools = true;
+                    let summary = format_tool_result(&tool_name, &content);
+                    blocks.push(ResponseBlock::Text { content: summary.clone() });
+                    blocks.push(ResponseBlock::ToolResult {
+                        tool_name: tool_name.clone(),
+                        content: content.clone(),
+                    });
+
+                    let observation = format!("Observation from {}: {}", tool_name, content);
+                    built_messages.push(("user".into(), observation));
+                }
+                ToolResult::ApprovalRequired { tool_name, payload } => {
+                    let message = build_approval_message(&tool_name, &payload);
+                    return Ok(ChatAgentResponse::ApprovalRequired {
+                        tool_name,
+                        payload,
+                        message,
+                    });
+                }
+                ToolResult::Error { message } => {
+                    has_tools = true;
+                    let error_msg = format!("Tool error: {}", message);
+                    built_messages.push(("user".into(), error_msg.clone()));
+                    blocks.push(ResponseBlock::Text { content: error_msg });
+                }
             }
-            ToolResult::ApprovalRequired { tool_name, payload } => {
-                let message = build_approval_message(&tool_name, &payload);
-                return Ok(ChatAgentResponse::ApprovalRequired {
-                    tool_name,
-                    payload,
-                    message,
-                });
-            }
-            ToolResult::Error { message } => {
-                let error_msg = format!("Tool error: {}", message);
-                built_messages.push(("user".into(), error_msg));
-                // Allow the LLM to try to recover or explain the error
-            }
+        }
+
+        if !has_tools {
+            return Ok(ChatAgentResponse::AssistantMessage {
+                content: if final_content.is_empty() { response } else { final_content },
+                blocks,
+            });
         }
     }
 }
