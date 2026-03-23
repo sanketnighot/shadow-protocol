@@ -28,10 +28,10 @@ export function AgentChat() {
   }, [messages, isStreaming]);
 
   return (
-    <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-border bg-surface shadow-none border border-white/5">
+    <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-surface shadow-none border-white/5">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,color-mix(in_srgb,var(--accent-purple)_10%,transparent),transparent_50%)]" />
 
-      <div className="relative z-10 shrink-0 border-b border-border bg-white/[0.02] px-5 py-4 sm:px-6 sm:py-5 backdrop-blur-md">
+      <div className="relative z-10 shrink-0 border-b border-border bg-white/2 px-5 py-4 sm:px-6 sm:py-5 backdrop-blur-md">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             <p className="font-mono text-[11px] font-semibold tracking-[0.2em] text-primary uppercase flex items-center gap-2">

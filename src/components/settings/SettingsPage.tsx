@@ -4,6 +4,7 @@ import { Key, Save, Trash2, Cpu, AlertTriangle } from "lucide-react";
 
 import packageJson from "../../../package.json";
 import { ModelSelector } from "@/components/ModelSelector";
+import { AgentGovernance } from "@/components/settings/AgentGovernance";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -481,6 +482,8 @@ export function SettingsPage() {
           </Button>
         </section>
       </div>
+
+      <AgentGovernance />
 
       <section className="glass-panel rounded-sm p-5 sm:p-6">
         <h2 className="text-xl font-semibold text-foreground">About</h2>

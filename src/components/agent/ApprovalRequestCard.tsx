@@ -1,6 +1,14 @@
-import { ArrowRight, CheckCircle, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle, XCircle, Settings2 } from "lucide-react";
 
 import type { SwapPreviewPayload } from "@/types/agent";
+
+type StrategyProposal = {
+  name: string;
+  summary: string;
+  trigger: any;
+  action: any;
+  guardrails: any;
+};
 
 type ApprovalRequestCardProps = {
   toolName: string;
@@ -29,14 +37,15 @@ export function ApprovalRequestCard({
   isPending,
 }: ApprovalRequestCardProps) {
   const name = toolName ?? "";
-  const swap = payload as SwapPreviewPayload | null;
-  const isSwap = name === "execute_token_swap" && swap;
+  
+  const swap = name === "execute_token_swap" ? (payload as SwapPreviewPayload) : null;
+  const strategy = name === "create_automation_strategy" ? (payload as StrategyProposal) : null;
 
   return (
     <div className="rounded-sm border border-border bg-surface-elevated p-4 shadow-none border border-white/5">
       <p className="mb-4 text-sm leading-6 text-foreground/85">{message}</p>
 
-      {isSwap && (
+      {swap && (
         <div className="mb-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-primary/15 px-2 py-1 text-sm font-semibold text-primary">
@@ -52,6 +61,26 @@ export function ApprovalRequestCard({
             <SwapDetail label="Slippage" value={swap.slippage} />
             <SwapDetail label="Est. Gas" value={swap.gasEstimate} />
             <SwapDetail label="Est. Output" value={`${swap.estimatedOutput} ${swap.toToken}`} />
+          </div>
+        </div>
+      )}
+
+      {strategy && (
+        <div className="mb-4 rounded-sm border border-border bg-secondary/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Settings2 className="size-4 text-primary" />
+            <span className="text-sm font-bold text-foreground">{strategy.name}</span>
+          </div>
+          <p className="text-xs text-muted leading-relaxed">{strategy.summary}</p>
+          <div className="mt-3 grid grid-cols-1 gap-2">
+             <div className="rounded-sm bg-black/20 p-2">
+                <p className="font-mono text-[8px] uppercase tracking-tighter text-muted-foreground mb-1">Trigger</p>
+                <p className="text-[10px] text-foreground/80 truncate">{JSON.stringify(strategy.trigger)}</p>
+             </div>
+             <div className="rounded-sm bg-black/20 p-2">
+                <p className="font-mono text-[8px] uppercase tracking-tighter text-muted-foreground mb-1">Action</p>
+                <p className="text-[10px] text-foreground/80 truncate">{JSON.stringify(strategy.action)}</p>
+             </div>
           </div>
         </div>
       )}

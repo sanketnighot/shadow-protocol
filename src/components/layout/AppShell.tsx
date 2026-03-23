@@ -24,6 +24,7 @@ import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
 import { useTxConfirmationListener, useWalletSyncListeners, useShadowAlertListener } from "@/store/useWalletSyncStore";
+import { useShadowHeartbeat } from "@/hooks/useShadowHeartbeat";
 
 type SessionStatusResult = { locked: boolean; expiresAtSecs?: number };
 
@@ -74,6 +75,7 @@ export function AppShell() {
   useWalletSyncListeners();
   useTxConfirmationListener();
   useShadowAlertListener();
+  useShadowHeartbeat();
 
   useEffect(() => {
     const checkOllama = async () => {
