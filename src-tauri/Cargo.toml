@@ -37,4 +37,5 @@ sysinfo = "0.32"
 dotenvy = "0.15"
 rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.22.0", features = ["v4"] }
 

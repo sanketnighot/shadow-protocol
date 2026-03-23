@@ -73,3 +73,21 @@ export type ApproveAgentActionResult = {
   message: string;
   txHash?: string | null;
 };
+
+export type AgentSoul = {
+  risk_appetite: string;
+  preferred_chains: string[];
+  persona: string;
+  custom_rules: string[];
+};
+
+export type AgentMemoryItem = {
+  id: string;
+  fact: string;
+  created_at: number;
+};
+
+export type AgentMemory = {
+  facts: AgentMemoryItem[];
+};
+

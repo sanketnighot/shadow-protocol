@@ -32,3 +32,25 @@ export async function approveAgentAction(
     },
   });
 }
+
+import type { AgentSoul, AgentMemory, AgentMemoryItem } from "@/types/agent";
+
+export async function getAgentSoul(): Promise<AgentSoul> {
+  return invoke<AgentSoul>("get_agent_soul");
+}
+
+export async function updateAgentSoul(soul: AgentSoul): Promise<void> {
+  return invoke<void>("update_agent_soul", { soul });
+}
+
+export async function getAgentMemory(): Promise<AgentMemory> {
+  return invoke<AgentMemory>("get_agent_memory");
+}
+
+export async function addAgentMemory(fact: string): Promise<AgentMemoryItem> {
+  return invoke<AgentMemoryItem>("add_agent_memory", { fact });
+}
+
+export async function removeAgentMemory(id: string): Promise<void> {
+  return invoke<void>("remove_agent_memory", { id });
+}
