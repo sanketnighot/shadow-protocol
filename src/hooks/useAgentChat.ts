@@ -8,6 +8,8 @@ import {
   useAgentThreadStore,
 } from "@/store/useAgentThreadStore";
 import { useUiStore } from "@/store/useUiStore";
+import type { ApproveAgentActionResult } from "@/types/agent";
+import { useToast } from "@/hooks/useToast";
 
 export function useAgentChat() {
   const threads = useAgentThreadStore((state) => state.threads);
@@ -20,6 +22,7 @@ export function useAgentChat() {
     (state) => state.recordApprovalFollowUp,
   );
   const clearPendingApproval = useUiStore((state) => state.clearPendingApproval);
+  const { success, warning } = useToast();
 
   const activeThread = getActiveThread(threads, activeThreadId);
   const pendingAgentAction = getPendingAgentActionForApp(activeThread);
@@ -38,20 +41,27 @@ export function useAgentChat() {
     if (!pendingAgentAction || !activeThread) return;
     setIsApprovePending(true);
     try {
-      await invoke("approve_agent_action", {
+      const result = await invoke<ApproveAgentActionResult>("approve_agent_action", {
         input: {
           toolName: pendingAgentAction.toolName,
           payload: pendingAgentAction.payload,
         },
       });
-      recordApprovalFollowUp(activeThread.id, true);
-      clearPendingApproval();
-    } catch {
-      // error is surfaced in the UI by keeping the card visible; just reset pending state
+      
+      if (result.success) {
+        success("Action Approved", result.message);
+        recordApprovalFollowUp(activeThread.id, true);
+        clearPendingApproval();
+      } else {
+        warning("Action Failed", result.message);
+        // We don't record follow-up so the card stays visible for retry or manual action
+      }
+    } catch (err) {
+      warning("Error", String(err));
     } finally {
       setIsApprovePending(false);
     }
-  }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval]);
+  }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval, success, warning]);
 
   const rejectAction = useCallback(() => {
     if (!activeThread) return;
