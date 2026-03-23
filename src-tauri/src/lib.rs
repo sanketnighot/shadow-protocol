@@ -24,6 +24,7 @@ pub fn run() {
             services::shadow_watcher::start(handle.clone());
             services::harvester::start(handle.clone());
             services::alpha_service::start(handle.clone());
+            services::heartbeat::start(handle.clone());
 
             tauri::async_runtime::spawn(async move {
                 let addresses = commands::get_addresses(&handle);
@@ -86,6 +87,11 @@ pub fn run() {
             commands::start_ollama_service,
             commands::get_system_info,
             commands::delete_model,
+            commands::get_agent_soul,
+            commands::update_agent_soul,
+            commands::get_agent_memory,
+            commands::add_agent_memory,
+            commands::remove_agent_memory,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

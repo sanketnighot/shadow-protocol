@@ -1,3 +1,4 @@
+mod agent_state;
 mod chat;
 mod ollama_manager;
 mod portfolio;
@@ -7,6 +8,7 @@ mod transfer;
 mod wallet;
 mod wallet_sync;
 
+pub use agent_state::*;
 pub use chat::*;
 pub use ollama_manager::*;
 pub use portfolio::*;
