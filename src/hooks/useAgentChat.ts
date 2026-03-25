@@ -52,6 +52,9 @@ export function useAgentChat() {
         success("Action Approved", result.message);
         recordApprovalFollowUp(activeThread.id, true);
         clearPendingApproval();
+        
+        // Trigger agent follow-up turn (hidden from UI)
+        sendMessageFromStore(activeThread.id, `[SYSTEM: User APPROVED the action. Result: ${result.message}. IMPORTANT: The action is DONE. Do not suggest it again. Just provide a brief, friendly confirmation to the user that it was successful.]`, { hidden: true });
       } else {
         warning("Action Failed", result.message);
         // We don't record follow-up so the card stays visible for retry or manual action
@@ -61,13 +64,16 @@ export function useAgentChat() {
     } finally {
       setIsApprovePending(false);
     }
-  }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval, success, warning]);
+  }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval, success, warning, sendMessageFromStore]);
 
   const rejectAction = useCallback(() => {
     if (!activeThread) return;
     recordApprovalFollowUp(activeThread.id, false);
     clearPendingApproval();
-  }, [activeThread, recordApprovalFollowUp, clearPendingApproval]);
+    
+    // Trigger agent follow-up turn (hidden from UI)
+    sendMessageFromStore(activeThread.id, `[SYSTEM: User REJECTED the action. Please acknowledge gracefully and ask if there is anything else the user needs.]`, { hidden: true });
+  }, [activeThread, recordApprovalFollowUp, clearPendingApproval, sendMessageFromStore]);
 
   return {
     isStreaming: activeThread?.isStreaming ?? false,

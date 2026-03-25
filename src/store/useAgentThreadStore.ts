@@ -74,7 +74,11 @@ type AgentThreadStore = {
   activeThreadId: string | null;
   createThread: () => void;
   setActiveThreadId: (id: string | null) => void;
-  sendMessage: (threadId: string, content: string) => void;
+  sendMessage: (
+    threadId: string,
+    content: string,
+    metadata?: { hidden?: boolean },
+  ) => void;
   deleteThread: (id: string) => void;
   clearPendingApprovalForThread: (threadId: string) => void;
   recordApprovalFollowUp: (threadId: string, approved: boolean) => void;
@@ -138,7 +142,7 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
         set({ activeThreadId: id });
       },
 
-      sendMessage: (threadId, content) => {
+      sendMessage: (threadId, content, metadata) => {
         const trimmedContent = content.trim();
         if (trimmedContent.length === 0) return;
 
@@ -146,6 +150,7 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
           id: `user-${crypto.randomUUID()}`,
           role: "user",
           blocks: [{ type: "text", content: trimmedContent }],
+          metadata,
         };
         const agentMessageId = `agent-${crypto.randomUUID()}`;
         const now = Date.now();

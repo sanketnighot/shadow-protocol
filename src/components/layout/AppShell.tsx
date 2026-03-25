@@ -261,7 +261,7 @@ export function AppShell() {
             initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-sm border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success shadow-none border border-white/5"
+            className="pointer-events-none fixed right-5 bottom-5 z-50 rounded-sm border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success shadow-none"
           >
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="size-4" />

@@ -53,7 +53,9 @@ export function AgentChat() {
         <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-20 sm:pb-24">
           {messages.length > 0 ? (
             <>
-              {messages.map((message, index) => (
+              {messages
+                .filter((m) => !m.metadata?.hidden)
+                .map((message, index) => (
                 <motion.div
                   key={message.id}
                   ref={

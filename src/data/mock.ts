@@ -72,6 +72,9 @@ export type AgentMessage = {
   id: string;
   role: "user" | "agent";
   blocks: AgentMessageBlock[];
+  metadata?: {
+    hidden?: boolean;
+  };
 };
 
 export type ApprovalTransaction = {
