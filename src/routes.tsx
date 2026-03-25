@@ -8,6 +8,7 @@ import { MarketView } from "@/components/market/MarketView";
 import { PortfolioView } from "@/components/portfolio/PortfolioView";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { StrategyBuilder } from "@/components/strategy/StrategyBuilder";
+import { AppsMarketplace } from "@/components/apps/AppsMarketplace";
 
 export function createAppRouter() {
   return createHashRouter([
@@ -21,6 +22,7 @@ export function createAppRouter() {
         { path: "automation", element: <AutomationCenter /> },
         { path: "market", element: <MarketView /> },
         { path: "portfolio", element: <PortfolioView /> },
+        { path: "apps", element: <AppsMarketplace /> },
         { path: "settings", element: <SettingsPage /> },
       ],
     },

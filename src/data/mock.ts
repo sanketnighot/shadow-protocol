@@ -151,6 +151,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/agent", label: "Agent", description: "DeFi intelligence" },
   // { href: "/strategy", label: "Strategy", description: "Builder canvas" },
   { href: "/automation", label: "Auto", description: "Running systems" },
+  { href: "/apps", label: "Apps", description: "Agent capabilities" },
   { href: "/market", label: "Market", description: "Opportunities & yields" },
   { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },
   { href: "/settings", label: "Account", description: "Profile & preferences" },
@@ -182,7 +183,8 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 export const AGENT_SUGGESTION: AgentSuggestion = {
   title: "Arbitrage opportunity on Base",
-  summary: "Base WETH pricing diverged 1.8% from Arbitrum with enough liquidity to act safely.",
+  summary:
+    "Base WETH pricing diverged 1.8% from Arbitrum with enough liquidity to act safely.",
   actionLabel: "Review details",
 };
 
@@ -198,7 +200,8 @@ export const AGENT_MESSAGES: AgentMessage[] = [
     blocks: [
       {
         type: "text",
-        content: "Analyzing 127 pools across 8 chains with your risk guardrails applied.",
+        content:
+          "Analyzing 127 pools across 8 chains with your risk guardrails applied.",
       },
       {
         type: "opportunity",
@@ -210,7 +213,8 @@ export const AGENT_MESSAGES: AgentMessage[] = [
       },
       {
         type: "text",
-        content: "Would you like me to execute option 1 or surface two higher-risk alternatives?",
+        content:
+          "Would you like me to execute option 1 or surface two higher-risk alternatives?",
       },
     ],
   },
@@ -224,7 +228,8 @@ export const PENDING_APPROVAL_TX: ApprovalTransaction = {
   chain: "Arbitrum",
   slippage: "0.5%",
   gas: "~$0.42",
-  reason: "ETH price dipped below your target $2,850. Executing DCA strategy as planned.",
+  reason:
+    "ETH price dipped below your target $2,850. Executing DCA strategy as planned.",
   executionWindow: "30 seconds",
 };
 
@@ -241,7 +246,8 @@ export const ACTIVE_STRATEGIES: ActiveStrategy[] = [
   {
     id: "arb-hunter",
     name: "Arbitrage Hunter",
-    summary: "Monitors Base and Arbitrum routing for spread-based opportunities.",
+    summary:
+      "Monitors Base and Arbitrum routing for spread-based opportunities.",
     nextRun: "Live monitoring",
     executedCount: 3,
     progress: 42,
@@ -250,7 +256,8 @@ export const ACTIVE_STRATEGIES: ActiveStrategy[] = [
   {
     id: "privacy-rebalance",
     name: "Privacy Rebalance",
-    summary: "Keeps stablecoin exposure between 35% and 45% with approval guardrails.",
+    summary:
+      "Keeps stablecoin exposure between 35% and 45% with approval guardrails.",
     nextRun: "Tomorrow 8:30 AM",
     executedCount: 8,
     progress: 81,
@@ -262,7 +269,8 @@ export const MARKET_OPPORTUNITIES: MarketOpportunity[] = [
   {
     id: "market-aave-arb",
     title: "Aave V3 on Arbitrum",
-    summary: "Low-risk USDC lending with strong liquidity and stable utilization.",
+    summary:
+      "Low-risk USDC lending with strong liquidity and stable utilization.",
     apy: "4.2%",
     tvl: "$1.2B",
     risk: "Low",
@@ -273,7 +281,8 @@ export const MARKET_OPPORTUNITIES: MarketOpportunity[] = [
   {
     id: "market-base-spread",
     title: "WETH spread on Base",
-    summary: "Temporary 1.8% divergence versus Arbitrum routing with room to execute privately.",
+    summary:
+      "Temporary 1.8% divergence versus Arbitrum routing with room to execute privately.",
     apy: "1.8%",
     tvl: "$82M",
     risk: "Medium",
@@ -284,7 +293,8 @@ export const MARKET_OPPORTUNITIES: MarketOpportunity[] = [
   {
     id: "market-stable-rebalance",
     title: "Stablecoin rebalance",
-    summary: "Reduce Solana USDC concentration and restore your 40% stablecoin target.",
+    summary:
+      "Reduce Solana USDC concentration and restore your 40% stablecoin target.",
     apy: "Policy",
     tvl: "$12.3k",
     risk: "Low",

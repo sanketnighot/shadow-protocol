@@ -1,4 +1,5 @@
 import {
+  Blocks,
   Bot,
   Compass,
   Home,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const NAV_ICONS: Record<string, typeof Home> = {
   "/": Home,
   "/agent": Bot,
+  "/apps": Blocks,
   "/strategy": Sparkles,
   "/automation": Zap,
   "/market": Compass,
