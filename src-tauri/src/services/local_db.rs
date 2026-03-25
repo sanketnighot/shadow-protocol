@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS active_strategies (
   next_run_at INTEGER,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS command_log (
+  id TEXT PRIMARY KEY,
+  tool_name TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  result_message TEXT NOT NULL,
+  status TEXT NOT NULL, -- 'approved', 'rejected', 'failed'
+  created_at INTEGER NOT NULL
+);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -317,6 +326,56 @@ pub fn get_strategies() -> Result<Vec<ActiveStrategy>, DbError> {
                 guardrails_json: row.get(6)?,
                 last_run_at: row.get(7)?,
                 next_run_at: row.get(8)?,
+            })
+        })?;
+
+        let mut all = Vec::new();
+        for r in rows {
+            all.push(r?);
+        }
+        Ok(all)
+    })
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandLogEntry {
+    pub id: String,
+    pub tool_name: String,
+    pub payload_json: String,
+    pub result_message: String,
+    pub status: String,
+    pub created_at: i64,
+}
+
+pub fn insert_command_log(entry: &CommandLogEntry) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO command_log (id, tool_name, payload_json, result_message, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                entry.id,
+                entry.tool_name,
+                entry.payload_json,
+                entry.result_message,
+                entry.status,
+                entry.created_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_command_log(limit: u32) -> Result<Vec<CommandLogEntry>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT id, tool_name, payload_json, result_message, status, created_at FROM command_log ORDER BY created_at DESC LIMIT ?1")?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(CommandLogEntry {
+                id: row.get(0)?,
+                tool_name: row.get(1)?,
+                payload_json: row.get(2)?,
+                result_message: row.get(3)?,
+                status: row.get(4)?,
+                created_at: row.get(5)?,
             })
         })?;
 

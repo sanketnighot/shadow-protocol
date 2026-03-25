@@ -41,6 +41,7 @@ pub enum ChatAgentResponse {
         blocks: Vec<ResponseBlock>,
     },
     ApprovalRequired {
+        #[serde(rename = "toolName")]
         tool_name: String,
         payload: serde_json::Value,
         message: String,

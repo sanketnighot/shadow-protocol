@@ -92,6 +92,7 @@ pub fn run() {
             commands::get_agent_memory,
             commands::add_agent_memory,
             commands::remove_agent_memory,
+            commands::get_command_log,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

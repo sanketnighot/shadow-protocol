@@ -3,6 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
+use crate::services::local_db::{CommandLogEntry, insert_command_log, get_command_log as db_get_command_log};
+
+#[tauri::command]
+pub async fn get_command_log(limit: u32) -> Result<Vec<CommandLogEntry>, String> {
+    db_get_command_log(limit).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn chat_agent(app: tauri::AppHandle, input: agent_chat::ChatAgentInput) -> Result<ChatAgentResponse, String> {
@@ -17,6 +23,7 @@ pub async fn chat_agent(app: tauri::AppHandle, input: agent_chat::ChatAgentInput
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApproveAgentActionInput {
+    #[serde(rename = "toolName")]
     pub tool_name: String,
     pub payload: serde_json::Value,
 }
@@ -32,21 +39,20 @@ pub struct ApproveAgentActionResult {
 #[tauri::command]
 pub async fn approve_agent_action(input: ApproveAgentActionInput) -> Result<ApproveAgentActionResult, String> {
     let tool_name = input.tool_name.trim();
+    let log_id = uuid::Uuid::new_v4().to_string();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
     
-    if tool_name == "execute_token_swap" {
+    let result = if tool_name == "execute_token_swap" {
         // Phase 1: Swap execution not yet connected to a DEX/router.
         // Approval flow is validated; execution is Phase 2.
-        let _ = input.payload;
-        return Ok(ApproveAgentActionResult {
+        ApproveAgentActionResult {
             success: false,
             message: "Swap execution is not yet implemented. Use Portfolio to transfer or swap manually."
                 .to_string(),
             tx_hash: None,
-        });
-    }
-
-    if tool_name == "create_automation_strategy" {
-        let payload = input.payload;
+        }
+    } else if tool_name == "create_automation_strategy" {
+        let payload = &input.payload;
         let id = uuid::Uuid::new_v4().to_string();
         let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Strategy").to_string();
         let summary = payload.get("summary").and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -64,21 +70,39 @@ pub async fn approve_agent_action(input: ApproveAgentActionInput) -> Result<Appr
             action_json,
             guardrails_json,
             last_run_at: None,
-            next_run_at: None,
+            next_run_at: Some(now), // Run immediately on next heartbeat
         };
 
-        crate::services::local_db::upsert_strategy(&strategy).map_err(|e| e.to_string())?;
-
-        return Ok(ApproveAgentActionResult {
-            success: true,
-            message: format!("Strategy '{}' has been created and is now active.", strategy.name),
+        match crate::services::local_db::upsert_strategy(&strategy) {
+            Ok(_) => ApproveAgentActionResult {
+                success: true,
+                message: format!("Strategy '{}' has been created and is now active.", strategy.name),
+                tx_hash: None,
+            },
+            Err(e) => ApproveAgentActionResult {
+                success: false,
+                message: format!("Failed to save strategy: {}", e),
+                tx_hash: None,
+            }
+        }
+    } else {
+        ApproveAgentActionResult {
+            success: false,
+            message: format!("Unknown or unsupported tool: {tool_name}"),
             tx_hash: None,
-        });
-    }
+        }
+    };
 
-    Ok(ApproveAgentActionResult {
-        success: false,
-        message: format!("Unknown or unsupported tool: {tool_name}"),
-        tx_hash: None,
-    })
+    // Log the command result
+    let log_entry = CommandLogEntry {
+        id: log_id,
+        tool_name: tool_name.to_string(),
+        payload_json: input.payload.to_string(),
+        result_message: result.message.clone(),
+        status: if result.success { "approved" } else { "failed" }.to_string(),
+        created_at: now,
+    };
+    let _ = insert_command_log(&log_entry);
+
+    Ok(result)
 }
