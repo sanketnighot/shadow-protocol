@@ -5,6 +5,7 @@ mod ollama_manager;
 mod portfolio;
 mod session;
 mod settings;
+pub mod strategy;
 mod transfer;
 mod wallet;
 mod wallet_sync;

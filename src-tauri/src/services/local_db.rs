@@ -82,10 +82,18 @@ CREATE TABLE IF NOT EXISTS active_strategies (
   name TEXT NOT NULL,
   summary TEXT,
   status TEXT NOT NULL,
+  template TEXT NOT NULL DEFAULT 'dca_buy',
   mode TEXT NOT NULL DEFAULT 'approval_required',
+  version INTEGER NOT NULL DEFAULT 1,
   trigger_json TEXT NOT NULL,
   action_json TEXT NOT NULL,
   guardrails_json TEXT NOT NULL,
+  draft_graph_json TEXT NOT NULL DEFAULT '{}',
+  compiled_plan_json TEXT NOT NULL DEFAULT '{}',
+  validation_state TEXT NOT NULL DEFAULT 'invalid',
+  last_simulation_json TEXT,
+  last_execution_status TEXT,
+  last_execution_reason TEXT,
   approval_policy_json TEXT NOT NULL DEFAULT '{}',
   execution_policy_json TEXT NOT NULL DEFAULT '{}',
   failure_count INTEGER NOT NULL DEFAULT 0,
@@ -93,7 +101,8 @@ CREATE TABLE IF NOT EXISTS active_strategies (
   disabled_reason TEXT,
   last_run_at INTEGER,
   next_run_at INTEGER,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS command_log (
@@ -142,6 +151,20 @@ CREATE TABLE IF NOT EXISTS tool_executions (
 
 CREATE INDEX IF NOT EXISTS idx_tool_executions_status ON tool_executions(status);
 CREATE INDEX IF NOT EXISTS idx_tool_executions_created_at ON tool_executions(created_at);
+
+CREATE TABLE IF NOT EXISTS strategy_executions (
+  id TEXT PRIMARY KEY,
+  strategy_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT,
+  evaluation_json TEXT NOT NULL,
+  approval_id TEXT,
+  tool_execution_id TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_executions_strategy_id ON strategy_executions(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_strategy_executions_created_at ON strategy_executions(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
@@ -235,11 +258,20 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
     ensure_column(conn, "portfolio_snapshots", "performance_usd", "TEXT NOT NULL DEFAULT '0.00'")?;
 
     ensure_column(conn, "active_strategies", "mode", "TEXT NOT NULL DEFAULT 'approval_required'")?;
+    ensure_column(conn, "active_strategies", "template", "TEXT NOT NULL DEFAULT 'dca_buy'")?;
+    ensure_column(conn, "active_strategies", "version", "INTEGER NOT NULL DEFAULT 1")?;
     ensure_column(conn, "active_strategies", "approval_policy_json", "TEXT NOT NULL DEFAULT '{}'")?;
     ensure_column(conn, "active_strategies", "execution_policy_json", "TEXT NOT NULL DEFAULT '{}'")?;
+    ensure_column(conn, "active_strategies", "draft_graph_json", "TEXT NOT NULL DEFAULT '{}'")?;
+    ensure_column(conn, "active_strategies", "compiled_plan_json", "TEXT NOT NULL DEFAULT '{}'")?;
+    ensure_column(conn, "active_strategies", "validation_state", "TEXT NOT NULL DEFAULT 'invalid'")?;
+    ensure_column(conn, "active_strategies", "last_simulation_json", "TEXT")?;
+    ensure_column(conn, "active_strategies", "last_execution_status", "TEXT")?;
+    ensure_column(conn, "active_strategies", "last_execution_reason", "TEXT")?;
     ensure_column(conn, "active_strategies", "failure_count", "INTEGER NOT NULL DEFAULT 0")?;
     ensure_column(conn, "active_strategies", "last_evaluation_at", "INTEGER")?;
     ensure_column(conn, "active_strategies", "disabled_reason", "TEXT")?;
+    ensure_column(conn, "active_strategies", "updated_at", "INTEGER")?;
     Ok(())
 }
 
@@ -380,6 +412,7 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM active_strategies", [])?;
         conn.execute("DELETE FROM approval_requests", [])?;
         conn.execute("DELETE FROM tool_executions", [])?;
+        conn.execute("DELETE FROM strategy_executions", [])?;
         conn.execute("DELETE FROM audit_log", [])?;
         conn.execute("DELETE FROM market_opportunities", [])?;
         conn.execute("DELETE FROM market_provider_runs", [])?;
@@ -437,33 +470,55 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
             r#"
-            INSERT INTO active_strategies (id, name, summary, status, mode, trigger_json, action_json, guardrails_json, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at, disabled_reason, last_run_at, next_run_at, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+            INSERT INTO active_strategies (
+              id, name, summary, status, template, mode, version, trigger_json, action_json, guardrails_json,
+              draft_graph_json, compiled_plan_json, validation_state, last_simulation_json, last_execution_status,
+              last_execution_reason, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at,
+              disabled_reason, last_run_at, next_run_at, created_at, updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               summary = excluded.summary,
               status = excluded.status,
+              template = excluded.template,
               mode = excluded.mode,
+              version = excluded.version,
               trigger_json = excluded.trigger_json,
               action_json = excluded.action_json,
               guardrails_json = excluded.guardrails_json,
+              draft_graph_json = excluded.draft_graph_json,
+              compiled_plan_json = excluded.compiled_plan_json,
+              validation_state = excluded.validation_state,
+              last_simulation_json = excluded.last_simulation_json,
+              last_execution_status = excluded.last_execution_status,
+              last_execution_reason = excluded.last_execution_reason,
               approval_policy_json = excluded.approval_policy_json,
               execution_policy_json = excluded.execution_policy_json,
               failure_count = excluded.failure_count,
               last_evaluation_at = excluded.last_evaluation_at,
               disabled_reason = excluded.disabled_reason,
               last_run_at = excluded.last_run_at,
-              next_run_at = excluded.next_run_at
+              next_run_at = excluded.next_run_at,
+              updated_at = excluded.updated_at
             "#,
             params![
                 strategy.id,
                 strategy.name,
                 strategy.summary,
                 strategy.status,
+                strategy.template,
                 strategy.mode,
+                strategy.version,
                 strategy.trigger_json,
                 strategy.action_json,
                 strategy.guardrails_json,
+                strategy.draft_graph_json,
+                strategy.compiled_plan_json,
+                strategy.validation_state,
+                strategy.last_simulation_json,
+                strategy.last_execution_status,
+                strategy.last_execution_reason,
                 strategy.approval_policy_json,
                 strategy.execution_policy_json,
                 strategy.failure_count,
@@ -471,6 +526,7 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
                 strategy.disabled_reason,
                 strategy.last_run_at,
                 strategy.next_run_at,
+                now,
                 now,
             ],
         )?;
@@ -482,24 +538,33 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
 #[allow(dead_code)]
 pub fn get_strategies() -> Result<Vec<ActiveStrategy>, DbError> {
     with_connection(|conn| {
-        let mut stmt = conn.prepare("SELECT id, name, summary, status, mode, trigger_json, action_json, guardrails_json, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at, disabled_reason, last_run_at, next_run_at FROM active_strategies")?;
+        let mut stmt = conn.prepare("SELECT id, name, summary, status, template, mode, version, trigger_json, action_json, guardrails_json, draft_graph_json, compiled_plan_json, validation_state, last_simulation_json, last_execution_status, last_execution_reason, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at, disabled_reason, last_run_at, next_run_at, updated_at FROM active_strategies")?;
         let rows = stmt.query_map([], |row| {
             Ok(ActiveStrategy {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 summary: row.get(2)?,
                 status: row.get(3)?,
-                mode: row.get(4)?,
-                trigger_json: row.get(5)?,
-                action_json: row.get(6)?,
-                guardrails_json: row.get(7)?,
-                approval_policy_json: row.get(8)?,
-                execution_policy_json: row.get(9)?,
-                failure_count: row.get(10)?,
-                last_evaluation_at: row.get(11)?,
-                disabled_reason: row.get(12)?,
-                last_run_at: row.get(13)?,
-                next_run_at: row.get(14)?,
+                template: row.get(4)?,
+                mode: row.get(5)?,
+                version: row.get(6)?,
+                trigger_json: row.get(7)?,
+                action_json: row.get(8)?,
+                guardrails_json: row.get(9)?,
+                draft_graph_json: row.get(10)?,
+                compiled_plan_json: row.get(11)?,
+                validation_state: row.get(12)?,
+                last_simulation_json: row.get(13)?,
+                last_execution_status: row.get(14)?,
+                last_execution_reason: row.get(15)?,
+                approval_policy_json: row.get(16)?,
+                execution_policy_json: row.get(17)?,
+                failure_count: row.get(18)?,
+                last_evaluation_at: row.get(19)?,
+                disabled_reason: row.get(20)?,
+                last_run_at: row.get(21)?,
+                next_run_at: row.get(22)?,
+                updated_at: row.get(23)?,
             })
         })?;
 
@@ -518,9 +583,14 @@ pub fn get_due_strategies(now: i64) -> Result<Vec<ActiveStrategy>, DbError> {
         .filter(|s| {
             s.status == "active"
                 && s.disabled_reason.is_none()
+                && s.validation_state == "valid"
                 && s.next_run_at.map(|next| next <= now).unwrap_or(true)
         })
         .collect())
+}
+
+pub fn get_strategy(id: &str) -> Result<Option<ActiveStrategy>, DbError> {
+    Ok(get_strategies()?.into_iter().find(|strategy| strategy.id == id))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -587,10 +657,18 @@ pub struct ActiveStrategy {
     pub name: String,
     pub summary: Option<String>,
     pub status: String,
+    pub template: String,
     pub mode: String,
+    pub version: i64,
     pub trigger_json: String,
     pub action_json: String,
     pub guardrails_json: String,
+    pub draft_graph_json: String,
+    pub compiled_plan_json: String,
+    pub validation_state: String,
+    pub last_simulation_json: Option<String>,
+    pub last_execution_status: Option<String>,
+    pub last_execution_reason: Option<String>,
     pub approval_policy_json: String,
     pub execution_policy_json: String,
     pub failure_count: i64,
@@ -598,6 +676,88 @@ pub struct ActiveStrategy {
     pub disabled_reason: Option<String>,
     pub last_run_at: Option<i64>,
     pub next_run_at: Option<i64>,
+    pub updated_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExecutionRecord {
+    pub id: String,
+    pub strategy_id: String,
+    pub status: String,
+    pub reason: Option<String>,
+    pub evaluation_json: String,
+    pub approval_id: Option<String>,
+    pub tool_execution_id: Option<String>,
+    pub created_at: i64,
+}
+
+pub fn insert_strategy_execution(record: &StrategyExecutionRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO strategy_executions (id, strategy_id, status, reason, evaluation_json, approval_id, tool_execution_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                record.id,
+                record.strategy_id,
+                record.status,
+                record.reason,
+                record.evaluation_json,
+                record.approval_id,
+                record.tool_execution_id,
+                record.created_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_strategy_executions(
+    strategy_id: Option<&str>,
+    limit: u32,
+) -> Result<Vec<StrategyExecutionRecord>, DbError> {
+    with_connection(|conn| {
+        let query = if strategy_id.is_some() {
+            "SELECT id, strategy_id, status, reason, evaluation_json, approval_id, tool_execution_id, created_at FROM strategy_executions WHERE strategy_id = ?1 ORDER BY created_at DESC LIMIT ?2"
+        } else {
+            "SELECT id, strategy_id, status, reason, evaluation_json, approval_id, tool_execution_id, created_at FROM strategy_executions ORDER BY created_at DESC LIMIT ?1"
+        };
+        let mut stmt = conn.prepare(query)?;
+        let mut out = Vec::new();
+        if let Some(strategy_id) = strategy_id {
+            let rows = stmt.query_map(params![strategy_id, limit], |row| {
+                Ok(StrategyExecutionRecord {
+                    id: row.get(0)?,
+                    strategy_id: row.get(1)?,
+                    status: row.get(2)?,
+                    reason: row.get(3)?,
+                    evaluation_json: row.get(4)?,
+                    approval_id: row.get(5)?,
+                    tool_execution_id: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?;
+            for row in rows {
+                out.push(row?);
+            }
+        } else {
+            let rows = stmt.query_map(params![limit], |row| {
+                Ok(StrategyExecutionRecord {
+                    id: row.get(0)?,
+                    strategy_id: row.get(1)?,
+                    status: row.get(2)?,
+                    reason: row.get(3)?,
+                    evaluation_json: row.get(4)?,
+                    approval_id: row.get(5)?,
+                    tool_execution_id: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?;
+            for row in rows {
+                out.push(row?);
+            }
+        }
+        Ok(out)
+    })
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

@@ -1,8 +1,16 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use super::audit;
-use super::local_db::{self, ActiveStrategy, ApprovalRecord};
+use crate::commands;
+use crate::services::audit;
+use crate::services::local_db::{
+    self, ActiveStrategy, ApprovalRecord, StrategyExecutionRecord, TokenRow,
+};
+use crate::services::strategy_scheduler;
+use crate::services::strategy_types::{
+    CompiledStrategyPlan, StrategyAction, StrategyCondition, StrategyConditionPreview,
+    StrategyExecutionPolicy, StrategyGuardrails, StrategyTrigger,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,12 +22,12 @@ pub struct StrategyEvaluationResult {
     pub approval_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApprovalPolicy {
-    pub mode: String,
-    pub max_amount_usd: Option<f64>,
-    pub require_above_amount_usd: Option<f64>,
+#[derive(Debug, Clone)]
+struct EvalContext {
+    now: i64,
+    total_portfolio_usd: f64,
+    latest_snapshot_age_secs: Option<i64>,
+    tokens: Vec<TokenRow>,
 }
 
 fn now_secs() -> i64 {
@@ -29,104 +37,581 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-fn parse_amount_usd(action: &serde_json::Value) -> Option<f64> {
-    action
-        .get("amount")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.replace('$', "").parse::<f64>().ok())
+fn parse_money(value: &str) -> f64 {
+    value.replace(['$', ','], "").trim().parse::<f64>().unwrap_or(0.0)
 }
 
-fn load_policy(strategy: &ActiveStrategy) -> ApprovalPolicy {
-    serde_json::from_str(&strategy.approval_policy_json).unwrap_or(ApprovalPolicy {
-        mode: "always_require".to_string(),
-        max_amount_usd: Some(5_000.0),
-        require_above_amount_usd: Some(0.0),
-    })
+fn parse_balance(value: &str) -> f64 {
+    value
+        .split_whitespace()
+        .next()
+        .unwrap_or("0")
+        .replace(',', "")
+        .parse::<f64>()
+        .unwrap_or(0.0)
 }
 
-pub fn evaluate_strategy(app: &AppHandle, strategy: &mut ActiveStrategy) -> Result<StrategyEvaluationResult, String> {
-    let now = now_secs();
-    strategy.last_evaluation_at = Some(now);
-    let action: serde_json::Value = serde_json::from_str(&strategy.action_json).unwrap_or_else(|_| serde_json::json!({}));
-    let policy = load_policy(strategy);
-    let amount_usd = parse_amount_usd(&action).unwrap_or(0.0);
+fn load_execution_policy(strategy: &ActiveStrategy) -> StrategyExecutionPolicy {
+    serde_json::from_str(&strategy.execution_policy_json).unwrap_or_default()
+}
 
-    if let Some(max_amount) = policy.max_amount_usd {
-        if amount_usd > max_amount {
-            strategy.failure_count += 1;
-            strategy.disabled_reason = Some("strategy_limit_exceeded".to_string());
-            strategy.status = "paused".to_string();
-            local_db::upsert_strategy(strategy).map_err(|e| e.to_string())?;
-            audit::record("strategy_paused", "strategy", Some(&strategy.id), &serde_json::json!({
-                "reason": "max_amount_exceeded",
-                "amountUsd": amount_usd,
-                "maxAmountUsd": max_amount,
-            }));
-            return Ok(StrategyEvaluationResult {
-                strategy_id: strategy.id.clone(),
-                action: "pause".to_string(),
-                status: "paused".to_string(),
-                message: "Strategy paused because it exceeded configured amount limits.".to_string(),
-                approval_id: None,
-            });
+fn load_compiled_plan(strategy: &ActiveStrategy) -> Result<CompiledStrategyPlan, String> {
+    if strategy.compiled_plan_json.trim().is_empty()
+        || strategy.compiled_plan_json.trim() == "{}"
+        || strategy.compiled_plan_json.trim() == "null"
+    {
+        return Err("Strategy has no compiled plan".to_string());
+    }
+
+    serde_json::from_str::<Option<CompiledStrategyPlan>>(&strategy.compiled_plan_json)
+        .ok()
+        .flatten()
+        .or_else(|| serde_json::from_str::<CompiledStrategyPlan>(&strategy.compiled_plan_json).ok())
+        .ok_or_else(|| "Failed to parse compiled plan".to_string())
+}
+
+fn build_context(app: &AppHandle, now: i64) -> EvalContext {
+    let addresses = commands::get_addresses(app);
+    let tokens = local_db::get_tokens_for_wallets(&addresses).unwrap_or_default();
+    let latest_snapshot = local_db::get_portfolio_snapshots(1)
+        .ok()
+        .and_then(|mut rows| rows.pop());
+    let total_portfolio_usd = latest_snapshot
+        .as_ref()
+        .map(|snapshot| parse_money(&snapshot.total_usd))
+        .unwrap_or_else(|| tokens.iter().map(|token| parse_money(&token.value_usd)).sum());
+    let latest_snapshot_age_secs = latest_snapshot.map(|snapshot| now - snapshot.timestamp);
+    EvalContext {
+        now,
+        total_portfolio_usd,
+        latest_snapshot_age_secs,
+        tokens,
+    }
+}
+
+fn compute_max_observed_drift_pct(
+    ctx: &EvalContext,
+    targets: &[crate::services::strategy_types::TargetAllocationSpec],
+) -> f64 {
+    if ctx.total_portfolio_usd <= 0.0 {
+        return 0.0;
+    }
+    targets
+        .iter()
+        .map(|target| {
+            let current_value: f64 = ctx
+                .tokens
+                .iter()
+                .filter(|token| token.symbol.eq_ignore_ascii_case(&target.symbol))
+                .map(|token| parse_money(&token.value_usd))
+                .sum();
+            let current_pct = (current_value / ctx.total_portfolio_usd) * 100.0;
+            (current_pct - target.percentage).abs()
+        })
+        .fold(0.0, f64::max)
+}
+
+fn evaluate_trigger(
+    strategy: &ActiveStrategy,
+    plan: &CompiledStrategyPlan,
+    ctx: &EvalContext,
+) -> Result<(bool, String), String> {
+    match &plan.trigger {
+        StrategyTrigger::TimeInterval { .. } => Ok((
+            strategy.next_run_at.map(|next| next <= ctx.now).unwrap_or(true),
+            "Time trigger evaluated.".to_string(),
+        )),
+        StrategyTrigger::DriftThreshold {
+            drift_pct,
+            target_allocations,
+            ..
+        } => {
+            if ctx.latest_snapshot_age_secs.map(|age| age > 900).unwrap_or(true) {
+                return Ok((false, "Latest portfolio snapshot is stale.".to_string()));
+            }
+            let drift = compute_max_observed_drift_pct(ctx, target_allocations);
+            Ok((drift >= *drift_pct, format!("Observed drift is {:.2}%.", drift)))
+        }
+        StrategyTrigger::Threshold {
+            metric,
+            operator,
+            value,
+            ..
+        } => {
+            let observed = match metric.as_str() {
+                "portfolio_value_usd" => ctx.total_portfolio_usd,
+                _ => return Ok((false, format!("Unsupported threshold metric '{}'.", metric))),
+            };
+            let passed = match operator.as_str() {
+                "gte" => observed >= *value,
+                "lte" => observed <= *value,
+                _ => false,
+            };
+            Ok((passed, format!("Observed threshold metric is {:.2}.", observed)))
         }
     }
+}
 
-    let action_type = action.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-    let next_interval = 5 * 60;
-    strategy.next_run_at = Some(now + next_interval);
-    strategy.last_run_at = Some(now);
+fn estimate_gas_usd(action: &StrategyAction) -> f64 {
+    match action {
+        StrategyAction::AlertOnly { .. } => 0.0,
+        StrategyAction::DcaBuy { .. } => 0.50,
+        StrategyAction::RebalanceToTarget { .. } => 1.0,
+    }
+}
 
-    if strategy.mode == "monitor_only" {
-        local_db::upsert_strategy(strategy).map_err(|e| e.to_string())?;
-        let payload = serde_json::json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "title": format!("Automation: {}", strategy.name),
-            "message": format!("Strategy evaluated in monitor-only mode. Action candidate: {}.", action_type),
-            "timestamp": now,
-        });
-        let _ = app.emit("shadow_brief_ready", payload);
-        return Ok(StrategyEvaluationResult {
-            strategy_id: strategy.id.clone(),
-            action: "monitor".to_string(),
-            status: "ok".to_string(),
-            message: "Strategy evaluated without execution.".to_string(),
-            approval_id: None,
+fn evaluate_conditions(
+    strategy: &ActiveStrategy,
+    plan: &CompiledStrategyPlan,
+    ctx: &EvalContext,
+) -> (bool, Vec<StrategyConditionPreview>) {
+    let mut passed = true;
+    let mut previews = Vec::new();
+    for condition in &plan.conditions {
+        let (condition_passed, code, message) = match condition {
+            StrategyCondition::PortfolioFloor { min_portfolio_usd } => (
+                ctx.total_portfolio_usd >= *min_portfolio_usd,
+                "portfolio_floor",
+                format!(
+                    "Portfolio value {:.2} vs minimum {:.2}.",
+                    ctx.total_portfolio_usd, min_portfolio_usd
+                ),
+            ),
+            StrategyCondition::MaxGas { max_gas_usd } => (
+                estimate_gas_usd(&plan.action) <= *max_gas_usd,
+                "max_gas",
+                format!(
+                    "Estimated gas {:.2} vs maximum {:.2}.",
+                    estimate_gas_usd(&plan.action),
+                    max_gas_usd
+                ),
+            ),
+            StrategyCondition::MaxSlippage { max_slippage_bps } => (
+                plan.normalized_guardrails
+                    .max_slippage_bps
+                    .unwrap_or(50)
+                    <= *max_slippage_bps,
+                "max_slippage",
+                format!(
+                    "Configured slippage {} bps vs maximum {} bps.",
+                    plan.normalized_guardrails.max_slippage_bps.unwrap_or(50),
+                    max_slippage_bps
+                ),
+            ),
+            StrategyCondition::WalletAssetAvailable { symbol, min_amount } => {
+                let balance = ctx
+                    .tokens
+                    .iter()
+                    .filter(|token| token.symbol.eq_ignore_ascii_case(symbol))
+                    .map(|token| parse_balance(&token.balance))
+                    .sum::<f64>();
+                (
+                    balance >= *min_amount,
+                    "wallet_asset_available",
+                    format!("Available balance {:.6} {}.", balance, symbol),
+                )
+            }
+            StrategyCondition::Cooldown { cooldown_seconds } => {
+                let ready = strategy
+                    .last_run_at
+                    .map(|last_run| ctx.now - last_run >= *cooldown_seconds)
+                    .unwrap_or(true);
+                (
+                    ready,
+                    "cooldown",
+                    format!("Cooldown window is {} seconds.", cooldown_seconds),
+                )
+            }
+            StrategyCondition::DriftMinimum { min_drift_pct } => {
+                let targets = match &plan.action {
+                    StrategyAction::RebalanceToTarget {
+                        target_allocations, ..
+                    } => target_allocations.as_slice(),
+                    _ => &[],
+                };
+                let drift = compute_max_observed_drift_pct(ctx, targets);
+                (
+                    drift >= *min_drift_pct,
+                    "drift_minimum",
+                    format!("Observed drift {:.2}% vs minimum {:.2}%.", drift, min_drift_pct),
+                )
+            }
+        };
+        passed &= condition_passed;
+        previews.push(StrategyConditionPreview {
+            code: code.to_string(),
+            passed: condition_passed,
+            message,
         });
     }
+    (passed, previews)
+}
 
+fn determine_notional_usd(action: &StrategyAction, ctx: &EvalContext) -> f64 {
+    match action {
+        StrategyAction::DcaBuy { amount_usd, .. } => amount_usd.unwrap_or(0.0),
+        StrategyAction::RebalanceToTarget {
+            max_execution_usd, ..
+        } => max_execution_usd.unwrap_or(ctx.total_portfolio_usd * 0.10),
+        StrategyAction::AlertOnly { .. } => 0.0,
+    }
+}
+
+fn persist_strategy_execution(
+    strategy_id: &str,
+    status: &str,
+    reason: Option<String>,
+    evaluation_json: serde_json::Value,
+    approval_id: Option<String>,
+    tool_execution_id: Option<String>,
+    now: i64,
+) {
+    let record = StrategyExecutionRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        strategy_id: strategy_id.to_string(),
+        status: status.to_string(),
+        reason,
+        evaluation_json: evaluation_json.to_string(),
+        approval_id,
+        tool_execution_id,
+        created_at: now,
+    };
+    let _ = local_db::insert_strategy_execution(&record);
+}
+
+fn create_approval_request(
+    app: &AppHandle,
+    strategy: &ActiveStrategy,
+    plan: &CompiledStrategyPlan,
+    payload: serde_json::Value,
+    message: String,
+    now: i64,
+) -> Result<String, String> {
+    let tool_name = match plan.action {
+        StrategyAction::DcaBuy { .. } => "execute_token_swap",
+        StrategyAction::RebalanceToTarget { .. } => "rebalance_to_target",
+        StrategyAction::AlertOnly { .. } => "alert_only",
+    };
     let approval = ApprovalRecord {
         id: uuid::Uuid::new_v4().to_string(),
         source: "heartbeat".to_string(),
-        tool_name: action_type.to_string(),
+        tool_name: tool_name.to_string(),
         kind: "strategy_action".to_string(),
         status: "pending".to_string(),
-        payload_json: action.to_string(),
+        payload_json: payload.to_string(),
         simulation_json: Some(
             serde_json::json!({
-                "validated": action_type != "unknown",
                 "strategyId": strategy.id,
+                "template": strategy.template,
+                "supportedDirectExecution": false
             })
             .to_string(),
         ),
         policy_json: Some(strategy.approval_policy_json.clone()),
-        message: format!("Strategy '{}' is ready to run. Review the proposed action inline.", strategy.name),
+        message,
         expires_at: Some(now + 15 * 60),
         version: 1,
         strategy_id: Some(strategy.id.clone()),
         created_at: now,
         updated_at: now,
     };
-    local_db::insert_approval_request(&approval).map_err(|e| e.to_string())?;
-    local_db::upsert_strategy(strategy).map_err(|e| e.to_string())?;
+    local_db::insert_approval_request(&approval).map_err(|err| err.to_string())?;
     audit::record("approval_created", "strategy", Some(&strategy.id), &approval);
     let _ = app.emit("approval_request_created", &approval);
+    Ok(approval.id)
+}
 
-    Ok(StrategyEvaluationResult {
-        strategy_id: strategy.id.clone(),
-        action: "approval_request".to_string(),
-        status: "ok".to_string(),
-        message: "Approval request created for strategy execution.".to_string(),
-        approval_id: Some(approval.id),
-    })
+fn emit_alert(app: &AppHandle, strategy: &ActiveStrategy, title: String, message: String, now: i64) {
+    let payload = serde_json::json!({
+        "id": uuid::Uuid::new_v4().to_string(),
+        "title": title,
+        "message": message,
+        "strategyId": strategy.id,
+        "timestamp": now,
+    });
+    let _ = app.emit("shadow_alert", &payload);
+    let _ = app.emit("shadow_brief_ready", &payload);
+}
+
+pub fn evaluate_strategy(app: &AppHandle, strategy: &mut ActiveStrategy) -> Result<StrategyEvaluationResult, String> {
+    let now = now_secs();
+    strategy.last_evaluation_at = Some(now);
+    let plan = load_compiled_plan(strategy)?;
+    let ctx = build_context(app, now);
+    let execution_policy = load_execution_policy(strategy);
+    let normalized_guardrails: &StrategyGuardrails = &plan.normalized_guardrails;
+
+    let (would_trigger, trigger_message) = evaluate_trigger(strategy, &plan, &ctx)?;
+    if !would_trigger {
+        strategy.next_run_at = strategy_scheduler::compute_next_run(&plan.trigger, now);
+        strategy.last_execution_status = Some("skipped".to_string());
+        strategy.last_execution_reason = Some(trigger_message.clone());
+        local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+        persist_strategy_execution(
+            &strategy.id,
+            "skipped",
+            Some(trigger_message.clone()),
+            serde_json::json!({ "trigger": trigger_message }),
+            None,
+            None,
+            now,
+        );
+        return Ok(StrategyEvaluationResult {
+            strategy_id: strategy.id.clone(),
+            action: "trigger_not_due".to_string(),
+            status: "skipped".to_string(),
+            message: trigger_message,
+            approval_id: None,
+        });
+    }
+
+    let (conditions_passed, condition_results) = evaluate_conditions(strategy, &plan, &ctx);
+    if !conditions_passed {
+        let reason = "One or more strategy conditions blocked execution.".to_string();
+        strategy.next_run_at = strategy_scheduler::compute_next_run(&plan.trigger, now);
+        strategy.last_execution_status = Some("skipped".to_string());
+        strategy.last_execution_reason = Some(reason.clone());
+        local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+        persist_strategy_execution(
+            &strategy.id,
+            "skipped",
+            Some(reason.clone()),
+            serde_json::json!({
+                "trigger": trigger_message,
+                "conditions": condition_results,
+            }),
+            None,
+            None,
+            now,
+        );
+        return Ok(StrategyEvaluationResult {
+            strategy_id: strategy.id.clone(),
+            action: "condition_blocked".to_string(),
+            status: "skipped".to_string(),
+            message: reason,
+            approval_id: None,
+        });
+    }
+
+    let notional_usd = determine_notional_usd(&plan.action, &ctx);
+    if notional_usd > normalized_guardrails.max_per_trade_usd {
+        strategy.failure_count += 1;
+        strategy.disabled_reason = Some("strategy_limit_exceeded".to_string());
+        strategy.status = "paused".to_string();
+        strategy.last_execution_status = Some("failed".to_string());
+        strategy.last_execution_reason = Some("Action exceeds max per trade guardrail.".to_string());
+        local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+        audit::record("strategy_paused", "strategy", Some(&strategy.id), &serde_json::json!({
+            "reason": "max_per_trade_exceeded",
+            "notionalUsd": notional_usd,
+            "maxPerTradeUsd": normalized_guardrails.max_per_trade_usd,
+        }));
+        persist_strategy_execution(
+            &strategy.id,
+            "failed",
+            Some("Action exceeds max per trade guardrail.".to_string()),
+            serde_json::json!({ "notionalUsd": notional_usd }),
+            None,
+            None,
+            now,
+        );
+        return Ok(StrategyEvaluationResult {
+            strategy_id: strategy.id.clone(),
+            action: "pause".to_string(),
+            status: "paused".to_string(),
+            message: "Strategy paused because it exceeded configured amount limits.".to_string(),
+            approval_id: None,
+        });
+    }
+
+    strategy.next_run_at = strategy_scheduler::compute_next_run(&plan.trigger, now);
+    strategy.last_run_at = Some(now);
+    strategy.failure_count = 0;
+
+    match &plan.action {
+        StrategyAction::AlertOnly {
+            title,
+            message_template,
+            ..
+        } => {
+            emit_alert(app, strategy, title.clone(), message_template.clone(), now);
+            strategy.last_execution_status = Some("succeeded".to_string());
+            strategy.last_execution_reason = Some("Alert emitted.".to_string());
+            local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+            persist_strategy_execution(
+                &strategy.id,
+                "succeeded",
+                Some("Alert emitted.".to_string()),
+                serde_json::json!({
+                    "trigger": trigger_message,
+                    "conditions": condition_results,
+                    "action": "alert_only",
+                }),
+                None,
+                None,
+                now,
+            );
+            return Ok(StrategyEvaluationResult {
+                strategy_id: strategy.id.clone(),
+                action: "monitor_event_emitted".to_string(),
+                status: "ok".to_string(),
+                message: "Alert emitted successfully.".to_string(),
+                approval_id: None,
+            });
+        }
+        StrategyAction::DcaBuy {
+            chain,
+            from_symbol,
+            to_symbol,
+            amount_usd,
+            amount_token,
+        } => {
+            if strategy.mode == "monitor_only" {
+                emit_alert(
+                    app,
+                    strategy,
+                    format!("Monitor-only DCA: {}", strategy.name),
+                    format!("DCA conditions met for {} -> {}.", from_symbol, to_symbol),
+                    now,
+                );
+                strategy.last_execution_status = Some("succeeded".to_string());
+                strategy.last_execution_reason = Some("Monitor-only notification emitted.".to_string());
+                local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+                persist_strategy_execution(
+                    &strategy.id,
+                    "succeeded",
+                    Some("Monitor-only notification emitted.".to_string()),
+                    serde_json::json!({ "action": "dca_buy", "monitorOnly": true }),
+                    None,
+                    None,
+                    now,
+                );
+                return Ok(StrategyEvaluationResult {
+                    strategy_id: strategy.id.clone(),
+                    action: "monitor_event_emitted".to_string(),
+                    status: "ok".to_string(),
+                    message: "Monitor-only DCA signal emitted.".to_string(),
+                    approval_id: None,
+                });
+            }
+
+            let approval_required = strategy.mode == "approval_required"
+                || !execution_policy.enabled
+                || !execution_policy.fallback_to_approval;
+            let payload = serde_json::json!({
+                "type": "dca_buy",
+                "chain": chain,
+                "fromSymbol": from_symbol,
+                "toSymbol": to_symbol,
+                "amountUsd": amount_usd,
+                "amountToken": amount_token,
+                "strategyId": strategy.id,
+            });
+            let approval_id = create_approval_request(
+                app,
+                strategy,
+                &plan,
+                payload,
+                if strategy.mode == "pre_authorized" && execution_policy.enabled {
+                    "Direct execution adapter is unavailable, so SHADOW downgraded this strategy run to approval-required.".to_string()
+                } else {
+                    format!("Strategy '{}' is ready to execute a DCA trade.", strategy.name)
+                },
+                now,
+            )?;
+            strategy.last_execution_status = Some("approval_created".to_string());
+            strategy.last_execution_reason = Some("Approval created for DCA trade.".to_string());
+            local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+            persist_strategy_execution(
+                &strategy.id,
+                "approval_created",
+                Some("Approval created for DCA trade.".to_string()),
+                serde_json::json!({
+                    "trigger": trigger_message,
+                    "conditions": condition_results,
+                    "mode": strategy.mode,
+                    "approvalRequired": approval_required,
+                }),
+                Some(approval_id.clone()),
+                None,
+                now,
+            );
+            return Ok(StrategyEvaluationResult {
+                strategy_id: strategy.id.clone(),
+                action: "approval_request".to_string(),
+                status: "ok".to_string(),
+                message: "Approval request created for DCA trade.".to_string(),
+                approval_id: Some(approval_id),
+            });
+        }
+        StrategyAction::RebalanceToTarget {
+            chain,
+            threshold_pct,
+            target_allocations,
+            max_execution_usd,
+        } => {
+            let observed_drift = compute_max_observed_drift_pct(&ctx, target_allocations);
+            if observed_drift < *threshold_pct {
+                strategy.last_execution_status = Some("skipped".to_string());
+                strategy.last_execution_reason = Some("Observed drift is below threshold.".to_string());
+                local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+                persist_strategy_execution(
+                    &strategy.id,
+                    "skipped",
+                    Some("Observed drift is below threshold.".to_string()),
+                    serde_json::json!({ "observedDriftPct": observed_drift }),
+                    None,
+                    None,
+                    now,
+                );
+                return Ok(StrategyEvaluationResult {
+                    strategy_id: strategy.id.clone(),
+                    action: "condition_blocked".to_string(),
+                    status: "skipped".to_string(),
+                    message: "Observed drift is below threshold.".to_string(),
+                    approval_id: None,
+                });
+            }
+            let payload = serde_json::json!({
+                "type": "rebalance_to_target",
+                "chain": chain,
+                "thresholdPct": threshold_pct,
+                "maxExecutionUsd": max_execution_usd,
+                "targetAllocations": target_allocations,
+                "strategyId": strategy.id,
+                "observedDriftPct": observed_drift,
+            });
+            let approval_id = create_approval_request(
+                app,
+                strategy,
+                &plan,
+                payload,
+                "Rebalance requires review because only approval-preview execution is currently available.".to_string(),
+                now,
+            )?;
+            strategy.last_execution_status = Some("approval_created".to_string());
+            strategy.last_execution_reason = Some("Approval created for rebalance.".to_string());
+            local_db::upsert_strategy(strategy).map_err(|err| err.to_string())?;
+            persist_strategy_execution(
+                &strategy.id,
+                "approval_created",
+                Some("Approval created for rebalance.".to_string()),
+                serde_json::json!({
+                    "trigger": trigger_message,
+                    "conditions": condition_results,
+                    "observedDriftPct": observed_drift,
+                }),
+                Some(approval_id.clone()),
+                None,
+                now,
+            );
+            return Ok(StrategyEvaluationResult {
+                strategy_id: strategy.id.clone(),
+                action: "approval_request".to_string(),
+                status: "ok".to_string(),
+                message: "Approval request created for rebalance.".to_string(),
+                approval_id: Some(approval_id),
+            });
+        }
+    }
 }

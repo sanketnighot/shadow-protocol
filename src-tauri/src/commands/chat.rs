@@ -9,6 +9,7 @@ use crate::services::local_db::{
     get_command_log as db_get_command_log, get_strategies as db_get_strategies,
     insert_command_log, upsert_strategy,
 };
+use crate::commands::strategy::infer_strategy_fields_for_legacy;
 
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
@@ -110,27 +111,25 @@ pub async fn get_strategies() -> Result<Vec<ActiveStrategy>, String> {
 
 #[tauri::command]
 pub async fn create_strategy(input: CreateStrategyInput) -> Result<StrategyResult, String> {
-    let now = now_secs();
-    let strategy = ActiveStrategy {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: input.name.trim().to_string(),
-        summary: input.summary.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        status: "active".to_string(),
-        mode: input.mode.unwrap_or_else(|| "approval_required".to_string()),
-        trigger_json: input.trigger.to_string(),
-        action_json: input.action.to_string(),
-        guardrails_json: input.guardrails.to_string(),
-        approval_policy_json: input.approval_policy.unwrap_or_else(|| serde_json::json!({"mode": "always_require"})).to_string(),
-        execution_policy_json: input.execution_policy.unwrap_or_else(|| serde_json::json!({"enabled": false})).to_string(),
-        failure_count: 0,
-        last_evaluation_at: None,
-        disabled_reason: None,
-        last_run_at: None,
-        next_run_at: Some(now),
-    };
-    if strategy.name.is_empty() {
+    let id = uuid::Uuid::new_v4().to_string();
+    let name = input.name.trim().to_string();
+    let summary = input.summary.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    if name.is_empty() {
         return Err("Strategy name is required".to_string());
     }
+    let mut strategy = infer_strategy_fields_for_legacy(
+        &id,
+        &name,
+        summary,
+        &input.mode.unwrap_or_else(|| "approval_required".to_string()),
+        &input.trigger.to_string(),
+        &input.action.to_string(),
+        &input.guardrails.to_string(),
+        &input.approval_policy.unwrap_or_else(|| serde_json::json!({"mode": "always_require"})).to_string(),
+        &input.execution_policy.unwrap_or_else(|| serde_json::json!({"enabled": false, "fallbackToApproval": true, "killSwitch": false})).to_string(),
+    );
+    strategy.status = "active".to_string();
+    strategy.next_run_at = Some(now_secs());
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_created", "strategy", Some(&strategy.id), &strategy);
     Ok(StrategyResult { strategy })
@@ -138,43 +137,67 @@ pub async fn create_strategy(input: CreateStrategyInput) -> Result<StrategyResul
 
 #[tauri::command]
 pub async fn update_strategy(input: UpdateStrategyInput) -> Result<StrategyResult, String> {
-    let mut strategy = db_get_strategies()
+    let existing = db_get_strategies()
         .map_err(|e| e.to_string())?
         .into_iter()
         .find(|s| s.id == input.id)
         .ok_or_else(|| "Strategy not found".to_string())?;
 
-    if let Some(name) = input.name {
+    let next_name = if let Some(name) = input.name {
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err("Strategy name cannot be empty".to_string());
         }
-        strategy.name = trimmed.to_string();
-    }
-    if let Some(summary) = input.summary {
-        strategy.summary = Some(summary.trim().to_string()).filter(|s| !s.is_empty());
-    }
-    if let Some(status) = input.status {
-        strategy.status = status;
-    }
-    if let Some(mode) = input.mode {
-        strategy.mode = mode;
-    }
-    if let Some(trigger) = input.trigger {
-        strategy.trigger_json = trigger.to_string();
-    }
-    if let Some(action) = input.action {
-        strategy.action_json = action.to_string();
-    }
-    if let Some(guardrails) = input.guardrails {
-        strategy.guardrails_json = guardrails.to_string();
-    }
-    if let Some(policy) = input.approval_policy {
-        strategy.approval_policy_json = policy.to_string();
-    }
-    if let Some(policy) = input.execution_policy {
-        strategy.execution_policy_json = policy.to_string();
-    }
+        trimmed.to_string()
+    } else {
+        existing.name.clone()
+    };
+    let next_summary = input
+        .summary
+        .map(|summary| summary.trim().to_string())
+        .filter(|item| !item.is_empty())
+        .or(existing.summary.clone());
+    let next_mode = input.mode.unwrap_or_else(|| existing.mode.clone());
+    let next_trigger_json = input
+        .trigger
+        .unwrap_or_else(|| serde_json::from_str(&existing.trigger_json).unwrap_or_else(|_| serde_json::json!({})))
+        .to_string();
+    let next_action_json = input
+        .action
+        .unwrap_or_else(|| serde_json::from_str(&existing.action_json).unwrap_or_else(|_| serde_json::json!({})))
+        .to_string();
+    let next_guardrails_json = input
+        .guardrails
+        .unwrap_or_else(|| serde_json::from_str(&existing.guardrails_json).unwrap_or_else(|_| serde_json::json!({})))
+        .to_string();
+    let next_approval_policy_json = input
+        .approval_policy
+        .unwrap_or_else(|| serde_json::from_str(&existing.approval_policy_json).unwrap_or_else(|_| serde_json::json!({})))
+        .to_string();
+    let next_execution_policy_json = input
+        .execution_policy
+        .unwrap_or_else(|| serde_json::from_str(&existing.execution_policy_json).unwrap_or_else(|_| serde_json::json!({})))
+        .to_string();
+
+    let mut strategy = infer_strategy_fields_for_legacy(
+        &existing.id,
+        &next_name,
+        next_summary,
+        &next_mode,
+        &next_trigger_json,
+        &next_action_json,
+        &next_guardrails_json,
+        &next_approval_policy_json,
+        &next_execution_policy_json,
+    );
+    strategy.status = input.status.unwrap_or_else(|| existing.status.clone());
+    strategy.failure_count = existing.failure_count;
+    strategy.last_evaluation_at = existing.last_evaluation_at;
+    strategy.disabled_reason = existing.disabled_reason.clone();
+    strategy.last_run_at = existing.last_run_at;
+    strategy.next_run_at = existing.next_run_at;
+    strategy.last_execution_status = existing.last_execution_status.clone();
+    strategy.last_execution_reason = existing.last_execution_reason.clone();
 
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_updated", "strategy", Some(&strategy.id), &strategy);
@@ -227,7 +250,7 @@ pub async fn run_strategy_simulation(input: RunStrategySimulationInput) -> Resul
     let valid = strategy.status != "paused";
     Ok(StrategySimulationResult {
         strategy_id: strategy.id,
-        valid,
+        valid: valid && strategy.validation_state == "valid",
         message: if valid {
             "Strategy passes local validation and policy checks.".to_string()
         } else {
@@ -389,23 +412,19 @@ pub async fn approve_agent_action(input: ApproveAgentActionInput) -> Result<Appr
         }
     } else if tool_name == "create_automation_strategy" {
         let payload = &input.payload;
-        let strategy = ActiveStrategy {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Strategy").trim().to_string(),
-            summary: payload.get("summary").and_then(|v| v.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-            status: "active".to_string(),
-            mode: "approval_required".to_string(),
-            trigger_json: payload.get("trigger").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
-            action_json: payload.get("action").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
-            guardrails_json: payload.get("guardrails").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
-            approval_policy_json: serde_json::json!({"mode": "always_require"}).to_string(),
-            execution_policy_json: serde_json::json!({"enabled": false}).to_string(),
-            failure_count: 0,
-            last_evaluation_at: None,
-            disabled_reason: None,
-            last_run_at: None,
-            next_run_at: Some(now),
-        };
+        let mut strategy = infer_strategy_fields_for_legacy(
+            &uuid::Uuid::new_v4().to_string(),
+            payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Strategy").trim(),
+            payload.get("summary").and_then(|v| v.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+            "approval_required",
+            &payload.get("trigger").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
+            &payload.get("action").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
+            &payload.get("guardrails").cloned().unwrap_or_else(|| serde_json::json!({})).to_string(),
+            &serde_json::json!({"mode": "always_require"}).to_string(),
+            &serde_json::json!({"enabled": false, "fallbackToApproval": true, "killSwitch": false}).to_string(),
+        );
+        strategy.status = "active".to_string();
+        strategy.next_run_at = Some(now);
 
         upsert_strategy(&strategy).map_err(|e| e.to_string())?;
         execution.status = "succeeded".to_string();
