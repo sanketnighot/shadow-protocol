@@ -37,14 +37,12 @@ describe("App", () => {
   it("renders the dashboard shell on the home route", () => {
     renderApp();
 
-    expect(screen.getByText("SHADOW Protocol")).toBeInTheDocument();
-    expect(screen.getByText("Private DeFi workstation")).toBeInTheDocument();
+    expect(screen.getByText("SHADOW")).toBeInTheDocument();
     expect(screen.queryByText("Cmd+K")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
     expect(screen.getByText("Total Portfolio Value")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
-    expect(screen.getByText("AI agent status")).toBeInTheDocument();
+    expect(screen.getByText("Markets calm. Capital ready.")).toBeInTheDocument();
   });
 
   it("renders the agent workspace on the agent route", () => {
@@ -52,11 +50,11 @@ describe("App", () => {
 
     renderApp();
 
-    expect(screen.getByText("Agent conversation")).toBeInTheDocument();
+    expect(screen.getByText("Agent Copilot")).toBeInTheDocument();
+    expect(screen.getByLabelText("Agent instruction")).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText("Type your instruction..."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Aave V3 on Arbitrum")).toBeInTheDocument();
+      screen.getAllByText("Find me the best yield for USDC").length,
+    ).toBeGreaterThan(0);
   });
 
   it("renders the automation center route", () => {
@@ -64,7 +62,7 @@ describe("App", () => {
 
     renderApp();
 
-    expect(screen.getByText("Active strategies")).toBeInTheDocument();
+    expect(screen.getByText("Active strategies.")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /create new strategy/i }),
     ).toBeInTheDocument();
@@ -77,7 +75,10 @@ describe("App", () => {
 
     await vi.waitFor(() => {
       expect(
-        screen.getByText(/Create or import a wallet|All assets/i),
+        screen.getByRole("heading", { name: "No wallet" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Create wallet" }),
       ).toBeInTheDocument();
     });
   });
@@ -106,7 +107,7 @@ describe("App", () => {
 
     renderApp();
 
-    expect(screen.getByRole("heading", { name: "Appearance & shortcuts" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Configuration & Security" })).toBeInTheDocument();
     expect(screen.getByText("Theme")).toBeInTheDocument();
   });
 

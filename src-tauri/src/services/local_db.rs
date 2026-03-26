@@ -153,6 +153,47 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+
+CREATE TABLE IF NOT EXISTS market_opportunities (
+  id TEXT PRIMARY KEY,
+  fingerprint TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  category TEXT NOT NULL,
+  chain TEXT NOT NULL,
+  protocol TEXT,
+  symbols_json TEXT NOT NULL,
+  risk TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  score REAL NOT NULL,
+  actionability TEXT NOT NULL,
+  metrics_json TEXT NOT NULL,
+  portfolio_fit_json TEXT NOT NULL,
+  primary_action_json TEXT NOT NULL,
+  details_json TEXT NOT NULL,
+  sources_json TEXT NOT NULL,
+  stale INTEGER NOT NULL DEFAULT 0,
+  fresh_until INTEGER,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  expires_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_opportunities_category_chain ON market_opportunities(category, chain);
+CREATE INDEX IF NOT EXISTS idx_market_opportunities_score ON market_opportunities(score DESC);
+CREATE INDEX IF NOT EXISTS idx_market_opportunities_last_seen_at ON market_opportunities(last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS market_provider_runs (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL,
+  items_seen INTEGER NOT NULL DEFAULT 0,
+  error_summary TEXT,
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_provider_runs_started_at ON market_provider_runs(started_at DESC);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -340,6 +381,8 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM approval_requests", [])?;
         conn.execute("DELETE FROM tool_executions", [])?;
         conn.execute("DELETE FROM audit_log", [])?;
+        conn.execute("DELETE FROM market_opportunities", [])?;
+        conn.execute("DELETE FROM market_provider_runs", [])?;
         Ok(())
     })
 }
@@ -616,6 +659,45 @@ pub struct AuditLogEntry {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketOpportunityRecord {
+    pub id: String,
+    pub fingerprint: String,
+    pub title: String,
+    pub summary: String,
+    pub category: String,
+    pub chain: String,
+    pub protocol: Option<String>,
+    pub symbols_json: String,
+    pub risk: String,
+    pub confidence: f64,
+    pub score: f64,
+    pub actionability: String,
+    pub metrics_json: String,
+    pub portfolio_fit_json: String,
+    pub primary_action_json: String,
+    pub details_json: String,
+    pub sources_json: String,
+    pub stale: bool,
+    pub fresh_until: Option<i64>,
+    pub first_seen_at: i64,
+    pub last_seen_at: i64,
+    pub expires_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketProviderRunRecord {
+    pub id: String,
+    pub provider: String,
+    pub status: String,
+    pub items_seen: i64,
+    pub error_summary: Option<String>,
+    pub started_at: i64,
+    pub completed_at: Option<i64>,
+}
+
 pub fn insert_approval_request(record: &ApprovalRecord) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
@@ -803,6 +885,207 @@ pub fn insert_audit_log(entry: &AuditLogEntry) -> Result<(), DbError> {
             ],
         )?;
         Ok(())
+    })
+}
+
+pub fn replace_market_opportunities(records: &[MarketOpportunityRecord]) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute("DELETE FROM market_opportunities", [])?;
+        for record in records {
+            conn.execute(
+                "INSERT INTO market_opportunities (id, fingerprint, title, summary, category, chain, protocol, symbols_json, risk, confidence, score, actionability, metrics_json, portfolio_fit_json, primary_action_json, details_json, sources_json, stale, fresh_until, first_seen_at, last_seen_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+                params![
+                    record.id,
+                    record.fingerprint,
+                    record.title,
+                    record.summary,
+                    record.category,
+                    record.chain,
+                    record.protocol,
+                    record.symbols_json,
+                    record.risk,
+                    record.confidence,
+                    record.score,
+                    record.actionability,
+                    record.metrics_json,
+                    record.portfolio_fit_json,
+                    record.primary_action_json,
+                    record.details_json,
+                    record.sources_json,
+                    if record.stale { 1_i64 } else { 0_i64 },
+                    record.fresh_until,
+                    record.first_seen_at,
+                    record.last_seen_at,
+                    record.expires_at,
+                ],
+            )?;
+        }
+        Ok(())
+    })
+}
+
+pub fn get_market_opportunities(
+    category: Option<&str>,
+    chain: Option<&str>,
+    include_research: bool,
+    limit: u32,
+) -> Result<Vec<MarketOpportunityRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, fingerprint, title, summary, category, chain, protocol, symbols_json, risk, confidence, score, actionability, metrics_json, portfolio_fit_json, primary_action_json, details_json, sources_json, stale, fresh_until, first_seen_at, last_seen_at, expires_at FROM market_opportunities ORDER BY score DESC, last_seen_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(MarketOpportunityRecord {
+                id: row.get(0)?,
+                fingerprint: row.get(1)?,
+                title: row.get(2)?,
+                summary: row.get(3)?,
+                category: row.get(4)?,
+                chain: row.get(5)?,
+                protocol: row.get(6)?,
+                symbols_json: row.get(7)?,
+                risk: row.get(8)?,
+                confidence: row.get(9)?,
+                score: row.get(10)?,
+                actionability: row.get(11)?,
+                metrics_json: row.get(12)?,
+                portfolio_fit_json: row.get(13)?,
+                primary_action_json: row.get(14)?,
+                details_json: row.get(15)?,
+                sources_json: row.get(16)?,
+                stale: row.get::<_, i64>(17)? != 0,
+                fresh_until: row.get(18)?,
+                first_seen_at: row.get(19)?,
+                last_seen_at: row.get(20)?,
+                expires_at: row.get(21)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let record = row?;
+            if !include_research && record.actionability == "research_only" && record.category == "catalyst" {
+                continue;
+            }
+            if let Some(category_filter) = category {
+                if !category_filter.trim().is_empty() && category_filter != "all" && record.category != category_filter {
+                    continue;
+                }
+            }
+            if let Some(chain_filter) = chain {
+                if !chain_filter.trim().is_empty() && chain_filter != "all" && record.chain != chain_filter {
+                    continue;
+                }
+            }
+            out.push(record);
+            if out.len() >= limit as usize {
+                break;
+            }
+        }
+        Ok(out)
+    })
+}
+
+pub fn count_market_opportunities() -> Result<i64, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT COUNT(*) FROM market_opportunities")?;
+        let count = stmt.query_row([], |row| row.get(0))?;
+        Ok(count)
+    })
+}
+
+pub fn get_market_opportunity(id: &str) -> Result<Option<MarketOpportunityRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, fingerprint, title, summary, category, chain, protocol, symbols_json, risk, confidence, score, actionability, metrics_json, portfolio_fit_json, primary_action_json, details_json, sources_json, stale, fresh_until, first_seen_at, last_seen_at, expires_at FROM market_opportunities WHERE id = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(MarketOpportunityRecord {
+                id: row.get(0)?,
+                fingerprint: row.get(1)?,
+                title: row.get(2)?,
+                summary: row.get(3)?,
+                category: row.get(4)?,
+                chain: row.get(5)?,
+                protocol: row.get(6)?,
+                symbols_json: row.get(7)?,
+                risk: row.get(8)?,
+                confidence: row.get(9)?,
+                score: row.get(10)?,
+                actionability: row.get(11)?,
+                metrics_json: row.get(12)?,
+                portfolio_fit_json: row.get(13)?,
+                primary_action_json: row.get(14)?,
+                details_json: row.get(15)?,
+                sources_json: row.get(16)?,
+                stale: row.get::<_, i64>(17)? != 0,
+                fresh_until: row.get(18)?,
+                first_seen_at: row.get(19)?,
+                last_seen_at: row.get(20)?,
+                expires_at: row.get(21)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
+pub fn insert_market_provider_run(record: &MarketProviderRunRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO market_provider_runs (id, provider, status, items_seen, error_summary, started_at, completed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                record.id,
+                record.provider,
+                record.status,
+                record.items_seen,
+                record.error_summary,
+                record.started_at,
+                record.completed_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn update_market_provider_run(record: &MarketProviderRunRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "UPDATE market_provider_runs SET provider = ?2, status = ?3, items_seen = ?4, error_summary = ?5, started_at = ?6, completed_at = ?7 WHERE id = ?1",
+            params![
+                record.id,
+                record.provider,
+                record.status,
+                record.items_seen,
+                record.error_summary,
+                record.started_at,
+                record.completed_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_latest_market_provider_run(provider: &str) -> Result<Option<MarketProviderRunRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, provider, status, items_seen, error_summary, started_at, completed_at FROM market_provider_runs WHERE provider = ?1 ORDER BY started_at DESC LIMIT 1",
+        )?;
+        let mut rows = stmt.query(params![provider])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(MarketProviderRunRecord {
+                id: row.get(0)?,
+                provider: row.get(1)?,
+                status: row.get(2)?,
+                items_seen: row.get(3)?,
+                error_summary: row.get(4)?,
+                started_at: row.get(5)?,
+                completed_at: row.get(6)?,
+            }))
+        } else {
+            Ok(None)
+        }
     })
 }
 

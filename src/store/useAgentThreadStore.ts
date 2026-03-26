@@ -75,6 +75,15 @@ type AgentThreadStore = {
   threads: Thread[];
   activeThreadId: string | null;
   createThread: () => void;
+  startThreadWithDraft: (title: string, prompt: string) => void;
+  openMarketApprovalThread: (input: {
+    title: string;
+    message: string;
+    toolName: string;
+    payload: Record<string, unknown>;
+    approvalId: string;
+    expectedVersion: number;
+  }) => void;
   setActiveThreadId: (id: string | null) => void;
   sendMessage: (
     threadId: string,
@@ -134,6 +143,65 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
 
       createThread: () => {
         const thread = createEmptyThread();
+        set((state) => ({
+          threads: [thread, ...state.threads],
+          activeThreadId: thread.id,
+        }));
+      },
+
+      startThreadWithDraft: (title, prompt) => {
+        const thread = createEmptyThread();
+        thread.title = title.trim() || null;
+        set((state) => ({
+          threads: [thread, ...state.threads],
+          activeThreadId: thread.id,
+        }));
+        get().sendMessage(thread.id, prompt);
+      },
+
+      openMarketApprovalThread: ({
+        title,
+        message,
+        toolName,
+        payload,
+        approvalId,
+        expectedVersion,
+      }) => {
+        const thread = createEmptyThread();
+        thread.title = title.trim() || "Market opportunity";
+        thread.latestActivityLabel = "Market approval required";
+        thread.messages = [
+          {
+            id: `agent-${crypto.randomUUID()}`,
+            role: "agent",
+            blocks: [
+              { type: "text", content: message },
+              {
+                type: "approvalRequest",
+                toolName,
+                payload,
+                message,
+              },
+            ],
+          },
+        ];
+        thread.pendingAgentAction = {
+          approvalId,
+          toolName,
+          payload,
+          expectedVersion,
+        };
+        thread.pendingApproval = {
+          id: approvalId,
+          strategyId: `market-${toolName}`,
+          action: title,
+          amount: "Policy draft",
+          chain: "Policy",
+          slippage: "N/A",
+          gas: "N/A",
+          reason: message,
+          executionWindow: "15 minutes",
+        };
         set((state) => ({
           threads: [thread, ...state.threads],
           activeThreadId: thread.id,

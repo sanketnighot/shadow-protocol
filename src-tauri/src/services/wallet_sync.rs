@@ -393,6 +393,7 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
     let addresses = crate::commands::get_addresses(&app);
     if !addresses.is_empty() {
         let _h = app.clone();
+        let market_addresses = addresses.clone();
         tokio::spawn(async move {
             let addrs_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
             if let Ok(total) = super::tools::get_total_portfolio_value_multi(&addrs_refs).await {
@@ -400,6 +401,18 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
                 let top_assets_json = serde_json::to_string(&top_assets).unwrap_or_else(|_| "[]".to_string());
                 let _ = local_db::insert_portfolio_snapshot(&total.total_usd, &top_assets_json);
             }
+        });
+        let market_app = app.clone();
+        tokio::spawn(async move {
+            let _ = super::market_service::refresh_opportunities(
+                Some(&market_app),
+                super::market_service::MarketRefreshInput {
+                    include_research: Some(false),
+                    wallet_addresses: Some(market_addresses),
+                    force: Some(false),
+                },
+            )
+            .await;
         });
     }
 

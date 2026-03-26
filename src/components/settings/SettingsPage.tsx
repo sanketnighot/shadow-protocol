@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { logError } from "@/lib/logger";
+import { hasTauriRuntime } from "@/lib/tauri";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
@@ -53,6 +54,10 @@ export function SettingsPage() {
   const [isSavingOllama, setIsSavingOllama] = useState(false);
 
   useEffect(() => {
+    if (!hasTauriRuntime()) {
+      return;
+    }
+
     const fetchKeys = async () => {
       try {
         const pResult = await invoke<{ key?: string }>("get_perplexity_key");

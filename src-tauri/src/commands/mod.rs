@@ -1,5 +1,6 @@
 mod agent_state;
 mod chat;
+mod market;
 mod ollama_manager;
 mod portfolio;
 mod session;
@@ -10,6 +11,7 @@ mod wallet_sync;
 
 pub use agent_state::*;
 pub use chat::*;
+pub use market::*;
 pub use ollama_manager::*;
 pub use portfolio::*;
 pub use session::*;

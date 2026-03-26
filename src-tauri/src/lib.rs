@@ -27,9 +27,9 @@ pub fn run() {
             }
             let handle = app.handle().clone();
             services::shadow_watcher::start(handle.clone());
-            services::harvester::start(handle.clone());
             services::alpha_service::start(handle.clone());
             services::heartbeat::start(handle.clone());
+            services::market_service::start(handle.clone());
             tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
                 loop {
@@ -97,6 +97,10 @@ pub fn run() {
             commands::portfolio_fetch_history,
             commands::portfolio_fetch_allocations,
             commands::portfolio_fetch_performance_summary,
+            commands::market_fetch_opportunities,
+            commands::market_refresh_opportunities,
+            commands::market_get_opportunity_detail,
+            commands::market_prepare_opportunity_action,
             commands::portfolio_transfer,
             commands::portfolio_transfer_background,
             commands::check_ollama_status,

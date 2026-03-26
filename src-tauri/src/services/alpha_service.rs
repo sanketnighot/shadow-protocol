@@ -9,6 +9,7 @@ use tracing::error;
 
 use super::sonar_client;
 use super::ollama_client;
+use super::market_service::MarketOpportunity;
 
 const ALPHA_INTERVAL_SECS: u64 = 86400; // 24 hours
 
@@ -17,7 +18,8 @@ const ALPHA_INTERVAL_SECS: u64 = 86400; // 24 hours
 pub struct ShadowBrief {
     pub headline: String,
     pub summary: String,
-    pub opportunity_payload: Option<serde_json::Value>,
+    pub opportunity_id: Option<String>,
+    pub opportunity: Option<MarketOpportunity>,
 }
 
 pub fn start(app: AppHandle) {
@@ -72,7 +74,11 @@ Output format (JSON ONLY):
         Err(e) => return Err(format!("LLM synthesis failed with model {}: {}", model, e)),
     };
 
-    if let Some(brief) = parse_brief(&resp) {
+    if let Some(mut brief) = parse_brief(&resp) {
+        if let Ok(opportunity) = super::market_service::top_cached_opportunity() {
+            brief.opportunity_id = opportunity.as_ref().map(|item| item.id.clone());
+            brief.opportunity = opportunity;
+        }
         let _ = app.emit("shadow_brief", brief);
     }
 

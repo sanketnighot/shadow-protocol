@@ -9,6 +9,8 @@ import {
   addAgentMemory,
   removeAgentMemory,
 } from "@/lib/agent";
+import { logError } from "@/lib/logger";
+import { hasTauriRuntime } from "@/lib/tauri";
 import type { AgentSoul, AgentMemoryItem } from "@/types/agent";
 
 export function AgentGovernance() {
@@ -22,6 +24,10 @@ export function AgentGovernance() {
   const [isAddingMemory, setIsAddingMemory] = useState(false);
 
   useEffect(() => {
+    if (!hasTauriRuntime()) {
+      return;
+    }
+
     void fetchState();
   }, []);
 
@@ -31,7 +37,7 @@ export function AgentGovernance() {
       setSoul(s);
       setMemories(m.facts);
     } catch (err) {
-      console.error("Failed to fetch agent state:", err);
+      logError("Failed to fetch agent state", err);
     }
   };
 

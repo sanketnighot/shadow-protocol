@@ -31,6 +31,8 @@ type SessionStatusResult = { locked: boolean; expiresAtSecs?: number };
 export function AppShell() {
   const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  const hasTauriRuntime =
+    typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   const addresses = useWalletStore((s) => s.addresses);
   const activeAddress = useWalletStore((s) => s.activeAddress);
@@ -77,6 +79,9 @@ export function AppShell() {
   useShadowHeartbeat();
 
   useEffect(() => {
+    if (!hasTauriRuntime) {
+      return;
+    }
     const checkOllama = async () => {
       try {
         const status = await checkOllamaStatus();
@@ -103,7 +108,13 @@ export function AppShell() {
       }
     };
     void checkOllama();
-  }, [setupComplete, openOllamaSetup, setOllamaLastStatus, setSelectedModel]);
+  }, [
+    hasTauriRuntime,
+    setupComplete,
+    openOllamaSetup,
+    setOllamaLastStatus,
+    setSelectedModel,
+  ]);
 
   useEffect(() => {
     if (!activeAddress || addresses.length === 0) {
