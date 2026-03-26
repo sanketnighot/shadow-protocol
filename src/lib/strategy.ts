@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  ActiveStrategy,
   StrategyDetailResult,
   StrategyDraft,
   StrategyExecutionRecord,
@@ -179,8 +180,8 @@ export async function compileStrategyDraft(
 export async function createStrategyFromDraft(
   draft: StrategyDraft,
   status: string,
-): Promise<StrategyDetailResult["strategy"]> {
-  const result = await invoke<{ strategy: StrategyDetailResult["strategy"] }>(
+): Promise<ActiveStrategy> {
+  const result = await invoke<{ strategy: ActiveStrategy }>(
     "strategy_create_from_draft",
     { input: { draft, status } },
   );
@@ -191,8 +192,8 @@ export async function updateStrategyFromDraft(
   id: string,
   draft: StrategyDraft,
   status: string,
-): Promise<StrategyDetailResult["strategy"]> {
-  const result = await invoke<{ strategy: StrategyDetailResult["strategy"] }>(
+): Promise<ActiveStrategy> {
+  const result = await invoke<{ strategy: ActiveStrategy }>(
     "strategy_update_from_draft",
     { input: { id, draft, status } },
   );

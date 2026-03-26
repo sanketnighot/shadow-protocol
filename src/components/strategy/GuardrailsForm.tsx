@@ -1,128 +1,187 @@
 import type { StrategyGuardrails } from "@/types/strategy";
-import { Button } from "@/components/ui/button";
+
+import { cn } from "@/lib/utils";
+
+const CHAIN_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "ethereum", label: "Ethereum" },
+  { id: "base", label: "Base" },
+  { id: "polygon", label: "Polygon" },
+  { id: "eth-sepolia", label: "Sepolia" },
+  { id: "base-sepolia", label: "Base Sepolia" },
+  { id: "polygon-amoy", label: "Amoy" },
+];
 
 type GuardrailsFormProps = {
   guardrails: StrategyGuardrails;
   onChange: (patch: Partial<StrategyGuardrails>) => void;
-  onSave: () => void;
-  onTestSimulation: () => void;
-  isSaving?: boolean;
+  /** Inline validation messages for guardrail fields (e.g. from compile). */
+  safetyIssues?: string[];
 };
 
-export function GuardrailsForm({
-  guardrails,
-  onChange,
-  onSave,
-  onTestSimulation,
-  isSaving = false,
-}: GuardrailsFormProps) {
+export function GuardrailsForm({ guardrails, onChange, safetyIssues }: GuardrailsFormProps) {
+  const allowed = new Set(guardrails.allowedChains ?? []);
+
+  const toggleChain = (chainId: string) => {
+    const next = new Set(allowed);
+    if (next.has(chainId)) {
+      next.delete(chainId);
+    } else {
+      next.add(chainId);
+    }
+    onChange({ allowedChains: [...next].sort() });
+  };
+
+  const inputClassName =
+    "rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none";
+
   return (
-    <section className="glass-panel rounded-sm p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-            Guardrails
-          </p>
-          <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-foreground">
-            Safety before automation
-          </h2>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+          Guardrails
+        </p>
+        <h2 className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+          Safety before automation
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Applied at execution time in Rust. Save the draft from the header when ready.
+        </p>
       </div>
 
-      <div className="mt-5 grid gap-4">
-        <label className="grid gap-2 text-sm text-muted">
-          Max per trade (USD)
+      {safetyIssues && safetyIssues.length > 0 ? (
+        <div className="rounded-sm border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          <p className="font-medium text-amber-200">Guardrail checks</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {safetyIssues.map((msg) => (
+              <li key={msg}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Maximum notional for a single automated trade.">Max per trade (USD)</span>
           <input
-            value={guardrails.maxPerTradeUsd}
+            type="number"
+            value={guardrails.maxPerTradeUsd ?? ""}
             onChange={(event) =>
               onChange({
                 maxPerTradeUsd: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
           />
         </label>
-        <label className="grid gap-2 text-sm text-muted">
-          Max daily notional (USD)
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Cap on total notional per rolling day.">Max daily notional (USD)</span>
           <input
-            value={guardrails.maxDailyNotionalUsd}
+            type="number"
+            value={guardrails.maxDailyNotionalUsd ?? ""}
             onChange={(event) =>
               onChange({
                 maxDailyNotionalUsd: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
           />
         </label>
-        <label className="grid gap-2 text-sm text-muted">
-          Require approval above (USD)
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Trades above this amount require explicit approval when in approval mode.">
+            Require approval above (USD)
+          </span>
           <input
-            value={guardrails.requireApprovalAboveUsd}
+            type="number"
+            value={guardrails.requireApprovalAboveUsd ?? ""}
             onChange={(event) =>
               onChange({
                 requireApprovalAboveUsd: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
           />
         </label>
-        <label className="grid gap-2 text-sm text-muted">
-          Stop if portfolio below (USD)
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Skip execution if total portfolio value falls below this.">
+            Stop if portfolio below (USD)
+          </span>
           <input
-            value={guardrails.minPortfolioUsd}
+            type="number"
+            value={guardrails.minPortfolioUsd ?? ""}
             onChange={(event) =>
               onChange({
                 minPortfolioUsd: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
           />
         </label>
-        <label className="grid gap-2 text-sm text-muted">
-          Cooldown (seconds)
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Minimum time between two runs for this strategy.">Cooldown (seconds)</span>
           <input
-            value={guardrails.cooldownSeconds}
+            type="number"
+            value={guardrails.cooldownSeconds ?? ""}
             onChange={(event) =>
               onChange({
                 cooldownSeconds: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
           />
         </label>
-        <label className="grid gap-2 text-sm text-muted">
-          Allowed chains
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Maximum route slippage in basis points.">Max slippage (bps)</span>
           <input
-            value={guardrails.allowedChains.join(", ")}
+            type="number"
+            value={guardrails.maxSlippageBps ?? ""}
             onChange={(event) =>
               onChange({
-                allowedChains: event.currentTarget.value
-                  .split(",")
-                  .map((item) => item.trim().toLowerCase())
-                  .filter(Boolean),
+                maxSlippageBps: Number(event.currentTarget.value),
               })
             }
-            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+            className={inputClassName}
+          />
+        </label>
+        <label className="grid gap-1.5 text-xs text-muted">
+          <span title="Upper bound on gas spend per execution in USD.">Max gas (USD)</span>
+          <input
+            type="number"
+            value={guardrails.maxGasUsd ?? ""}
+            onChange={(event) =>
+              onChange({
+                maxGasUsd: Number(event.currentTarget.value),
+              })
+            }
+            className={inputClassName}
           />
         </label>
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Button
-          className="rounded-sm px-5 active:scale-95"
-          onClick={onSave}
-          disabled={isSaving}
-        >
-          {isSaving ? "Saving…" : "Save Draft"}
-        </Button>
-        <Button
-          variant="outline"
-          className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated active:scale-95"
-          onClick={onTestSimulation}
-        >
-          Validate
-        </Button>
+      <div className="grid gap-2">
+        <span className="text-xs text-muted" title="Chains where this strategy may execute.">
+          Allowed chains
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {CHAIN_OPTIONS.map((chain) => {
+            const active = allowed.has(chain.id);
+            return (
+              <button
+                key={chain.id}
+                type="button"
+                onClick={() => toggleChain(chain.id)}
+                className={cn(
+                  "rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors",
+                  active
+                    ? "border-primary/40 bg-primary/15 text-foreground"
+                    : "border-border bg-secondary text-muted hover:text-foreground",
+                )}
+              >
+                {chain.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }

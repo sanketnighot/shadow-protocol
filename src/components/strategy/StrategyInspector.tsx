@@ -1,19 +1,12 @@
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 
-import type {
-  AlertOnlyAction,
-  DcaBuyAction,
-  DriftTrigger,
-  RebalanceToTargetAction,
-  StrategyCondition,
-  StrategyDraftNode,
-  ThresholdTrigger,
-  TimeTrigger,
-} from "@/types/strategy";
+import type { DraftNodeData, StrategyDraftNode, StrategyValidationIssue } from "@/types/strategy";
 
 type StrategyInspectorProps = {
   node: StrategyDraftNode | null;
   onUpdate: (data: StrategyDraftNode["data"]) => void;
+  /** Compile issues relevant to the selected step (or graph, when a node is selected). */
+  validationIssues?: StrategyValidationIssue[];
 };
 
 function updateTargetAllocations(
@@ -35,7 +28,7 @@ function updateTargetAllocations(
 
 function renderField(
   label: string,
-  input: React.ReactNode,
+  input: ReactNode,
 ) {
   return (
     <label className="grid gap-2 text-sm text-muted">
@@ -45,17 +38,29 @@ function renderField(
   );
 }
 
-export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
+export function StrategyInspector({ node, onUpdate, validationIssues }: StrategyInspectorProps) {
   if (!node) {
     return (
-      <section className="glass-panel rounded-sm p-5">
-        <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-          Inspector
-        </p>
-        <p className="mt-4 text-sm text-muted">
-          Select a node in the canvas to edit its executable configuration.
-        </p>
-      </section>
+      <div className="space-y-4">
+        <div>
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+            Step
+          </p>
+          <p className="mt-2 text-sm text-muted">
+            Select a node on the canvas to edit trigger, conditions, or action.
+          </p>
+        </div>
+        {validationIssues && validationIssues.length > 0 ? (
+          <div className="rounded-sm border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+            <p className="font-medium text-red-200">Fix for this draft</p>
+            <ul className="mt-1 list-inside list-disc space-y-0.5">
+              {validationIssues.map((issue) => (
+                <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -65,7 +70,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
     "rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none";
 
   const handleTextInput =
-    <T extends StrategyDraftNode["data"]>(current: T, field: keyof T) =>
+    <T extends DraftNodeData>(current: T, field: keyof T) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const raw = event.currentTarget.value;
       const nextValue =
@@ -76,25 +81,38 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         field === "amountToken"
           ? Number(raw)
           : raw;
-      onUpdate({ ...current, [field]: nextValue } as StrategyDraftNode["data"]);
+      onUpdate({ ...current, [field]: nextValue } as DraftNodeData);
     };
 
   return (
-    <section className="glass-panel rounded-sm p-5">
-      <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
-        Inspector
-      </p>
-      <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-foreground">
-        {node.type === "trigger"
-          ? "Trigger Step"
-          : node.type === "condition"
-            ? "Condition Step"
-            : "Action Step"}
-      </h2>
+    <div className="space-y-4">
+      <div>
+        <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+          Step
+        </p>
+        <h2 className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+          {node.type === "trigger"
+            ? "Trigger"
+            : node.type === "condition"
+              ? "Condition"
+              : "Action"}
+        </h2>
+      </div>
 
-      <div className="mt-5 grid gap-4">
+      {validationIssues && validationIssues.length > 0 ? (
+        <div className="rounded-sm border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+          <p className="font-medium text-red-200">This step</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {validationIssues.map((issue) => (
+              <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4">
         {node.type === "trigger" && data.type === "time_interval" && (() => {
-          const trigger = data as TimeTrigger;
+          const trigger = data;
           return (
             <>
               {renderField(
@@ -123,7 +141,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "trigger" && data.type === "drift_threshold" && (() => {
-          const trigger = data as DriftTrigger;
+          const trigger = data;
           return (
             <>
               {renderField(
@@ -162,7 +180,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "trigger" && data.type === "threshold" && (() => {
-          const trigger = data as ThresholdTrigger;
+          const trigger = data;
           return (
             <>
               {renderField(
@@ -190,7 +208,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "condition" && (() => {
-          const condition = data as StrategyCondition;
+          const condition = data;
           return (
             <>
               {renderField(
@@ -198,7 +216,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
                 <select
                   value={condition.type}
                   onChange={(event) => {
-                    const nextType = event.currentTarget.value as StrategyCondition["type"];
+                    const nextType = event.currentTarget.value as DraftNodeData["type"];
                     if (nextType === "portfolio_floor") {
                       onUpdate({ type: "portfolio_floor", minPortfolioUsd: 5_000 });
                     } else if (nextType === "max_gas") {
@@ -300,7 +318,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "action" && data.type === "dca_buy" && (() => {
-          const action = data as DcaBuyAction;
+          const action = data;
           return (
             <>
               {renderField(
@@ -345,7 +363,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "action" && data.type === "rebalance_to_target" && (() => {
-          const action = data as RebalanceToTargetAction;
+          const action = data;
           return (
             <>
               {renderField(
@@ -397,7 +415,7 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
         })()}
 
         {node.type === "action" && data.type === "alert_only" && (() => {
-          const action = data as AlertOnlyAction;
+          const action = data;
           return (
             <>
               {renderField(
@@ -433,6 +451,6 @@ export function StrategyInspector({ node, onUpdate }: StrategyInspectorProps) {
           );
         })()}
       </div>
-    </section>
+    </div>
   );
 }
