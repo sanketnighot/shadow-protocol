@@ -1,13 +1,13 @@
+//! Tauri commands for typed strategy draft compile, persist, and history.
+
 use serde::{Deserialize, Serialize};
 
 use crate::services::audit;
-use crate::services::local_db::{
-    self, get_strategy as db_get_strategy, upsert_strategy, ActiveStrategy, StrategyExecutionRecord,
-};
-use crate::services::strategy_compiler::{compile_draft, infer_template_from_legacy};
-use crate::services::strategy_scheduler;
+use crate::services::local_db::{self, ActiveStrategy};
+use crate::services::strategy_compiler::compile_draft;
 use crate::services::strategy_types::{
-    CompiledStrategyPlan, StrategyDraft, StrategySimulationResult,
+    CompiledStrategyPlan, EvaluationPreview, StrategyAction, StrategyDraft, StrategyMode,
+    StrategySimulationResult, StrategyExecutionRecordIpc,
 };
 
 fn now_secs() -> i64 {
@@ -19,55 +19,23 @@ fn now_secs() -> i64 {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StrategyDraftInput {
-    pub id: Option<String>,
-    pub name: String,
-    pub summary: Option<String>,
-    pub template: String,
-    pub mode: String,
-    pub nodes: Vec<crate::services::strategy_types::StrategyDraftNode>,
-    pub edges: Vec<crate::services::strategy_types::StrategyDraftEdge>,
-    pub guardrails: crate::services::strategy_types::StrategyGuardrails,
-    pub approval_policy: crate::services::strategy_types::StrategyApprovalPolicy,
-    pub execution_policy: crate::services::strategy_types::StrategyExecutionPolicy,
-}
-
-impl From<StrategyDraftInput> for StrategyDraft {
-    fn from(value: StrategyDraftInput) -> Self {
-        StrategyDraft {
-            id: value.id,
-            name: value.name,
-            summary: value.summary,
-            template: value.template,
-            mode: value.mode,
-            nodes: value.nodes,
-            edges: value.edges,
-            guardrails: value.guardrails,
-            approval_policy: value.approval_policy,
-            execution_policy: value.execution_policy,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct StrategyCompileDraftInput {
-    pub draft: StrategyDraftInput,
+    pub draft: StrategyDraft,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StrategyCreateFromDraftInput {
-    pub draft: StrategyDraftInput,
-    pub status: Option<String>,
+    pub draft: StrategyDraft,
+    pub status: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StrategyUpdateFromDraftInput {
     pub id: String,
-    pub draft: StrategyDraftInput,
-    pub status: Option<String>,
+    pub draft: StrategyDraft,
+    pub status: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,15 +46,9 @@ pub struct StrategyGetInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetStrategyExecutionsInput {
+pub struct StrategyExecutionHistoryInput {
     pub strategy_id: Option<String>,
     pub limit: Option<u32>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyResult {
-    pub strategy: ActiveStrategy,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,228 +59,244 @@ pub struct StrategyDetailResult {
     pub plan: Option<CompiledStrategyPlan>,
 }
 
-fn extract_legacy_action_json(draft: &StrategyDraft) -> String {
-    draft
-        .nodes
-        .iter()
-        .find(|node| node.node_type == crate::services::strategy_types::StrategyNodeType::Action)
-        .map(|node| node.data.to_string())
-        .unwrap_or_else(|| "{}".to_string())
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyPersistResult {
+    pub strategy: ActiveStrategy,
 }
 
-fn extract_legacy_trigger_json(draft: &StrategyDraft) -> String {
-    draft
-        .nodes
-        .iter()
-        .find(|node| node.node_type == crate::services::strategy_types::StrategyNodeType::Trigger)
-        .map(|node| node.data.to_string())
-        .unwrap_or_else(|| "{}".to_string())
+fn summarize_action(action: &StrategyAction) -> String {
+    match action {
+        StrategyAction::DcaBuy {
+            from_symbol,
+            to_symbol,
+            amount_usd,
+            chain,
+            ..
+        } => {
+            format!(
+                "DCA on {}: {} -> {} (~${:.2})",
+                chain,
+                from_symbol,
+                to_symbol,
+                amount_usd.unwrap_or(0.0)
+            )
+        }
+        StrategyAction::RebalanceToTarget {
+            chain,
+            threshold_pct,
+            ..
+        } => {
+            format!("Rebalance on {} when drift >= {:.2}%", chain, threshold_pct)
+        }
+        StrategyAction::AlertOnly { title, .. } => format!("Alert: {}", title),
+    }
 }
 
-fn build_active_strategy(
-    strategy_id: String,
+fn build_simulation(draft: &StrategyDraft, plan: &CompiledStrategyPlan) -> StrategySimulationResult {
+    let preview = EvaluationPreview {
+        would_trigger: plan.valid,
+        condition_results: vec![],
+        execution_mode: draft.mode.clone(),
+        expected_action_summary: summarize_action(&plan.action),
+    };
+    let message = if plan.valid {
+        "Strategy compiles successfully.".to_string()
+    } else {
+        "Strategy has validation errors; fix before activation.".to_string()
+    };
+    StrategySimulationResult {
+        strategy_id: draft.id.clone(),
+        valid: plan.valid,
+        plan: Some(plan.clone()),
+        evaluation_preview: preview,
+        message,
+    }
+}
+
+fn normalize_status(s: &str) -> Result<String, String> {
+    match s.trim() {
+        "draft" | "active" | "paused" => Ok(s.trim().to_string()),
+        _ => Err("Invalid strategy status.".to_string()),
+    }
+}
+
+fn draft_to_active(
     draft: StrategyDraft,
-    previous: Option<&ActiveStrategy>,
-    requested_status: Option<String>,
-) -> Result<(ActiveStrategy, StrategySimulationResult), String> {
-    let version = previous.map(|item| item.version + 1).unwrap_or(1);
-    let simulation = compile_draft(strategy_id.clone(), version, &draft);
-    let desired_status = requested_status.unwrap_or_else(|| "draft".to_string());
-
-    if desired_status == "active" && !simulation.valid {
-        return Err("Strategy must validate successfully before activation.".to_string());
+    id: &str,
+    status: &str,
+    version: i64,
+    existing: Option<ActiveStrategy>,
+) -> Result<ActiveStrategy, String> {
+    let compiled = compile_draft(&draft, id, version);
+    let status_norm = normalize_status(status)?;
+    if status_norm == "active" && !compiled.valid {
+        return Err("Cannot activate an invalid strategy.".to_string());
+    }
+    if draft.mode == StrategyMode::PreAuthorized && !compiled.valid {
+        return Err("Pre-authorized mode requires a valid compiled plan.".to_string());
     }
 
-    let plan = simulation.plan.clone();
+    let draft_graph_json = serde_json::to_string(&draft).map_err(|e| e.to_string())?;
+    let compiled_plan_json = serde_json::to_string(&compiled).map_err(|e| e.to_string())?;
+    let validation_state = if compiled.valid { "valid" } else { "invalid" };
+    let sim = build_simulation(&draft, &compiled);
+    let last_simulation_json = serde_json::to_string(&sim).ok();
+
+    let trigger_json = serde_json::to_string(&compiled.trigger).map_err(|e| e.to_string())?;
+    let action_json = serde_json::to_string(&compiled.action).map_err(|e| e.to_string())?;
+    let guardrails_json =
+        serde_json::to_string(&draft.guardrails).map_err(|e| e.to_string())?;
+    let approval_policy_json =
+        serde_json::to_string(&draft.approval_policy).map_err(|e| e.to_string())?;
+    let execution_policy_json =
+        serde_json::to_string(&draft.execution_policy).map_err(|e| e.to_string())?;
+
+    let template_str = match draft.template {
+        crate::services::strategy_types::StrategyTemplate::DcaBuy => "dca_buy",
+        crate::services::strategy_types::StrategyTemplate::RebalanceToTarget => {
+            "rebalance_to_target"
+        }
+        crate::services::strategy_types::StrategyTemplate::AlertOnly => "alert_only",
+    };
+
+    let mode_str = match draft.mode {
+        StrategyMode::MonitorOnly => "monitor_only",
+        StrategyMode::ApprovalRequired => "approval_required",
+        StrategyMode::PreAuthorized => "pre_authorized",
+    };
+
     let now = now_secs();
-    let next_run_at = if desired_status == "active" && simulation.valid {
-        plan.as_ref()
-            .and_then(|compiled| strategy_scheduler::compute_next_run(&compiled.trigger, now))
-            .or(Some(now))
+    let next_run = if status_norm == "active" && compiled.valid {
+        crate::services::strategy_scheduler::compute_next_run(&compiled.trigger, now)
     } else {
         None
     };
+    let is_draft_status = status_norm == "draft";
+    let disabled_reason = if compiled.valid || is_draft_status {
+        None
+    } else {
+        Some("invalid_plan".to_string())
+    };
 
-    let strategy = ActiveStrategy {
-        id: strategy_id,
+    Ok(ActiveStrategy {
+        id: id.to_string(),
         name: draft.name.trim().to_string(),
-        summary: draft.summary.clone().filter(|item| !item.trim().is_empty()),
-        status: if simulation.valid {
-            desired_status
-        } else {
-            "draft".to_string()
-        },
-        template: draft.template.clone(),
-        mode: draft.mode.clone(),
+        summary: draft.summary.clone(),
+        status: status_norm,
+        template: template_str.to_string(),
+        mode: mode_str.to_string(),
         version,
-        trigger_json: extract_legacy_trigger_json(&draft),
-        action_json: extract_legacy_action_json(&draft),
-        guardrails_json: serde_json::to_string(&draft.guardrails).map_err(|err| err.to_string())?,
-        draft_graph_json: serde_json::to_string(&draft).map_err(|err| err.to_string())?,
-        compiled_plan_json: serde_json::to_string(&plan).map_err(|err| err.to_string())?,
-        validation_state: if simulation.valid {
-            "valid".to_string()
-        } else {
-            "invalid".to_string()
-        },
-        last_simulation_json: Some(serde_json::to_string(&simulation).map_err(|err| err.to_string())?),
-        last_execution_status: previous.and_then(|item| item.last_execution_status.clone()),
-        last_execution_reason: previous.and_then(|item| item.last_execution_reason.clone()),
-        approval_policy_json: serde_json::to_string(&draft.approval_policy).map_err(|err| err.to_string())?,
-        execution_policy_json: serde_json::to_string(&draft.execution_policy).map_err(|err| err.to_string())?,
-        failure_count: previous.map(|item| item.failure_count).unwrap_or(0),
-        last_evaluation_at: previous.and_then(|item| item.last_evaluation_at),
-        disabled_reason: if simulation.valid {
-            previous.and_then(|item| item.disabled_reason.clone())
-        } else {
-            Some("validation_failed".to_string())
-        },
-        last_run_at: previous.and_then(|item| item.last_run_at),
-        next_run_at,
+        trigger_json,
+        action_json,
+        guardrails_json,
+        draft_graph_json,
+        compiled_plan_json,
+        validation_state: validation_state.to_string(),
+        last_simulation_json,
+        last_execution_status: existing
+            .as_ref()
+            .and_then(|e| e.last_execution_status.clone()),
+        last_execution_reason: existing
+            .as_ref()
+            .and_then(|e| e.last_execution_reason.clone()),
+        approval_policy_json,
+        execution_policy_json,
+        failure_count: existing.as_ref().map(|e| e.failure_count).unwrap_or(0),
+        last_evaluation_at: existing.as_ref().and_then(|e| e.last_evaluation_at),
+        disabled_reason,
+        last_run_at: existing.as_ref().and_then(|e| e.last_run_at),
+        next_run_at: next_run.or_else(|| existing.as_ref().and_then(|e| e.next_run_at)),
         updated_at: Some(now),
-    };
-
-    Ok((strategy, simulation))
-}
-
-pub fn infer_strategy_fields_for_legacy(
-    id: &str,
-    name: &str,
-    summary: Option<String>,
-    mode: &str,
-    trigger_json: &str,
-    action_json: &str,
-    guardrails_json: &str,
-    approval_policy_json: &str,
-    execution_policy_json: &str,
-) -> ActiveStrategy {
-    let trigger: serde_json::Value = serde_json::from_str(trigger_json).unwrap_or_else(|_| serde_json::json!({}));
-    let action: serde_json::Value = serde_json::from_str(action_json).unwrap_or_else(|_| serde_json::json!({}));
-    let template = infer_template_from_legacy(&trigger, &action);
-    let draft = StrategyDraft {
-        id: Some(id.to_string()),
-        name: name.to_string(),
-        summary,
-        template,
-        mode: mode.to_string(),
-        nodes: vec![
-            crate::services::strategy_types::StrategyDraftNode {
-                id: "trigger-legacy".to_string(),
-                node_type: crate::services::strategy_types::StrategyNodeType::Trigger,
-                position: crate::services::strategy_types::StrategyNodePosition { x: 0.0, y: 60.0 },
-                data: trigger,
-            },
-            crate::services::strategy_types::StrategyDraftNode {
-                id: "action-legacy".to_string(),
-                node_type: crate::services::strategy_types::StrategyNodeType::Action,
-                position: crate::services::strategy_types::StrategyNodePosition { x: 320.0, y: 60.0 },
-                data: action,
-            },
-        ],
-        edges: vec![crate::services::strategy_types::StrategyDraftEdge {
-            id: "edge-legacy".to_string(),
-            source: "trigger-legacy".to_string(),
-            target: "action-legacy".to_string(),
-        }],
-        guardrails: serde_json::from_str(guardrails_json).unwrap_or_default(),
-        approval_policy: serde_json::from_str(approval_policy_json).unwrap_or_default(),
-        execution_policy: serde_json::from_str(execution_policy_json).unwrap_or_default(),
-    };
-    let (strategy, _) = build_active_strategy(id.to_string(), draft.clone(), None, Some("draft".to_string()))
-        .unwrap_or_else(|_| {
-            (
-                ActiveStrategy {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    summary: None,
-                    status: "draft".to_string(),
-                    template: "alert_only".to_string(),
-                    mode: mode.to_string(),
-                    version: 1,
-                    trigger_json: trigger_json.to_string(),
-                    action_json: action_json.to_string(),
-                    guardrails_json: guardrails_json.to_string(),
-                    draft_graph_json: "{}".to_string(),
-                    compiled_plan_json: "null".to_string(),
-                    validation_state: "invalid".to_string(),
-                    last_simulation_json: None,
-                    last_execution_status: None,
-                    last_execution_reason: Some("legacy_import_failed".to_string()),
-                    approval_policy_json: approval_policy_json.to_string(),
-                    execution_policy_json: execution_policy_json.to_string(),
-                    failure_count: 0,
-                    last_evaluation_at: None,
-                    disabled_reason: Some("legacy_import_failed".to_string()),
-                    last_run_at: None,
-                    next_run_at: None,
-                    updated_at: Some(now_secs()),
-                },
-                compile_draft(id.to_string(), 1, &draft),
-            )
-        });
-    strategy
+    })
 }
 
 #[tauri::command]
 pub async fn strategy_compile_draft(
     input: StrategyCompileDraftInput,
 ) -> Result<StrategySimulationResult, String> {
-    let draft: StrategyDraft = input.draft.into();
-    let strategy_id = draft
+    let preview_id = input
+        .draft
         .id
         .clone()
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    Ok(compile_draft(strategy_id, 1, &draft))
+        .unwrap_or_else(|| "preview".to_string());
+    let plan = compile_draft(&input.draft, &preview_id, 0);
+    Ok(build_simulation(&input.draft, &plan))
 }
 
 #[tauri::command]
 pub async fn strategy_create_from_draft(
     input: StrategyCreateFromDraftInput,
-) -> Result<StrategyResult, String> {
-    let draft: StrategyDraft = input.draft.into();
-    let strategy_id = draft
-        .id
-        .clone()
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let (strategy, simulation) = build_active_strategy(strategy_id.clone(), draft, None, input.status)?;
-    upsert_strategy(&strategy).map_err(|err| err.to_string())?;
-    audit::record("strategy_saved_from_draft", "strategy", Some(&strategy.id), &simulation);
-    Ok(StrategyResult { strategy })
+) -> Result<StrategyPersistResult, String> {
+    if input.draft.name.trim().len() < 2 {
+        return Err("Strategy name is too short.".to_string());
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let strategy = draft_to_active(input.draft, &id, &input.status, 1, None)?;
+    local_db::upsert_strategy(&strategy).map_err(|e| e.to_string())?;
+    audit::record("strategy_created", "strategy", Some(&strategy.id), &strategy);
+    Ok(StrategyPersistResult { strategy })
 }
 
 #[tauri::command]
 pub async fn strategy_update_from_draft(
     input: StrategyUpdateFromDraftInput,
-) -> Result<StrategyResult, String> {
-    let existing = db_get_strategy(&input.id)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| "Strategy not found".to_string())?;
-    let mut draft: StrategyDraft = input.draft.into();
-    draft.id = Some(input.id.clone());
-    let (strategy, simulation) =
-        build_active_strategy(input.id.clone(), draft, Some(&existing), input.status)?;
-    upsert_strategy(&strategy).map_err(|err| err.to_string())?;
-    audit::record("strategy_updated_from_draft", "strategy", Some(&strategy.id), &simulation);
-    Ok(StrategyResult { strategy })
+) -> Result<StrategyPersistResult, String> {
+    let existing = local_db::get_strategy(&input.id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Strategy not found.".to_string())?;
+    if input.draft.name.trim().len() < 2 {
+        return Err("Strategy name is too short.".to_string());
+    }
+    let next_version = existing.version.saturating_add(1);
+    let strategy = draft_to_active(
+        input.draft,
+        &input.id,
+        &input.status,
+        next_version,
+        Some(existing),
+    )?;
+    local_db::upsert_strategy(&strategy).map_err(|e| e.to_string())?;
+    audit::record("strategy_updated", "strategy", Some(&strategy.id), &strategy);
+    Ok(StrategyPersistResult { strategy })
 }
 
 #[tauri::command]
 pub async fn strategy_get(input: StrategyGetInput) -> Result<StrategyDetailResult, String> {
-    let strategy = db_get_strategy(&input.id)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| "Strategy not found".to_string())?;
-    let draft = serde_json::from_str::<StrategyDraft>(&strategy.draft_graph_json).ok();
-    let plan = serde_json::from_str::<Option<CompiledStrategyPlan>>(&strategy.compiled_plan_json)
-        .ok()
-        .flatten()
-        .or_else(|| serde_json::from_str::<CompiledStrategyPlan>(&strategy.compiled_plan_json).ok());
-    Ok(StrategyDetailResult { strategy, draft, plan })
+    let strategy = local_db::get_strategy(&input.id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Strategy not found.".to_string())?;
+    let draft: Option<StrategyDraft> =
+        serde_json::from_str(&strategy.draft_graph_json).ok();
+    let plan: Option<CompiledStrategyPlan> =
+        serde_json::from_str(&strategy.compiled_plan_json).ok();
+    Ok(StrategyDetailResult {
+        strategy,
+        draft,
+        plan,
+    })
 }
 
 #[tauri::command]
 pub async fn strategy_get_execution_history(
-    input: GetStrategyExecutionsInput,
-) -> Result<Vec<StrategyExecutionRecord>, String> {
-    local_db::get_strategy_executions(input.strategy_id.as_deref(), input.limit.unwrap_or(100))
-        .map_err(|err| err.to_string())
+    input: StrategyExecutionHistoryInput,
+) -> Result<Vec<StrategyExecutionRecordIpc>, String> {
+    let limit = input.limit.unwrap_or(50).min(500);
+    let rows = local_db::get_strategy_executions(
+        input.strategy_id.as_deref(),
+        limit,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|r| StrategyExecutionRecordIpc {
+            id: r.id,
+            strategy_id: r.strategy_id,
+            status: r.status,
+            reason: r.reason,
+            approval_id: r.approval_id,
+            tool_execution_id: r.tool_execution_id,
+            created_at: r.created_at,
+        })
+        .collect())
 }

@@ -21,7 +21,7 @@ fn strip_ansi(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\x1b' {
             if chars.next() == Some('[') {
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c.is_alphabetic() {
                         break;
                     }

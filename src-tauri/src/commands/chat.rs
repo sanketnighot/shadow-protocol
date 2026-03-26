@@ -9,7 +9,7 @@ use crate::services::local_db::{
     get_command_log as db_get_command_log, get_strategies as db_get_strategies,
     insert_command_log, upsert_strategy,
 };
-use crate::commands::strategy::infer_strategy_fields_for_legacy;
+use crate::services::strategy_legacy::infer_strategy_fields_for_legacy;
 
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
@@ -247,14 +247,17 @@ pub async fn run_strategy_simulation(input: RunStrategySimulationInput) -> Resul
         .into_iter()
         .find(|s| s.id == input.id)
         .ok_or_else(|| "Strategy not found".to_string())?;
-    let valid = strategy.status != "paused";
+    let runnable = strategy.status != "paused";
+    let compiled_ok = strategy.validation_state == "valid";
     Ok(StrategySimulationResult {
         strategy_id: strategy.id,
-        valid: valid && strategy.validation_state == "valid",
-        message: if valid {
-            "Strategy passes local validation and policy checks.".to_string()
+        valid: runnable && compiled_ok,
+        message: if !runnable {
+            "Strategy is paused and will not execute.".to_string()
+        } else if !compiled_ok {
+            "Strategy plan is invalid; open the builder to repair.".to_string()
         } else {
-            "Strategy is paused and cannot execute.".to_string()
+            "Strategy is eligible for the automation engine.".to_string()
         },
     })
 }

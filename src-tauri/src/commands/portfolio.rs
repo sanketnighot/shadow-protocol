@@ -34,7 +34,7 @@ fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
 
 #[tauri::command]
 pub async fn portfolio_fetch_balances(address: String) -> Result<Vec<PortfolioAsset>, PortfolioError> {
-    if let Ok(rows) = local_db::get_tokens_for_wallets(&[address.clone()]) {
+    if let Ok(rows) = local_db::get_tokens_for_wallets(std::slice::from_ref(&address)) {
         if !rows.is_empty() {
             return Ok(token_rows_to_assets(rows));
         }
