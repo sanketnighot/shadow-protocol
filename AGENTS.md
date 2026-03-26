@@ -125,6 +125,7 @@ src-tauri/
 ## Learned Workspace Facts
 
 - Primary app navigation lives in the bottom dock; sidebar has been removed
+- Strategy builder is at `/strategy` with a **Builder** item in the bottom dock (`NAV_ITEMS`); Automation header also links to the builder
 - Supported chains: Ethereum, Base, Polygon (mainnet + testnet); no Arbitrum or Solana
 - Polygon Amoy native token ticker is POL (not MATIC)
 - Testnets: eth-sepolia, base-sepolia, polygon-amoy (Alchemy network names)

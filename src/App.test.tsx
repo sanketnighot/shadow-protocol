@@ -89,8 +89,9 @@ describe("App", () => {
     renderApp();
 
     expect(screen.getByText("Strategy builder")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save Strategy" })).toBeInTheDocument();
-    expect(screen.getByText("Guardrails")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Step" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Safety" })).toBeInTheDocument();
   });
 
   it("renders the market route", () => {

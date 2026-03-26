@@ -1,10 +1,9 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
-import { Zap, Clock, List } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Zap, Clock, List, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
 import { CreateStrategyButton } from "@/components/automation/CreateStrategyButton";
-import { StrategyEditorModal } from "@/components/automation/StrategyEditorModal";
 import { StrategyCard } from "@/components/automation/StrategyCard";
 import { ActivityLog } from "@/components/automation/ActivityLog";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -21,15 +20,17 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/useToast";
 import { logError } from "@/lib/logger";
+import { getStrategyExecutionHistory } from "@/lib/strategy";
+import type { ActiveStrategy, StrategyExecutionRecord } from "@/types/strategy";
 
 export function AutomationCenter() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"strategies" | "activity">("strategies");
-  const [strategies, setStrategies] = useState<any[]>([]);
+  const [strategies, setStrategies] = useState<ActiveStrategy[]>([]);
+  const [runs, setRuns] = useState<StrategyExecutionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingStrategyId, setEditingStrategyId] = useState<string | null>(null);
   const [pendingRemovalStrategyId, setPendingRemovalStrategyId] = useState<string | null>(null);
-  
+
   const { info, success, warning } = useToast();
 
   const fetchStrategies = useCallback(async () => {
@@ -39,17 +40,8 @@ export function AutomationCenter() {
       return;
     }
     try {
-      const result = await invoke<any[]>("get_strategies");
-      const mapped = result.map(s => ({
-        id: s.id,
-        name: s.name,
-        summary: s.summary || "No description provided.",
-        nextRun: s.nextRunAt ? new Date(s.nextRunAt * 1000).toLocaleTimeString() : "Live monitoring",
-        executedCount: s.lastRunAt ? 1 : 0, // Simplified
-        progress: 100,
-        status: s.status === "active" ? "running" : "paused"
-      }));
-      setStrategies(mapped);
+      const result = await invoke<ActiveStrategy[]>("get_strategies");
+      setStrategies(result);
     } catch (err) {
       logError("Failed to fetch strategies", err);
     } finally {
@@ -57,27 +49,43 @@ export function AutomationCenter() {
     }
   }, []);
 
+  const fetchRuns = useCallback(async () => {
+    if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+      setRuns([]);
+      return;
+    }
+    try {
+      const items = await getStrategyExecutionHistory(undefined);
+      setRuns(items.slice(0, 25));
+    } catch (err) {
+      logError("Failed to fetch strategy execution history", err);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchStrategies();
+    void fetchStrategies();
   }, [fetchStrategies]);
 
-  const editingStrategy = useMemo(
-    () => strategies.find((strategy) => strategy.id === editingStrategyId) ?? null,
-    [editingStrategyId, strategies],
-  );
+  useEffect(() => {
+    if (activeTab === "strategies") {
+      void fetchRuns();
+    }
+  }, [activeTab, fetchRuns]);
 
   const handleTogglePause = async (strategyId: string) => {
-    const strategy = strategies.find(s => s.id === strategyId);
+    const strategy = strategies.find((s) => s.id === strategyId);
     if (!strategy) return;
 
-    const nextStatus = strategy.status === "running" ? "paused" : "active";
-    
+    const nextStatus = strategy.status === "active" ? "paused" : "active";
+
     try {
-      await invoke("update_strategy_status", { input: { id: strategyId, status: nextStatus } });
+      await invoke("update_strategy_status", {
+        input: { id: strategyId, status: nextStatus },
+      });
       await fetchStrategies();
       success(
         nextStatus === "active" ? "Strategy resumed" : "Strategy paused",
-        "The automation schedule was updated in the database."
+        "Schedule updated in the local database.",
       );
     } catch (err) {
       warning("Update failed", String(err));
@@ -89,19 +97,10 @@ export function AutomationCenter() {
       await invoke("delete_strategy", { input: { id: strategyId } });
       await fetchStrategies();
       setPendingRemovalStrategyId(null);
-      info("Strategy removed", "The automation was permanently deleted.");
+      info("Strategy removed", "Automation was permanently deleted.");
     } catch (err) {
       warning("Removal failed", String(err));
     }
-  };
-
-  const handleSave = (
-    _strategyId: string,
-    _updates: any,
-  ) => {
-    // Modal update logic would go here
-    setEditingStrategyId(null);
-    fetchStrategies();
   };
 
   return (
@@ -117,33 +116,50 @@ export function AutomationCenter() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex bg-secondary/50 rounded-sm p-1 border border-white/5 mr-4">
+            <div className="mr-4 flex rounded-sm border border-white/5 bg-secondary/50 p-1">
               <button
+                type="button"
                 onClick={() => setActiveTab("strategies")}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-sm text-xs font-medium transition-all",
-                  activeTab === "strategies" 
-                    ? "bg-primary/20 text-foreground border border-white/10" 
-                    : "text-muted hover:text-foreground"
+                  "flex items-center gap-2 rounded-sm px-4 py-1.5 text-xs font-medium transition-all",
+                  activeTab === "strategies"
+                    ? "border border-white/10 bg-primary/20 text-foreground"
+                    : "text-muted hover:text-foreground",
                 )}
               >
                 <List className="size-3.5" />
                 Strategies
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab("activity")}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-sm text-xs font-medium transition-all",
-                  activeTab === "activity" 
-                    ? "bg-primary/20 text-foreground border border-white/10" 
-                    : "text-muted hover:text-foreground"
+                  "flex items-center gap-2 rounded-sm px-4 py-1.5 text-xs font-medium transition-all",
+                  activeTab === "activity"
+                    ? "border border-white/10 bg-primary/20 text-foreground"
+                    : "text-muted hover:text-foreground",
                 )}
               >
                 <Clock className="size-3.5" />
                 Activity
               </button>
             </div>
-            {activeTab === "strategies" && <CreateStrategyButton />}
+            {activeTab === "strategies" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-sm border-white/10 text-xs"
+                >
+                  <Link to="/strategy" className="inline-flex items-center gap-1.5">
+                    <Sparkles className="size-3.5" aria-hidden />
+                    Builder
+                  </Link>
+                </Button>
+                <CreateStrategyButton />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -156,16 +172,42 @@ export function AutomationCenter() {
               <Skeleton className="h-72 w-full" />
             </div>
           ) : strategies.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {strategies.map((strategy) => (
-                <StrategyCard
-                  key={strategy.id}
-                  strategy={strategy}
-                  onEdit={setEditingStrategyId}
-                  onRemove={setPendingRemovalStrategyId}
-                  onTogglePause={handleTogglePause}
-                />
-              ))}
+            <div className="space-y-8">
+              <div className="grid gap-4 md:grid-cols-2">
+                {strategies.map((strategy) => (
+                  <StrategyCard
+                    key={strategy.id}
+                    strategy={strategy}
+                    onEdit={(id) => navigate(`/strategy?id=${encodeURIComponent(id)}`)}
+                    onRemove={setPendingRemovalStrategyId}
+                    onTogglePause={handleTogglePause}
+                  />
+                ))}
+              </div>
+              {runs.length > 0 ? (
+                <section className="glass-panel rounded-sm p-5">
+                  <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+                    Recent strategy runs
+                  </p>
+                  <ul className="mt-4 space-y-2 text-sm">
+                    {runs.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/50 py-2 last:border-0"
+                      >
+                        <span className="font-mono text-xs text-muted">{r.strategyId.slice(0, 8)}…</span>
+                        <span className="text-foreground">{r.status}</span>
+                        <span className="text-xs text-muted">
+                          {new Date(r.createdAt * 1000).toLocaleString()}
+                        </span>
+                        {r.reason ? (
+                          <span className="w-full text-xs text-muted">{r.reason}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
             </div>
           ) : (
             <EmptyState
@@ -181,13 +223,6 @@ export function AutomationCenter() {
         <ActivityLog />
       )}
 
-      <StrategyEditorModal
-        open={editingStrategy !== null}
-        strategy={editingStrategy}
-        onClose={() => setEditingStrategyId(null)}
-        onSave={handleSave}
-      />
-      
       <Dialog
         open={pendingRemovalStrategyId !== null}
         onOpenChange={(nextOpen) => (!nextOpen ? setPendingRemovalStrategyId(null) : undefined)}
@@ -198,7 +233,8 @@ export function AutomationCenter() {
               Remove strategy
             </DialogTitle>
             <DialogDescription className="text-sm text-muted">
-              This removes the strategy from the active automation list. You can recreate it later from the builder.
+              This removes the strategy from the active automation list. You can recreate it later
+              from the builder.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-3 sm:justify-between">
@@ -218,7 +254,7 @@ export function AutomationCenter() {
                 if (!pendingRemovalStrategyId) {
                   return;
                 }
-                handleRemove(pendingRemovalStrategyId);
+                void handleRemove(pendingRemovalStrategyId);
               }}
             >
               Remove
