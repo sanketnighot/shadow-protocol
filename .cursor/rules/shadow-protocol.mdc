@@ -1,0 +1,66 @@
+---
+description: Repository rules for Cursor and other MDC-compatible editors
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# SHADOW Protocol Rules
+
+Read `AGENTS.md` first. It is the canonical instruction file for this repository.
+
+## Project
+
+SHADOW Protocol is a privacy-first desktop DeFi workstation built with:
+
+- React 19 + TypeScript + Vite 7
+- Tailwind CSS 4 + shadcn/ui + Framer Motion
+- Zustand + TanStack Query
+- Tauri 2 + Rust
+- Ollama for local AI
+- Alchemy for onchain portfolio data
+- SQLite local cache
+- OS keychain + biometric unlock for secrets
+
+## Non-Negotiable Security Rules
+
+- Never log private keys, mnemonics, seed phrases, or secret API keys
+- Never store secrets in localStorage, sessionStorage, IndexedDB, or cookies
+- Keep key custody and signing logic in Rust
+- Validate all user input in Rust even if already validated in TypeScript
+- Do not add unsafe Tauri commands that expose arbitrary file access, shell execution, or system internals
+- Keep transaction approvals and guardrails explicit
+
+## Codebase Facts
+
+- Frontend lives in `src/`
+- Backend lives in `src-tauri/`
+- Tauri command registration lives in `src-tauri/src/lib.rs`
+- Supported chains in code are Ethereum, Base, Polygon, `eth-sepolia`, `base-sepolia`, `polygon-amoy`
+- Wallet addresses are stored in `{appDataDir}/wallets.json`
+- Private keys stay in keychain/biometric storage
+- Session unlock caches the decrypted key in RAM temporarily
+- Transfers are implemented
+- Swaps are preview/approval-only today and not fully wired to real execution
+- Market/apps areas still contain some mock data
+
+## Development Preferences
+
+- Use `bun`, not npm or yarn
+- Use Tauri `invoke`, not localhost fetch calls
+- Prefer shared system fixes over page-specific patches
+- Keep the UI compact and minimal
+- Theme controls belong in Settings only
+- Keep the command palette fixed near the top
+- Keep the agent input fixed at the bottom and only scroll messages
+- Preserve the bottom dock navigation pattern
+
+## Validation
+
+Run the relevant checks before completing non-trivial changes:
+
+- `bun run build`
+- `bun run test:run`
+- `cd src-tauri && cargo check`
+- `cd src-tauri && cargo clippy -- -D warnings`
+- `cd src-tauri && cargo test`

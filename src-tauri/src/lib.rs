@@ -93,6 +93,9 @@ pub fn run() {
             commands::add_agent_memory,
             commands::remove_agent_memory,
             commands::get_command_log,
+            commands::get_strategies,
+            commands::update_strategy_status,
+            commands::delete_strategy,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

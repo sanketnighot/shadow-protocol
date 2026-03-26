@@ -1,36 +1,49 @@
-# Copilot Instructions — SHADOW Protocol
+# GitHub Copilot Instructions
 
-## Project
+Follow `AGENTS.md` as the canonical instruction file for this repository.
 
-Tauri 2.0 desktop DeFi app. Rust backend (`src-tauri/`) + React 19/TypeScript frontend (`src/`). Package manager: bun.
+## Repository Summary
 
-## Security (Mandatory)
+SHADOW Protocol is a privacy-first desktop DeFi workstation built with Tauri 2, Rust, React, and TypeScript. It handles wallets, portfolio data, agent-assisted workflows, and future automation. This is a security-critical financial app.
 
-- This handles private keys and real funds — treat every code suggestion as security-critical
-- No `.unwrap()` in Rust on external data — use `Result` and `?`
-- No `any` in TypeScript — strict mode enforced
-- No dynamic code evaluation, no unsanitized HTML rendering
-- No hardcoded secrets, RPC URLs, or API keys
-- Private keys only in OS keychain — never in files, logs, or browser storage
-- Validate all inputs on the Rust side of Tauri commands
-- Use checked arithmetic for all blockchain amounts
+## Core Rules
 
-## Code Patterns
+- Never log, serialize, or expose private keys, seed phrases, or mnemonics
+- Never store secrets in localStorage, sessionStorage, IndexedDB, or cookies
+- Keep secret handling in Rust and OS secure storage
+- Validate all user input at both the frontend and Rust boundaries
+- Use Tauri `invoke` for backend calls; do not introduce localhost HTTP backends
+- Prefer minimal dependencies and production-grade fixes
+- Use `bun` for frontend/package commands
+- Keep UI compact and aligned with the existing dark privacy-first design system
 
-### Rust
-- `#[tauri::command]` returns `Result<T, String>` — register in `generate_handler![]`
-- `thiserror` for error types, `serde` for IPC serialization, `tokio` for async
-- Background tasks use Tokio + `CancellationToken`, emit events to frontend
+## Current Codebase Facts
 
-### TypeScript
-- `invoke` from `@tauri-apps/api/core` for all backend calls — typed interfaces required
-- Functional React components, Zustand stores, TanStack Query for server state
-- `const` over `let`, never `var`
-- Dark theme, shadcn/ui, TailwindCSS, Framer Motion
+- Frontend is in `src/`
+- Rust/Tauri is in `src-tauri/`
+- Command registration is in `src-tauri/src/lib.rs`
+- Wallet commands are in `src-tauri/src/commands/wallet.rs`
+- Session commands are in `src-tauri/src/commands/session.rs`
+- Portfolio commands are in `src-tauri/src/commands/portfolio.rs`
+- Transfers are implemented in `src-tauri/src/commands/transfer.rs`
+- Agent orchestration is in `src-tauri/src/services/agent_chat.rs`
+- Supported chains in code: Ethereum, Base, Polygon, plus configured testnets
 
-## What Not to Suggest
+## Implementation Preferences
 
-- Electron patterns (this is Tauri, not Electron)
-- npm/yarn commands (use bun)
-- Cloud API calls for sensitive operations (everything runs locally)
-- Browser-based crypto (all crypto in Rust)
+- Prefer shared root-cause fixes over one-off patches
+- Keep theme controls in Settings only
+- Keep the command palette fixed near the top
+- Keep the agent input fixed to the bottom of the viewport
+- Preserve the bottom dock navigation pattern
+- Use skeletons instead of spinners when consistent with existing UI
+
+## Validation
+
+Before finishing meaningful code changes, run the relevant checks:
+
+- `bun run build`
+- `bun run test:run`
+- `cd src-tauri && cargo check`
+- `cd src-tauri && cargo clippy -- -D warnings`
+- `cd src-tauri && cargo test`

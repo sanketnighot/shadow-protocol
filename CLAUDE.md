@@ -1,65 +1,83 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Instructions for Claude Code working in this repository.
 
-## Project Overview
+`AGENTS.md` is the canonical cross-agent instruction file for this project. Read it first and treat it as the primary source of truth. This file adds Claude-specific guidance and mirrors the current codebase state.
 
-SHADOW Protocol is a privacy-first, desktop-native DeFi automation platform built with Tauri 2.0. It combines local AI intelligence with multi-chain crypto infrastructure. All sensitive operations (private keys, AI analysis, automation logic) run entirely on-device.
+## Project Summary
 
-## Architecture
+SHADOW Protocol is a privacy-first desktop DeFi workstation built with:
 
-**Tauri 2.0 hybrid app** with two layers:
+- Frontend: React 19, TypeScript, Vite 7, Tailwind CSS 4, Zustand, TanStack Query, shadcn/ui
+- Backend: Tauri 2 + Rust
+- AI: Local Ollama integration with Rust-owned tool execution
+- Data: Alchemy for chain data, SQLite local cache, OS keychain for secrets
 
-- **Frontend** (`src/`): React 19 + TypeScript + Vite 7. Renders in the system WebView (not Electron/Chromium). Dev server runs on port 3000.
-- **Backend** (`src-tauri/`): Rust. The lib crate is `shadow_protocol_lib` (see `src-tauri/src/lib.rs`). Tauri commands are exposed via `#[tauri::command]` and registered in `invoke_handler`. Entry point is `src-tauri/src/main.rs`.
+This is a security-critical financial application. Treat wallet, key, strategy, and transaction code as high risk by default.
 
-Frontend-to-backend communication uses Tauri's IPC invoke system (`@tauri-apps/api`).
+## Canonical Architecture
 
-**Planned stack** (per `docs/shadow-protocol.md`): TailwindCSS, Framer Motion, shadcn/ui, Viem (web3), Zustand/TanStack Query for state, Tokio for background tasks, local AI via Ollama/llama.cpp.
+- Frontend lives in `src/`
+- Rust/Tauri code lives in `src-tauri/`
+- Tauri entrypoint is `src-tauri/src/main.rs`
+- Tauri app bootstrap and command registration live in `src-tauri/src/lib.rs`
+- Rust services live in `src-tauri/src/services/`
+- Tauri commands live in `src-tauri/src/commands/`
 
-## Build & Dev Commands
+## Current Product Reality
 
-Package manager is **bun** (see `bun.lock` and `tauri.conf.json` `beforeDevCommand`).
+Prefer code over docs when they conflict. Current implemented reality:
 
-```bash
-# Frontend only (Vite dev server)
-bun run dev
+- Supported chains in code: Ethereum, Base, Polygon, plus `eth-sepolia`, `base-sepolia`, `polygon-amoy`
+- Wallet addresses are stored in `{appDataDir}/wallets.json`
+- Private keys remain in OS keychain and optional biometric storage
+- Session unlock caches the private key in RAM for 30 minutes
+- Portfolio balances, NFTs, and transactions are fetched via Alchemy and cached in SQLite
+- Agent chat is backend-owned and routes tool calls through Rust
+- Transfers are implemented
+- Swaps are approval-preview only and not fully executed onchain yet
+- Market/apps surfaces still contain mock data in places
 
-# Full Tauri app (starts Vite + Rust backend with hot reload)
-bun run tauri:dev
+Do not assume Arbitrum, Solana, FHE, background execution, or strategy automation are fully implemented unless you confirm them in code first.
 
-# Build production app
-bun run tauri:build
+## Development Rules
 
-# macOS universal binary
-bun run tauri:build:mac
+- Use `bun`, not npm or yarn
+- Prefer minimal, shared fixes over page-specific patches
+- Keep the UI compact and avoid adding unnecessary elements
+- Theme controls belong in Settings only
+- Keep the command palette fixed near the top
+- Keep the agent input fixed at the bottom; only the messages area should scroll
+- For wallet unlock flows, prefer biometric prompts over passive unlock behavior
+- Never move secret handling into the frontend
+- Never add direct localhost fetch-based backend communication; use Tauri `invoke`
 
-# Windows build
-bun run tauri:build:win
+## Security Rules
 
-# TypeScript check
-bun run build    # runs tsc && vite build
+- Never log private keys, seed phrases, mnemonics, or raw signed payloads
+- Never store secrets in localStorage, sessionStorage, IndexedDB, or cookies
+- Validate all frontend input again in Rust
+- Treat all transaction amounts, slippage, gas, addresses, chain ids, and token metadata as untrusted input
+- Keep CSP restrictive in production; do not normalize `csp: null` as acceptable
+- Avoid introducing commands that can read arbitrary files, execute arbitrary shell commands, or leak machine information
 
-# Install frontend deps
-bun install
+## Coding Conventions
 
-# Rust-only commands (run from src-tauri/)
-cargo build
-cargo check
-cargo test
-```
+- TypeScript strict mode is enabled
+- Avoid `any`; use proper types or `unknown` with guards
+- Use typed request/response payloads for Tauri invokes
+- Prefer Zustand for UI state and TanStack Query for async/server state
+- In Rust, use `Result<T, E>` and avoid `unwrap()` in production paths
+- Prefer `thiserror` for custom error types
+- Add tests for new state logic, parsing, validation, and security-sensitive behavior
 
-## Key Configuration Files
+## Recommended Validation
 
-- `src-tauri/tauri.conf.json` — Tauri app config (window size, security CSP, bundle settings, identifier `com.sanket.shadow`)
-- `src-tauri/Cargo.toml` — Rust dependencies. Lib name is `shadow_protocol_lib` with crate-types `staticlib`, `cdylib`, `rlib`
-- `vite.config.ts` — Vite config with Tauri-specific settings (fixed port 3000, ignores `src-tauri/` in watcher)
-- `tsconfig.json` — Strict mode enabled, `noUnusedLocals` and `noUnusedParameters` enforced
+- Frontend: `bun run build`
+- Frontend tests: `bun run test:run`
+- Rust: run from `src-tauri/`
+- `cargo check`
+- `cargo clippy -- -D warnings`
+- `cargo test`
 
-## Conventions
-
-- TypeScript strict mode is on — no unused locals or parameters allowed
-- Tauri commands go in `src-tauri/src/lib.rs` and must be registered in `tauri::generate_handler![]`
-- The Rust lib crate name (`shadow_protocol_lib`) differs from the package name (`Shadow`) — use the lib name when importing
-- Vite dev server is hardcoded to port 3000 (`strictPort: true`)
-- Design system: dark theme, privacy-first aesthetic with purple accent (#8b5cf6), Inter + JetBrains Mono fonts (see `docs/ui-ux.md`)
+If you change Tauri commands, wallet/session flows, or transfer logic, validate both TS and Rust sides before finishing.

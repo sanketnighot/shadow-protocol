@@ -53,7 +53,9 @@ export function Dock({ onNavigate }: DockProps) {
               }
             >
               <Icon className="size-5 sm:size-5" aria-hidden />
-              <span className="text-[10px] font-medium sm:text-xs">{item.label}</span>
+              <span className="text-[10px] font-medium sm:text-xs">
+                {item.label}
+              </span>
             </NavLink>
           );
         })}

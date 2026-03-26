@@ -130,6 +130,28 @@ pub fn all_tools() -> Vec<ToolDef> {
             supports_synthesis: true,
             example: "build_emergency_eject_route(assets=[\"ETH\", \"ARB\"], destination=\"USDC\")",
         },
+        ToolDef {
+            name: "list_automation_strategies",
+            kind: ToolKind::Read,
+            description: "Returns a list of all current automation strategies and their status (active/paused).",
+            parameters: r#"{"type": "object", "properties": {}}"#,
+            execution_mode: ExecutionMode::ReadAuto,
+            requires_wallet: false,
+            supports_multi_wallet: false,
+            supports_synthesis: true,
+            example: "list_automation_strategies()",
+        },
+        ToolDef {
+            name: "update_automation_strategy_status",
+            kind: ToolKind::Write,
+            description: "Updates the status of an existing automation strategy. Use this to pause, resume (active), or stop strategies.",
+            parameters: r#"{"type": "object", "properties": {"id": {"type": "string"}, "status": {"type": "string", "enum": ["active", "paused"]}}, "required": ["id", "status"]}"#,
+            execution_mode: ExecutionMode::ReadAuto, // Agent can do this immediately
+            requires_wallet: false,
+            supports_multi_wallet: false,
+            supports_synthesis: false,
+            example: "update_automation_strategy_status(id=\"uuid-123\", status=\"paused\")",
+        },
     ]
 }
 

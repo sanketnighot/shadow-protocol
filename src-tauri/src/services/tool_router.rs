@@ -274,8 +274,40 @@ pub async fn route_and_execute(
                     Err(e) => ToolResult::Error { message: e.to_string() }
                 }
             }
-            _ => {
-                results.push(ToolResult::Error { message: format!("Unknown tool: {}", def.name) });
+            "list_automation_strategies" => {
+                match local_db::get_strategies() {
+                    Ok(res) => {
+                        let content = serde_json::to_string(&res).unwrap_or_else(|_| "[]".into());
+                        ToolResult::ToolOutput {
+                            tool_name: def.name.to_string(),
+                            content,
+                        }
+                    }
+                    Err(e) => ToolResult::Error { message: e.to_string() }
+                }
+            }
+            "update_automation_strategy_status" => {
+                let id = call.parameters.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let status = call.parameters.get("status").and_then(|v| v.as_str()).unwrap_or("active");
+
+                let strategies = match local_db::get_strategies() {
+                    Ok(s) => s,
+                    Err(e) => return Ok(vec![ToolResult::Error { message: e.to_string() }]),
+                };
+                if let Some(mut strategy) = strategies.into_iter().find(|s| s.id == id) {
+                    strategy.status = status.to_string();
+                    match local_db::upsert_strategy(&strategy) {
+                        Ok(_) => ToolResult::ToolOutput {
+                            tool_name: def.name.to_string(),
+                            content: format!("Strategy '{}' status updated to {}.", strategy.name, status),
+                        },
+                        Err(e) => ToolResult::Error { message: e.to_string() }
+                    }
+                } else {
+                    ToolResult::Error { message: "Strategy not found.".to_string() }
+                }
+            }
+            _ => {                results.push(ToolResult::Error { message: format!("Unknown tool: {}", def.name) });
                 continue;
             }
         };

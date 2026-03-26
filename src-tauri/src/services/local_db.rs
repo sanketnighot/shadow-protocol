@@ -126,7 +126,7 @@ pub fn init(path: &Path) -> Result<(), DbError> {
     Ok(())
 }
 
-fn with_connection<F, R>(f: F) -> Result<R, DbError>
+pub fn with_connection<F, R>(f: F) -> Result<R, DbError>
 where
     F: FnOnce(&Connection) -> Result<R, rusqlite::Error>,
 {

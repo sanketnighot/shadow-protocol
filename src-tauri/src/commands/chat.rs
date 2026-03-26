@@ -3,7 +3,32 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
-use crate::services::local_db::{CommandLogEntry, insert_command_log, get_command_log as db_get_command_log};
+use crate::services::local_db::{ActiveStrategy, CommandLogEntry, insert_command_log, get_command_log as db_get_command_log, get_strategies as db_get_strategies, upsert_strategy};
+
+#[tauri::command]
+pub async fn get_strategies() -> Result<Vec<ActiveStrategy>, String> {
+    db_get_strategies().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_strategy_status(id: String, status: String) -> Result<(), String> {
+    let strategies = db_get_strategies().map_err(|e| e.to_string())?;
+    if let Some(mut strategy) = strategies.into_iter().find(|s| s.id == id) {
+        strategy.status = status;
+        upsert_strategy(&strategy).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Strategy not found".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn delete_strategy(id: String) -> Result<(), String> {
+    crate::services::local_db::with_connection(|conn| {
+        conn.execute("DELETE FROM active_strategies WHERE id = ?1", rusqlite::params![id])?;
+        Ok(())
+    }).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn get_command_log(limit: u32) -> Result<Vec<CommandLogEntry>, String> {

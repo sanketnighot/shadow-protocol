@@ -1,75 +1,74 @@
-# Shadow Protocol
+# GEMINI.md
 
-Shadow Protocol is a Tauri-based crypto/wallet application with integrated AI capabilities, utilizing Ollama for local LLM execution. It allows users to manage multiple wallets, view cross-chain portfolios (Ethereum, Arbitrum, Base), and execute transactions with the assistance of an AI agent.
+Instructions for Gemini and Gemini-based coding agents working in this repository.
 
-## Project Overview
+`AGENTS.md` is the primary shared instruction file for all coding agents. Read that first. This file is a Gemini-focused companion with the current codebase facts and practical development rules.
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS 4.
-- **Backend**: Rust + Tauri 2.
-- **AI Orchestration**: Integrated AI agent capable of assisting with wallet actions and strategies using local Ollama models (e.g., `llama3.2:3b`).
-- **Web3 Integration**: Uses `viem` and Alchemy API for blockchain interactions.
-- **State Management**: Zustand (for global state and persistence) and TanStack Query (for data fetching).
-- **UI/UX**: Radix UI primitives, Framer Motion for animations, and Recharts for portfolio visualization.
-- **Security**: Session locking/unlocking, secure wallet storage (via Rust backend).
+## Project Summary
 
-## Core Architecture
+SHADOW Protocol is a privacy-first Tauri desktop app for DeFi portfolio management, agent-assisted workflows, and future automation.
 
-- `src/`: React frontend source code.
-  - `components/`: UI components, including specialized modules for agent, automation, market, and portfolio.
-  - `lib/`: Core logic for agent orchestration, Ollama interaction, and utility functions.
-  - `store/`: Zustand stores for managing wallet state, agent threads, session, and UI.
-  - `types/`: TypeScript definitions for agent, wallet, and system types.
-- `src-tauri/`: Rust backend source code.
-  - `src/commands/`: Implementation of Tauri commands exposed to the frontend.
-  - `src/services/`: Backend services for local DB, wallet sync, and Ollama management.
-  - `src/session.rs`: Session and security management.
+Stack:
 
-## Building and Running
+- React 19 + TypeScript + Vite 7
+- Tailwind CSS 4 + shadcn/ui + Framer Motion
+- Zustand + TanStack Query
+- Tauri 2 + Rust
+- Ollama for local model execution
+- Alchemy for onchain data
+- SQLite local cache
+- OS keychain + biometrics for secrets and wallet unlock
 
-Ensure you have [Bun](https://bun.sh/) and [Rust](https://www.rust-lang.org/) installed.
+## Treat These As Canonical
 
-### Setup
-1. Install dependencies:
-   ```bash
-   bun install
-   ```
-2. Configure environment variables (Alchemy API key required for real balances):
-   ```bash
-   cp .env.example .env
-   # Edit .env with your ALCHEMY_API_KEY
-   ```
+- `AGENTS.md`
+- `src-tauri/src/lib.rs`
+- `src-tauri/src/commands/`
+- `src-tauri/src/services/`
+- `src/routes.tsx`
+- `src/components/layout/AppShell.tsx`
 
-### Development
-- **Run the full Tauri app**:
-  ```bash
-  bun run tauri:dev
-  ```
-- **Run only the frontend (web mode)**:
-  ```bash
-  bun run dev
-  ```
+Prefer code over docs if there is a mismatch.
 
-### Testing
-- **Run all tests**:
-  ```bash
-  bun run test
-  ```
-- **Run tests in CI mode**:
-  ```bash
-  bun run test:run
-  ```
+## Current Codebase Facts
 
-### Production Build
-- **Build the desktop application**:
-  ```bash
-  bun run tauri:build
-  ```
+- Supported chains in code are Ethereum, Base, Polygon, and their configured testnets
+- Polygon Amoy native ticker is `POL`
+- Main app navigation is in the bottom dock
+- Theme settings live in Settings, not in the sidebar
+- Agent input is fixed at the bottom of the viewport
+- Wallet addresses are persisted in `wallets.json`
+- Private keys remain in keychain/biometric storage
+- Session unlock uses biometric auth when available and caches the key in RAM temporarily
+- Portfolio and transaction data are fetched through Alchemy and cached in SQLite
+- Transfers are implemented
+- Swaps are not fully implemented as real execution yet
+- Some market and apps UI still uses mock data
 
-## Development Conventions
+## Required Engineering Behavior
 
-- **UI Style**: Follow the "glass-panel" theme using Tailwind 4 utility classes. Components are largely based on Radix UI.
-- **Tauri Commands**: All backend interactions must be defined in `src-tauri/src/commands` and registered in `src-tauri/src/lib.rs`.
-- **State Persistence**: Sensitive wallet metadata and UI preferences are persisted via Zustand's `persist` middleware.
-- **Local AI**: The agent defaults to `llama3.2:3b` via Ollama. Check `src/lib/ollama.ts` for interaction logic.
-- **Testing**: New UI components or complex state logic should include Vitest tests (`.test.tsx` or `.test.ts`).
-- **Safety**: Never log private keys or mnemonic phrases. Wallet sensitive operations are handled in the Rust backend.
+- Use `bun` commands, not npm or yarn
+- Use Tauri `invoke` for backend calls
+- Keep sensitive logic in Rust
+- Re-validate all user input in Rust even if the frontend validates it
+- Never log or persist secrets outside approved secure storage
+- Keep changes minimal, shared, and production-oriented
+- For UI work, preserve the existing compact dark privacy-first visual language
+
+## Security Requirements
+
+- Never expose private keys, mnemonics, seed phrases, or raw wallet secrets
+- Never store secrets in browser storage
+- Avoid adding unsafe Tauri commands
+- Do not weaken approval flows for transactions or automations
+- Simulate and validate financial actions before execution
+
+## Validation Commands
+
+- `bun run build`
+- `bun run test:run`
+- `cd src-tauri && cargo check`
+- `cd src-tauri && cargo clippy -- -D warnings`
+- `cd src-tauri && cargo test`
+
+If you touch wallet, session, transfer, or agent tooling code, validate those paths carefully before considering the task complete.
