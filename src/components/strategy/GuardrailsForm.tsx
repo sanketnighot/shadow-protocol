@@ -1,16 +1,21 @@
-import { useState } from "react";
-
-import { GUARDRAIL_DEFAULTS } from "@/data/mock";
+import type { StrategyGuardrails } from "@/types/strategy";
 import { Button } from "@/components/ui/button";
 
 type GuardrailsFormProps = {
+  guardrails: StrategyGuardrails;
+  onChange: (patch: Partial<StrategyGuardrails>) => void;
   onSave: () => void;
   onTestSimulation: () => void;
+  isSaving?: boolean;
 };
 
-export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps) {
-  const [guardrails, setGuardrails] = useState(GUARDRAIL_DEFAULTS);
-
+export function GuardrailsForm({
+  guardrails,
+  onChange,
+  onSave,
+  onTestSimulation,
+  isSaving = false,
+}: GuardrailsFormProps) {
   return (
     <section className="glass-panel rounded-sm p-5">
       <div className="flex items-start justify-between gap-3">
@@ -28,25 +33,23 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
         <label className="grid gap-2 text-sm text-muted">
           Max per trade (USD)
           <input
-            value={guardrails.maxTradeUsd}
+            value={guardrails.maxPerTradeUsd}
             onChange={(event) =>
-              setGuardrails((current) => ({
-                ...current,
-                maxTradeUsd: event.currentTarget.value,
-              }))
+              onChange({
+                maxPerTradeUsd: Number(event.currentTarget.value),
+              })
             }
             className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
         </label>
         <label className="grid gap-2 text-sm text-muted">
-          Stop if portfolio below (USD)
+          Max daily notional (USD)
           <input
-            value={guardrails.stopBelowPortfolioUsd}
+            value={guardrails.maxDailyNotionalUsd}
             onChange={(event) =>
-              setGuardrails((current) => ({
-                ...current,
-                stopBelowPortfolioUsd: event.currentTarget.value,
-              }))
+              onChange({
+                maxDailyNotionalUsd: Number(event.currentTarget.value),
+              })
             }
             className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
@@ -56,10 +59,48 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
           <input
             value={guardrails.requireApprovalAboveUsd}
             onChange={(event) =>
-              setGuardrails((current) => ({
-                ...current,
-                requireApprovalAboveUsd: event.currentTarget.value,
-              }))
+              onChange({
+                requireApprovalAboveUsd: Number(event.currentTarget.value),
+              })
+            }
+            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+          />
+        </label>
+        <label className="grid gap-2 text-sm text-muted">
+          Stop if portfolio below (USD)
+          <input
+            value={guardrails.minPortfolioUsd}
+            onChange={(event) =>
+              onChange({
+                minPortfolioUsd: Number(event.currentTarget.value),
+              })
+            }
+            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+          />
+        </label>
+        <label className="grid gap-2 text-sm text-muted">
+          Cooldown (seconds)
+          <input
+            value={guardrails.cooldownSeconds}
+            onChange={(event) =>
+              onChange({
+                cooldownSeconds: Number(event.currentTarget.value),
+              })
+            }
+            className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
+          />
+        </label>
+        <label className="grid gap-2 text-sm text-muted">
+          Allowed chains
+          <input
+            value={guardrails.allowedChains.join(", ")}
+            onChange={(event) =>
+              onChange({
+                allowedChains: event.currentTarget.value
+                  .split(",")
+                  .map((item) => item.trim().toLowerCase())
+                  .filter(Boolean),
+              })
             }
             className="rounded-sm border border-border bg-secondary px-4 py-3 text-foreground outline-none"
           />
@@ -67,15 +108,19 @@ export function GuardrailsForm({ onSave, onTestSimulation }: GuardrailsFormProps
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Button className="rounded-sm px-5 active:scale-95" onClick={onSave}>
-          Save Strategy
+        <Button
+          className="rounded-sm px-5 active:scale-95"
+          onClick={onSave}
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving…" : "Save Draft"}
         </Button>
         <Button
           variant="outline"
           className="rounded-sm border-border bg-secondary text-foreground hover:bg-surface-elevated active:scale-95"
           onClick={onTestSimulation}
         >
-          Test Simulation
+          Validate
         </Button>
       </div>
     </section>
