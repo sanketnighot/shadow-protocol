@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 import {
   getActiveThread,
@@ -8,7 +7,7 @@ import {
   useAgentThreadStore,
 } from "@/store/useAgentThreadStore";
 import { useUiStore } from "@/store/useUiStore";
-import type { ApproveAgentActionResult } from "@/types/agent";
+import { approveAgentAction, rejectAgentAction } from "@/lib/agent";
 import { useToast } from "@/hooks/useToast";
 
 export function useAgentChat() {
@@ -41,11 +40,11 @@ export function useAgentChat() {
     if (!pendingAgentAction || !activeThread) return;
     setIsApprovePending(true);
     try {
-      const result = await invoke<ApproveAgentActionResult>("approve_agent_action", {
-        input: {
-          toolName: pendingAgentAction.toolName,
-          payload: pendingAgentAction.payload,
-        },
+      const result = await approveAgentAction({
+        approvalId: pendingAgentAction.approvalId,
+        toolName: pendingAgentAction.toolName,
+        payload: pendingAgentAction.payload as Record<string, unknown>,
+        expectedVersion: pendingAgentAction.expectedVersion,
       });
       
       if (result.success) {
@@ -67,13 +66,16 @@ export function useAgentChat() {
   }, [pendingAgentAction, activeThread, recordApprovalFollowUp, clearPendingApproval, success, warning, sendMessageFromStore]);
 
   const rejectAction = useCallback(() => {
-    if (!activeThread) return;
-    recordApprovalFollowUp(activeThread.id, false);
-    clearPendingApproval();
-    
-    // Trigger agent follow-up turn (hidden from UI)
-    sendMessageFromStore(activeThread.id, `[SYSTEM: User REJECTED the action. Please acknowledge gracefully and ask if there is anything else the user needs.]`, { hidden: true });
-  }, [activeThread, recordApprovalFollowUp, clearPendingApproval, sendMessageFromStore]);
+    if (!activeThread || !pendingAgentAction) return;
+    void rejectAgentAction({
+      approvalId: pendingAgentAction.approvalId,
+      expectedVersion: pendingAgentAction.expectedVersion,
+    }).finally(() => {
+      recordApprovalFollowUp(activeThread.id, false);
+      clearPendingApproval();
+      sendMessageFromStore(activeThread.id, `[SYSTEM: User REJECTED the action. Please acknowledge gracefully and ask if there is anything else the user needs.]`, { hidden: true });
+    });
+  }, [activeThread, pendingAgentAction, recordApprovalFollowUp, clearPendingApproval, sendMessageFromStore]);
 
   return {
     isStreaming: activeThread?.isStreaming ?? false,

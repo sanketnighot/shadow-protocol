@@ -4,7 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { QUICK_ACTIONS } from "@/data/mock";
 import type { Asset, ChainBalance, PortfolioPoint } from "@/data/mock";
-import type { PortfolioAsset } from "@/types/wallet";
+import type {
+  PortfolioAsset,
+  PortfolioPerformanceRange,
+} from "@/types/wallet";
 
 type PortfolioParams = {
   addresses?: string[];
@@ -56,6 +59,13 @@ export function usePortfolio(params: PortfolioParams = {}) {
     retry: false,
   });
 
+  const { data: history } = useQuery({
+    queryKey: ["portfolio", "history", "30D"],
+    queryFn: async (): Promise<PortfolioPerformanceRange> =>
+      invoke("portfolio_fetch_history", { input: { range: "30D" } }),
+    staleTime: 60_000,
+  });
+
   const assets: Asset[] =
     rawAssets.length > 0
       ? rawAssets.map((pa) =>
@@ -71,9 +81,29 @@ export function usePortfolio(params: PortfolioParams = {}) {
     }, 0);
   }, [assets]);
 
-  const totalValueLabel = totalValue > 0 ? `$${totalValue.toFixed(2)}` : "$0.00";
+  const totalValueLabel =
+    history?.summary.currentTotalUsd ?? (totalValue > 0 ? `$${totalValue.toFixed(2)}` : "$0.00");
 
   const chains: ChainBalance[] = useMemo(() => {
+    const latestPoint =
+      history?.points.length && history.points.length > 0
+        ? history.points[history.points.length - 1]
+        : null;
+    const fromHistory = latestPoint?.chainBreakdown ?? [];
+    if (fromHistory.length > 0) {
+      const total = fromHistory.reduce(
+        (sum: number, item) =>
+          sum + Number(item.valueUsd.replace(/[$,]/g, "")),
+        0,
+      );
+      return fromHistory.map((item) => ({
+        symbol: item.chain ?? "Unknown",
+        name: item.chain ?? "Unknown",
+        valueLabel: item.valueUsd,
+        allocation: total > 0 ? Math.round((Number(item.valueUsd.replace(/[$,]/g, "")) / total) * 100) : 0,
+      }));
+    }
+
     const byChain = new Map<string, { value: number; symbol: string; name: string }>();
     for (const a of assets) {
       const v = Number(a.valueUsd.replace(/[$,]/g, ""));
@@ -94,23 +124,51 @@ export function usePortfolio(params: PortfolioParams = {}) {
         allocation: Math.round((c.value / total) * 100),
       }))
       .sort((a, b) => b.allocation - a.allocation);
-  }, [assets, totalValue]);
+  }, [assets, totalValue, history]);
 
   const series: PortfolioPoint[] = useMemo(() => {
+    const points = history?.points ?? [];
+    if (points.length > 0) {
+      return points.map((point, index) => ({
+        day: index === points.length - 1 ? "Now" : new Date(point.timestamp * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        value: Number(point.totalUsd.replace(/[$,]/g, "")),
+      }));
+    }
     if (totalValue <= 0) return [{ day: "Now", value: 0 }];
     return [
       { day: "Prev", value: totalValue * 0.98 },
       { day: "Now", value: totalValue },
     ];
-  }, [totalValue]);
+  }, [history, totalValue]);
+
+  const targetSeries: PortfolioPoint[] = useMemo(() => {
+    const points = history?.points ?? [];
+    return points.map((point) => ({
+      day: new Date(point.timestamp * 1000).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+      value:
+        Number(point.totalUsd.replace(/[$,]/g, "")) -
+        Number(point.netFlowUsd.replace(/[$,]/g, "")),
+    }));
+  }, [history]);
 
   return {
     assets,
     totalValueLabel,
-    dailyChangeLabel: "+0% (24h)",
+    dailyChangeLabel:
+      history?.summary.changeUsd && history?.summary.changePct
+        ? `${history.summary.changeUsd} (${history.summary.changePct})`
+        : "+0.00% (24h)",
     chains,
     series,
+    targetSeries,
     quickActions: QUICK_ACTIONS,
+    walletAttribution: history?.walletAttribution ?? [],
+    allocationActual: history?.allocationActual ?? [],
+    allocationTarget: history?.allocationTarget ?? [],
+    performanceSummary: history?.summary ?? null,
     isLoading,
     isFetching,
     refetch,

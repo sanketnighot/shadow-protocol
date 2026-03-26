@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
+import { logError } from "@/lib/logger";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
 
@@ -70,7 +71,7 @@ export function SettingsPage() {
           setIsOllamaKeySaved(true);
         }
       } catch (err) {
-        console.error("Failed to fetch keys:", err);
+        logError("Failed to fetch keys", err);
       }
     };
     void fetchKeys();

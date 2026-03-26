@@ -1,10 +1,20 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { uiStoreDefaults, useUiStore } from "@/store/useUiStore";
+
+function renderApp() {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>,
+  );
+}
 
 describe("App", () => {
   beforeEach(() => {
@@ -25,7 +35,7 @@ describe("App", () => {
   });
 
   it("renders the dashboard shell on the home route", () => {
-    render(<App />);
+    renderApp();
 
     expect(screen.getByText("SHADOW Protocol")).toBeInTheDocument();
     expect(screen.getByText("Private DeFi workstation")).toBeInTheDocument();
@@ -40,7 +50,7 @@ describe("App", () => {
   it("renders the agent workspace on the agent route", () => {
     window.location.hash = "#/agent";
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByText("Agent conversation")).toBeInTheDocument();
     expect(
@@ -52,7 +62,7 @@ describe("App", () => {
   it("renders the automation center route", () => {
     window.location.hash = "#/automation";
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByText("Active strategies")).toBeInTheDocument();
     expect(
@@ -63,7 +73,7 @@ describe("App", () => {
   it("renders the portfolio route", async () => {
     window.location.hash = "#/portfolio";
 
-    render(<App />);
+    renderApp();
 
     await vi.waitFor(() => {
       expect(
@@ -75,7 +85,7 @@ describe("App", () => {
   it("renders the strategy builder route", () => {
     window.location.hash = "#/strategy";
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByText("Strategy builder")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Strategy" })).toBeInTheDocument();
@@ -85,7 +95,7 @@ describe("App", () => {
   it("renders the market route", () => {
     window.location.hash = "#/market";
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByRole("heading", { name: "Live opportunities across yield, arbitrage, and rebalancing." })).toBeInTheDocument();
     expect(screen.getByText("Live opportunities across yield, arbitrage, and rebalancing.")).toBeInTheDocument();
@@ -94,7 +104,7 @@ describe("App", () => {
   it("renders the settings route", () => {
     window.location.hash = "#/settings";
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByRole("heading", { name: "Appearance & shortcuts" })).toBeInTheDocument();
     expect(screen.getByText("Theme")).toBeInTheDocument();
@@ -104,7 +114,7 @@ describe("App", () => {
     window.location.hash = "#/agent";
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "Deploy $500" }));
 

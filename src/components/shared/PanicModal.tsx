@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { useUiStore } from "@/store/useUiStore";
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/hooks/useToast";
 
 export function PanicModal() {
@@ -20,14 +19,7 @@ export function PanicModal() {
   const handlePanicExecute = async () => {
     setIsExecuting(true);
     try {
-      // In a real implementation, this would call the pre-computed panic route tool.
-      await invoke("approve_agent_action", {
-        input: {
-          toolName: "execute_token_swap", // Placeholder tool
-          payload: data?.routes?.[0] || {},
-        },
-      });
-      success("Emergency Exit Successful", "All funds have been routed to safety.");
+      success("Panic Route Staged", "Review the emergency route in the agent workflow before execution.");
       close();
     } catch (err) {
       info("Emergency Exit Failed", String(err));

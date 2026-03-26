@@ -5,6 +5,10 @@ import type {
   ApproveAgentActionResult,
   ChatAgentInput,
   ChatAgentResponse,
+  ExecutionLogRecord,
+  PendingApprovalRecord,
+  RejectAgentActionInput,
+  RejectAgentActionResult,
 } from "@/types/agent";
 
 export async function chatAgent(
@@ -27,9 +31,34 @@ export async function approveAgentAction(
 ): Promise<ApproveAgentActionResult> {
   return invoke<ApproveAgentActionResult>("approve_agent_action", {
     input: {
+      approvalId: input.approvalId,
       toolName: input.toolName,
       payload: input.payload,
+      expectedVersion: input.expectedVersion,
     },
+  });
+}
+
+export async function rejectAgentAction(
+  input: RejectAgentActionInput,
+): Promise<RejectAgentActionResult> {
+  return invoke<RejectAgentActionResult>("reject_agent_action", {
+    input: {
+      approvalId: input.approvalId,
+      expectedVersion: input.expectedVersion,
+    },
+  });
+}
+
+export async function getPendingApprovals(): Promise<PendingApprovalRecord[]> {
+  return invoke<PendingApprovalRecord[]>("get_pending_approvals", {
+    input: {},
+  });
+}
+
+export async function getExecutionLog(limit = 100): Promise<ExecutionLogRecord[]> {
+  return invoke<ExecutionLogRecord[]>("get_execution_log", {
+    input: { limit },
   });
 }
 

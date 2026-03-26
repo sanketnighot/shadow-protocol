@@ -46,6 +46,9 @@ export async function deleteModel(modelName: string): Promise<void> {
 export function listenOllamaProgress(
   callback: (step: string, progress: number) => void,
 ): Promise<UnlistenFn> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return Promise.resolve(() => {});
+  }
   return listen<OllamaProgressPayload>(OLLAMA_PROGRESS_EVENT, (event) => {
     const [step, progress] = event.payload;
     callback(step, progress ?? 0);

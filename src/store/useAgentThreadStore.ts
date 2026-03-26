@@ -21,11 +21,13 @@ import {
 } from "@/lib/chatContext";
 import { useOllamaStore } from "@/store/useOllamaStore";
 import { useWalletStore } from "@/store/useWalletStore";
-import type { SwapPreviewPayload } from "@/types/agent";
+import type { StrategyProposalPayload, SwapPreviewPayload } from "@/types/agent";
 
 export type PendingAgentAction = {
+  approvalId: string;
   toolName: string;
   payload: unknown;
+  expectedVersion: number;
 };
 
 export type Thread = {
@@ -343,22 +345,40 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                 };
               });
             } else if (response.kind === "approvalRequired") {
-              const p = response.payload as SwapPreviewPayload;
-              const approval: ApprovalTransaction = {
-                id: `approval-${crypto.randomUUID()}`,
-                strategyId: `agent-${response.toolName}`,
-                action: `Swap ${p.fromToken} → ${p.toToken}`,
-                amount: p.amount,
-                chain: p.chain,
-                slippage: p.slippage,
-                gas: p.gasEstimate,
-                reason: response.message,
-                executionWindow: "30 seconds",
-              };
+              const approval: ApprovalTransaction =
+                response.toolName === "execute_token_swap"
+                  ? (() => {
+                      const p = response.payload as SwapPreviewPayload;
+                      return {
+                        id: response.approvalId,
+                        strategyId: `agent-${response.toolName}`,
+                        action: `Swap ${p.fromToken} → ${p.toToken}`,
+                        amount: p.amount,
+                        chain: p.chain,
+                        slippage: p.slippage,
+                        gas: p.gasEstimate,
+                        reason: response.message,
+                        executionWindow: "15 minutes",
+                      };
+                    })()
+                  : (() => {
+                      const p = response.payload as StrategyProposalPayload;
+                      return {
+                        id: response.approvalId,
+                        strategyId: `agent-${response.toolName}`,
+                        action: `Create strategy: ${p.name}`,
+                        amount: "N/A",
+                        chain: "Policy",
+                        slippage: "N/A",
+                        gas: "N/A",
+                        reason: response.message,
+                        executionWindow: "15 minutes",
+                      };
+                    })();
               const approvalBlock: AgentMessageBlock = {
                 type: "approvalRequest",
                 toolName: response.toolName,
-                payload: p,
+                payload: response.payload,
                 message: response.message,
               };
               set((state) => {
@@ -382,8 +402,10 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
                           ),
                           pendingApproval: approval,
                           pendingAgentAction: {
+                            approvalId: response.approvalId,
                             toolName: response.toolName,
-                            payload: p,
+                            payload: response.payload,
+                            expectedVersion: response.version,
                           },
                           updatedAt: Date.now(),
                         }

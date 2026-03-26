@@ -197,6 +197,55 @@ async fn fetch_asset_transfers_for_network(
     Ok(rows)
 }
 
+fn snapshot_from_assets(assets: &[PortfolioAsset]) {
+    let mut by_wallet = std::collections::HashMap::<String, f64>::new();
+    let mut by_chain = std::collections::HashMap::<String, f64>::new();
+    let mut top_assets = Vec::new();
+    let mut total = 0.0;
+
+    for asset in assets {
+        let value = asset
+            .value_usd
+            .replace(['$', ','], "")
+            .parse::<f64>()
+            .unwrap_or(0.0);
+        total += value;
+        if let Some(wallet) = asset.wallet_address.as_ref() {
+            *by_wallet.entry(wallet.clone()).or_insert(0.0) += value;
+        }
+        *by_chain.entry(asset.chain.clone()).or_insert(0.0) += value;
+        top_assets.push(serde_json::json!({
+            "symbol": asset.symbol,
+            "valueUsd": asset.value_usd,
+        }));
+    }
+
+    top_assets.sort_by(|a, b| {
+        let av = a.get("valueUsd").and_then(|v| v.as_str()).unwrap_or("$0.00").replace(['$', ','], "").parse::<f64>().unwrap_or(0.0);
+        let bv = b.get("valueUsd").and_then(|v| v.as_str()).unwrap_or("$0.00").replace(['$', ','], "").parse::<f64>().unwrap_or(0.0);
+        bv.partial_cmp(&av).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    top_assets.truncate(5);
+
+    let wallet_breakdown = by_wallet
+        .into_iter()
+        .map(|(wallet, value)| serde_json::json!({ "wallet": wallet, "valueUsd": format!("${value:.2}") }))
+        .collect::<Vec<_>>();
+    let chain_breakdown = by_chain
+        .into_iter()
+        .map(|(chain, value)| serde_json::json!({ "chain": chain, "valueUsd": format!("${value:.2}") }))
+        .collect::<Vec<_>>();
+
+    let _ = local_db::insert_portfolio_snapshot_full(
+        &format!("${total:.2}"),
+        &serde_json::to_string(&top_assets).unwrap_or_else(|_| "[]".to_string()),
+        &serde_json::to_string(&wallet_breakdown).unwrap_or_else(|_| "[]".to_string()),
+        &serde_json::to_string(&chain_breakdown).unwrap_or_else(|_| "[]".to_string()),
+        "$0.00",
+        &format!("${total:.2}"),
+    );
+}
+
 pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, wallet_count: usize) {
     let api_key = match super::settings::get_alchemy_key_or_env() {
         Some(k) => k,
@@ -256,6 +305,7 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
     for (chain, rows) in &by_chain {
         let _ = local_db::upsert_tokens(&address, chain, rows);
     }
+    snapshot_from_assets(&assets);
 
     emit_progress(
         &app,

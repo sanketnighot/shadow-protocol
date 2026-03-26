@@ -1,6 +1,7 @@
 pub mod agent_chat;
 pub mod agent_state;
 pub mod anonymizer;
+pub mod audit;
 pub mod chain;
 pub mod local_db;
 pub mod heartbeat;
@@ -9,6 +10,7 @@ pub mod ollama_client;
 pub mod portfolio_service;
 pub mod settings;
 pub mod shadow_watcher;
+pub mod strategy_engine;
 pub mod harvester;
 pub mod alpha_service;
 pub mod sonar_client;

@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::time::interval;
 use serde::Serialize;
 use reqwest::Client;
+use tracing::error;
 
 use super::sonar_client;
 use super::ollama_client;
@@ -28,7 +29,7 @@ pub fn start(app: AppHandle) {
             timer.tick().await;
             
             if let Err(e) = run_alpha_cycle(&app, &client).await {
-                eprintln!("AlphaService error: {}", e);
+                error!("alpha_service.cycle_failed: {}", e);
             }
         }
     });

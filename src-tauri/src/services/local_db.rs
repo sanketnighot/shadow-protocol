@@ -1,6 +1,7 @@
 //! Local SQLite storage for wallet onchain data (tokens, NFTs, transactions).
 
 use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -61,7 +62,11 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   timestamp INTEGER NOT NULL,
   total_usd TEXT NOT NULL,
-  top_assets_json TEXT NOT NULL
+  top_assets_json TEXT NOT NULL,
+  wallet_breakdown_json TEXT NOT NULL DEFAULT '[]',
+  chain_breakdown_json TEXT NOT NULL DEFAULT '[]',
+  net_flow_usd TEXT NOT NULL DEFAULT '0.00',
+  performance_usd TEXT NOT NULL DEFAULT '0.00'
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON portfolio_snapshots(timestamp);
@@ -77,9 +82,15 @@ CREATE TABLE IF NOT EXISTS active_strategies (
   name TEXT NOT NULL,
   summary TEXT,
   status TEXT NOT NULL,
+  mode TEXT NOT NULL DEFAULT 'approval_required',
   trigger_json TEXT NOT NULL,
   action_json TEXT NOT NULL,
   guardrails_json TEXT NOT NULL,
+  approval_policy_json TEXT NOT NULL DEFAULT '{}',
+  execution_policy_json TEXT NOT NULL DEFAULT '{}',
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  last_evaluation_at INTEGER,
+  disabled_reason TEXT,
   last_run_at INTEGER,
   next_run_at INTEGER,
   created_at INTEGER NOT NULL
@@ -93,6 +104,55 @@ CREATE TABLE IF NOT EXISTS command_log (
   status TEXT NOT NULL, -- 'approved', 'rejected', 'failed'
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  simulation_json TEXT,
+  policy_json TEXT,
+  message TEXT NOT NULL,
+  expires_at INTEGER,
+  version INTEGER NOT NULL DEFAULT 1,
+  strategy_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_created_at ON approval_requests(created_at);
+
+CREATE TABLE IF NOT EXISTS tool_executions (
+  id TEXT PRIMARY KEY,
+  approval_id TEXT,
+  strategy_id TEXT,
+  tool_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  request_json TEXT NOT NULL,
+  result_json TEXT,
+  tx_hash TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_executions_status ON tool_executions(status);
+CREATE INDEX IF NOT EXISTS idx_tool_executions_created_at ON tool_executions(created_at);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT,
+  details_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -121,8 +181,43 @@ pub fn init(path: &Path) -> Result<(), DbError> {
     }
     let conn = Connection::open(path)?;
     conn.execute_batch(SCHEMA)?;
+    migrate(&conn)?;
     let mut guard = DB_PATH.lock().map_err(|_| rusqlite::Error::InvalidParameterName("lock".into()))?;
     *guard = Some(path.to_path_buf());
+    Ok(())
+}
+
+fn migrate(conn: &Connection) -> Result<(), DbError> {
+    ensure_column(conn, "portfolio_snapshots", "wallet_breakdown_json", "TEXT NOT NULL DEFAULT '[]'")?;
+    ensure_column(conn, "portfolio_snapshots", "chain_breakdown_json", "TEXT NOT NULL DEFAULT '[]'")?;
+    ensure_column(conn, "portfolio_snapshots", "net_flow_usd", "TEXT NOT NULL DEFAULT '0.00'")?;
+    ensure_column(conn, "portfolio_snapshots", "performance_usd", "TEXT NOT NULL DEFAULT '0.00'")?;
+
+    ensure_column(conn, "active_strategies", "mode", "TEXT NOT NULL DEFAULT 'approval_required'")?;
+    ensure_column(conn, "active_strategies", "approval_policy_json", "TEXT NOT NULL DEFAULT '{}'")?;
+    ensure_column(conn, "active_strategies", "execution_policy_json", "TEXT NOT NULL DEFAULT '{}'")?;
+    ensure_column(conn, "active_strategies", "failure_count", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(conn, "active_strategies", "last_evaluation_at", "INTEGER")?;
+    ensure_column(conn, "active_strategies", "disabled_reason", "TEXT")?;
+    Ok(())
+}
+
+fn ensure_column(conn: &Connection, table: &str, column: &str, definition: &str) -> Result<(), DbError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    let mut exists = false;
+    for col in columns {
+        if col? == column {
+            exists = true;
+            break;
+        }
+    }
+    if !exists {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -181,6 +276,17 @@ pub fn insert_portfolio_snapshot(
     total_usd: &str,
     top_assets_json: &str,
 ) -> Result<(), DbError> {
+    insert_portfolio_snapshot_full(total_usd, top_assets_json, "[]", "[]", "0.00", "0.00")
+}
+
+pub fn insert_portfolio_snapshot_full(
+    total_usd: &str,
+    top_assets_json: &str,
+    wallet_breakdown_json: &str,
+    chain_breakdown_json: &str,
+    net_flow_usd: &str,
+    performance_usd: &str,
+) -> Result<(), DbError> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -188,8 +294,8 @@ pub fn insert_portfolio_snapshot(
 
     with_connection(|conn| {
         conn.execute(
-            "INSERT INTO portfolio_snapshots (timestamp, total_usd, top_assets_json) VALUES (?1, ?2, ?3)",
-            params![now, total_usd, top_assets_json],
+            "INSERT INTO portfolio_snapshots (timestamp, total_usd, top_assets_json, wallet_breakdown_json, chain_breakdown_json, net_flow_usd, performance_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![now, total_usd, top_assets_json, wallet_breakdown_json, chain_breakdown_json, net_flow_usd, performance_usd],
         )?;
         Ok(())
     })
@@ -199,13 +305,17 @@ pub fn insert_portfolio_snapshot(
 pub fn get_portfolio_snapshots(limit: u32) -> Result<Vec<PortfolioSnapshot>, DbError> {
     with_connection(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT timestamp, total_usd, top_assets_json FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT ?1",
+            "SELECT timestamp, total_usd, top_assets_json, wallet_breakdown_json, chain_breakdown_json, net_flow_usd, performance_usd FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(params![limit], |row| {
             Ok(PortfolioSnapshot {
                 timestamp: row.get(0)?,
                 total_usd: row.get(1)?,
                 top_assets_json: row.get(2)?,
+                wallet_breakdown_json: row.get(3)?,
+                chain_breakdown_json: row.get(4)?,
+                net_flow_usd: row.get(5)?,
+                performance_usd: row.get(6)?,
             })
         })?;
 
@@ -227,6 +337,9 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM portfolio_snapshots", [])?;
         conn.execute("DELETE FROM target_allocations", [])?;
         conn.execute("DELETE FROM active_strategies", [])?;
+        conn.execute("DELETE FROM approval_requests", [])?;
+        conn.execute("DELETE FROM tool_executions", [])?;
+        conn.execute("DELETE FROM audit_log", [])?;
         Ok(())
     })
 }
@@ -281,15 +394,21 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
             r#"
-            INSERT INTO active_strategies (id, name, summary, status, trigger_json, action_json, guardrails_json, last_run_at, next_run_at, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            INSERT INTO active_strategies (id, name, summary, status, mode, trigger_json, action_json, guardrails_json, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at, disabled_reason, last_run_at, next_run_at, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               summary = excluded.summary,
               status = excluded.status,
+              mode = excluded.mode,
               trigger_json = excluded.trigger_json,
               action_json = excluded.action_json,
               guardrails_json = excluded.guardrails_json,
+              approval_policy_json = excluded.approval_policy_json,
+              execution_policy_json = excluded.execution_policy_json,
+              failure_count = excluded.failure_count,
+              last_evaluation_at = excluded.last_evaluation_at,
+              disabled_reason = excluded.disabled_reason,
               last_run_at = excluded.last_run_at,
               next_run_at = excluded.next_run_at
             "#,
@@ -298,9 +417,15 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
                 strategy.name,
                 strategy.summary,
                 strategy.status,
+                strategy.mode,
                 strategy.trigger_json,
                 strategy.action_json,
                 strategy.guardrails_json,
+                strategy.approval_policy_json,
+                strategy.execution_policy_json,
+                strategy.failure_count,
+                strategy.last_evaluation_at,
+                strategy.disabled_reason,
                 strategy.last_run_at,
                 strategy.next_run_at,
                 now,
@@ -314,18 +439,24 @@ pub fn upsert_strategy(strategy: &ActiveStrategy) -> Result<(), DbError> {
 #[allow(dead_code)]
 pub fn get_strategies() -> Result<Vec<ActiveStrategy>, DbError> {
     with_connection(|conn| {
-        let mut stmt = conn.prepare("SELECT id, name, summary, status, trigger_json, action_json, guardrails_json, last_run_at, next_run_at FROM active_strategies")?;
+        let mut stmt = conn.prepare("SELECT id, name, summary, status, mode, trigger_json, action_json, guardrails_json, approval_policy_json, execution_policy_json, failure_count, last_evaluation_at, disabled_reason, last_run_at, next_run_at FROM active_strategies")?;
         let rows = stmt.query_map([], |row| {
             Ok(ActiveStrategy {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 summary: row.get(2)?,
                 status: row.get(3)?,
-                trigger_json: row.get(4)?,
-                action_json: row.get(5)?,
-                guardrails_json: row.get(6)?,
-                last_run_at: row.get(7)?,
-                next_run_at: row.get(8)?,
+                mode: row.get(4)?,
+                trigger_json: row.get(5)?,
+                action_json: row.get(6)?,
+                guardrails_json: row.get(7)?,
+                approval_policy_json: row.get(8)?,
+                execution_policy_json: row.get(9)?,
+                failure_count: row.get(10)?,
+                last_evaluation_at: row.get(11)?,
+                disabled_reason: row.get(12)?,
+                last_run_at: row.get(13)?,
+                next_run_at: row.get(14)?,
             })
         })?;
 
@@ -335,6 +466,18 @@ pub fn get_strategies() -> Result<Vec<ActiveStrategy>, DbError> {
         }
         Ok(all)
     })
+}
+
+pub fn get_due_strategies(now: i64) -> Result<Vec<ActiveStrategy>, DbError> {
+    let all = get_strategies()?;
+    Ok(all
+        .into_iter()
+        .filter(|s| {
+            s.status == "active"
+                && s.disabled_reason.is_none()
+                && s.next_run_at.map(|next| next <= now).unwrap_or(true)
+        })
+        .collect())
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -401,19 +544,266 @@ pub struct ActiveStrategy {
     pub name: String,
     pub summary: Option<String>,
     pub status: String,
+    pub mode: String,
     pub trigger_json: String,
     pub action_json: String,
     pub guardrails_json: String,
+    pub approval_policy_json: String,
+    pub execution_policy_json: String,
+    pub failure_count: i64,
+    pub last_evaluation_at: Option<i64>,
+    pub disabled_reason: Option<String>,
     pub last_run_at: Option<i64>,
     pub next_run_at: Option<i64>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortfolioSnapshot {
     pub timestamp: i64,
     pub total_usd: String,
     pub top_assets_json: String,
+    pub wallet_breakdown_json: String,
+    pub chain_breakdown_json: String,
+    pub net_flow_usd: String,
+    pub performance_usd: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalRecord {
+    pub id: String,
+    pub source: String,
+    pub tool_name: String,
+    pub kind: String,
+    pub status: String,
+    pub payload_json: String,
+    pub simulation_json: Option<String>,
+    pub policy_json: Option<String>,
+    pub message: String,
+    pub expires_at: Option<i64>,
+    pub version: i64,
+    pub strategy_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolExecutionRecord {
+    pub id: String,
+    pub approval_id: Option<String>,
+    pub strategy_id: Option<String>,
+    pub tool_name: String,
+    pub status: String,
+    pub request_json: String,
+    pub result_json: Option<String>,
+    pub tx_hash: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: i64,
+    pub completed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditLogEntry {
+    pub id: String,
+    pub event_type: String,
+    pub subject_type: String,
+    pub subject_id: Option<String>,
+    pub details_json: String,
+    pub created_at: i64,
+}
+
+pub fn insert_approval_request(record: &ApprovalRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO approval_requests (id, source, tool_name, kind, status, payload_json, simulation_json, policy_json, message, expires_at, version, strategy_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                record.id,
+                record.source,
+                record.tool_name,
+                record.kind,
+                record.status,
+                record.payload_json,
+                record.simulation_json,
+                record.policy_json,
+                record.message,
+                record.expires_at,
+                record.version,
+                record.strategy_id,
+                record.created_at,
+                record.updated_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_pending_approvals() -> Result<Vec<ApprovalRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT id, source, tool_name, kind, status, payload_json, simulation_json, policy_json, message, expires_at, version, strategy_id, created_at, updated_at FROM approval_requests WHERE status = 'pending' ORDER BY created_at DESC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ApprovalRecord {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                tool_name: row.get(2)?,
+                kind: row.get(3)?,
+                status: row.get(4)?,
+                payload_json: row.get(5)?,
+                simulation_json: row.get(6)?,
+                policy_json: row.get(7)?,
+                message: row.get(8)?,
+                expires_at: row.get(9)?,
+                version: row.get(10)?,
+                strategy_id: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+            })
+        })?;
+        let mut all = Vec::new();
+        for row in rows {
+            all.push(row?);
+        }
+        Ok(all)
+    })
+}
+
+pub fn get_approval_request(id: &str) -> Result<Option<ApprovalRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT id, source, tool_name, kind, status, payload_json, simulation_json, policy_json, message, expires_at, version, strategy_id, created_at, updated_at FROM approval_requests WHERE id = ?1 LIMIT 1")?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(ApprovalRecord {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                tool_name: row.get(2)?,
+                kind: row.get(3)?,
+                status: row.get(4)?,
+                payload_json: row.get(5)?,
+                simulation_json: row.get(6)?,
+                policy_json: row.get(7)?,
+                message: row.get(8)?,
+                expires_at: row.get(9)?,
+                version: row.get(10)?,
+                strategy_id: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
+pub fn update_approval_request_status(id: &str, status: &str, expected_version: i64) -> Result<bool, DbError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    with_connection(|conn| {
+        let changed = conn.execute(
+            "UPDATE approval_requests SET status = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1 AND version = ?4 AND status = 'pending'",
+            params![id, status, now, expected_version],
+        )?;
+        Ok(changed > 0)
+    })
+}
+
+pub fn expire_stale_approvals(now: i64) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "UPDATE approval_requests SET status = 'expired', version = version + 1, updated_at = ?1 WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at < ?1",
+            params![now],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn insert_tool_execution(record: &ToolExecutionRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO tool_executions (id, approval_id, strategy_id, tool_name, status, request_json, result_json, tx_hash, error_code, error_message, created_at, completed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                record.id,
+                record.approval_id,
+                record.strategy_id,
+                record.tool_name,
+                record.status,
+                record.request_json,
+                record.result_json,
+                record.tx_hash,
+                record.error_code,
+                record.error_message,
+                record.created_at,
+                record.completed_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn update_tool_execution(record: &ToolExecutionRecord) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "UPDATE tool_executions SET status = ?2, result_json = ?3, tx_hash = ?4, error_code = ?5, error_message = ?6, completed_at = ?7 WHERE id = ?1",
+            params![
+                record.id,
+                record.status,
+                record.result_json,
+                record.tx_hash,
+                record.error_code,
+                record.error_message,
+                record.completed_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_tool_executions(limit: u32) -> Result<Vec<ToolExecutionRecord>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT id, approval_id, strategy_id, tool_name, status, request_json, result_json, tx_hash, error_code, error_message, created_at, completed_at FROM tool_executions ORDER BY created_at DESC LIMIT ?1")?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(ToolExecutionRecord {
+                id: row.get(0)?,
+                approval_id: row.get(1)?,
+                strategy_id: row.get(2)?,
+                tool_name: row.get(3)?,
+                status: row.get(4)?,
+                request_json: row.get(5)?,
+                result_json: row.get(6)?,
+                tx_hash: row.get(7)?,
+                error_code: row.get(8)?,
+                error_message: row.get(9)?,
+                created_at: row.get(10)?,
+                completed_at: row.get(11)?,
+            })
+        })?;
+        let mut all = Vec::new();
+        for row in rows {
+            all.push(row?);
+        }
+        Ok(all)
+    })
+}
+
+pub fn insert_audit_log(entry: &AuditLogEntry) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO audit_log (id, event_type, subject_type, subject_id, details_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                entry.id,
+                entry.event_type,
+                entry.subject_type,
+                entry.subject_id,
+                entry.details_json,
+                entry.created_at,
+            ],
+        )?;
+        Ok(())
+    })
 }
 
 /// Upsert tokens for a wallet. Replaces all tokens for this wallet on the given chain.

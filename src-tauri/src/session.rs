@@ -22,14 +22,16 @@ fn extend_expiry() -> Instant {
     Instant::now() + Duration::from_secs(INACTIVITY_SECS)
 }
 
+fn prune_expired_locked(guard: &mut HashMap<String, CachedKey>) {
+    let now = Instant::now();
+    guard.retain(|_, cached| cached.expires_at >= now);
+}
+
 /// Returns cached key if present and not expired. Refreshes expiry on use.
 pub fn get_cached_key(address: &str) -> Option<Zeroizing<String>> {
     let mut guard = cache().write().ok()?;
+    prune_expired_locked(&mut guard);
     let cached = guard.get_mut(address)?;
-    if cached.expires_at < Instant::now() {
-        guard.remove(address);
-        return None;
-    }
     cached.expires_at = extend_expiry();
     Some(cached.hex_pk.clone())
 }
@@ -51,6 +53,9 @@ pub fn cache_key(address: &str, hex_pk: String) {
         Ok(g) => g,
         Err(_) => return,
     };
+    prune_expired_locked(&mut guard);
+    // Only one actively unlocked wallet is retained at a time.
+    guard.clear();
     guard.insert(
         address.to_string(),
         CachedKey {
@@ -80,16 +85,22 @@ pub fn clear_all() {
 
 /// Returns (locked, expires_at_secs). locked=true if no valid cache.
 pub fn status(address: &str) -> (bool, Option<u64>) {
-    let guard = match cache().read() {
+    let mut write_guard = match cache().write() {
         Ok(g) => g,
         Err(_) => return (true, None),
     };
-    let Some(cached) = guard.get(address) else {
+    prune_expired_locked(&mut write_guard);
+    let Some(cached) = write_guard.get(address) else {
         return (true, None);
     };
-    if cached.expires_at < Instant::now() {
-        return (true, None);
-    }
     let secs = (cached.expires_at - Instant::now()).as_secs();
     (false, Some(secs))
+}
+
+pub fn prune_expired() {
+    let mut guard = match cache().write() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    prune_expired_locked(&mut guard);
 }

@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::time::interval;
 use serde::Serialize;
 use reqwest::Client;
+use tracing::error;
 
 use super::sonar_client;
 use super::ollama_client;
@@ -33,7 +34,7 @@ pub fn start(app: AppHandle) {
             timer.tick().await;
             
             if let Err(e) = run_watcher_cycle(&app, &client).await {
-                eprintln!("ShadowWatcher error: {}", e);
+                error!("shadow_watcher.cycle_failed: {}", e);
             }
         }
     });

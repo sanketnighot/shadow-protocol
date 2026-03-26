@@ -20,6 +20,9 @@ export function ShadowBriefSheet({ open, onOpenChange }: { open: boolean; onOpen
   const openSignalApproval = useUiStore((s) => s.openSignalApproval);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+      return;
+    }
     const unsub = listen<ShadowBrief>("shadow_brief", (event) => {
       setBrief(event.payload);
     });

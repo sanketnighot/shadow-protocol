@@ -24,7 +24,9 @@ export function AgentChat() {
 
   useEffect(() => {
     if (messages.length === 0) return;
-    lastMessageRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (typeof lastMessageRef.current?.scrollIntoView === "function") {
+      lastMessageRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
   }, [messages, isStreaming]);
 
   return (

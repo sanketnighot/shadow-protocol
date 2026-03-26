@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/useToast";
+import { logError } from "@/lib/logger";
 
 export function AutomationCenter() {
   const navigate = useNavigate();
@@ -32,6 +33,11 @@ export function AutomationCenter() {
   const { info, success, warning } = useToast();
 
   const fetchStrategies = useCallback(async () => {
+    if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+      setStrategies([]);
+      setIsLoading(false);
+      return;
+    }
     try {
       const result = await invoke<any[]>("get_strategies");
       const mapped = result.map(s => ({
@@ -45,7 +51,7 @@ export function AutomationCenter() {
       }));
       setStrategies(mapped);
     } catch (err) {
-      console.error("Failed to fetch strategies:", err);
+      logError("Failed to fetch strategies", err);
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +73,7 @@ export function AutomationCenter() {
     const nextStatus = strategy.status === "running" ? "paused" : "active";
     
     try {
-      await invoke("update_strategy_status", { id: strategyId, status: nextStatus });
+      await invoke("update_strategy_status", { input: { id: strategyId, status: nextStatus } });
       await fetchStrategies();
       success(
         nextStatus === "active" ? "Strategy resumed" : "Strategy paused",
@@ -80,7 +86,7 @@ export function AutomationCenter() {
 
   const handleRemove = async (strategyId: string) => {
     try {
-      await invoke("delete_strategy", { id: strategyId });
+      await invoke("delete_strategy", { input: { id: strategyId } });
       await fetchStrategies();
       setPendingRemovalStrategyId(null);
       info("Strategy removed", "The automation was permanently deleted.");

@@ -12,6 +12,11 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_target(false)
+        .try_init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_biometry::init())
@@ -25,6 +30,13 @@ pub fn run() {
             services::harvester::start(handle.clone());
             services::alpha_service::start(handle.clone());
             services::heartbeat::start(handle.clone());
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+                loop {
+                    interval.tick().await;
+                    session::prune_expired();
+                }
+            });
 
             tauri::async_runtime::spawn(async move {
                 let addresses = commands::get_addresses(&handle);
@@ -55,6 +67,9 @@ pub fn run() {
             greet,
             commands::chat_agent,
             commands::approve_agent_action,
+            commands::reject_agent_action,
+            commands::get_pending_approvals,
+            commands::get_execution_log,
             commands::wallet_create,
             commands::wallet_import_mnemonic,
             commands::wallet_import_private_key,
@@ -79,6 +94,9 @@ pub fn run() {
             commands::portfolio_fetch_balances_multi,
             commands::portfolio_fetch_transactions,
             commands::portfolio_fetch_nfts,
+            commands::portfolio_fetch_history,
+            commands::portfolio_fetch_allocations,
+            commands::portfolio_fetch_performance_summary,
             commands::portfolio_transfer,
             commands::portfolio_transfer_background,
             commands::check_ollama_status,
@@ -94,8 +112,14 @@ pub fn run() {
             commands::remove_agent_memory,
             commands::get_command_log,
             commands::get_strategies,
+            commands::create_strategy,
+            commands::update_strategy,
             commands::update_strategy_status,
+            commands::pause_strategy,
+            commands::resume_strategy,
             commands::delete_strategy,
+            commands::run_strategy_simulation,
+            commands::get_strategy_executions,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

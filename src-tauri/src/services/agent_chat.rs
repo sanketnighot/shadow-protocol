@@ -3,6 +3,8 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+use super::audit;
+use super::local_db::{self, ApprovalRecord};
 use super::ollama_client;
 use super::tool_router::{self, AgentContext, ToolResult};
 use super::agent_state::{read_soul, read_memory};
@@ -41,10 +43,16 @@ pub enum ChatAgentResponse {
         blocks: Vec<ResponseBlock>,
     },
     ApprovalRequired {
+        #[serde(rename = "approvalId")]
+        approval_id: String,
         #[serde(rename = "toolName")]
         tool_name: String,
+        #[serde(rename = "approvalKind")]
+        approval_kind: String,
         payload: serde_json::Value,
         message: String,
+        expires_at: Option<i64>,
+        version: i64,
     },
     #[allow(dead_code)]
     Error { message: String },
@@ -167,6 +175,15 @@ fn build_approval_message(tool_name: &str, payload: &serde_json::Value) -> Strin
     }
 }
 
+fn approval_kind(tool_name: &str) -> String {
+    match tool_name {
+        "execute_token_swap" => "swap",
+        "create_automation_strategy" => "strategy_create",
+        _ => "tool_action",
+    }
+    .to_string()
+}
+
 pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAgentResponse, String> {
     let wallet = input.wallet_address.as_deref();
     let wallet_addresses: Vec<String> = input
@@ -275,10 +292,42 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
                 }
                 ToolResult::ApprovalRequired { tool_name, payload } => {
                     let message = build_approval_message(&tool_name, &payload);
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let approval = ApprovalRecord {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        source: "agent_chat".to_string(),
+                        tool_name: tool_name.clone(),
+                        kind: approval_kind(&tool_name),
+                        status: "pending".to_string(),
+                        payload_json: payload.to_string(),
+                        simulation_json: Some(
+                            serde_json::json!({
+                                "validated": true,
+                                "toolName": tool_name,
+                            })
+                            .to_string(),
+                        ),
+                        policy_json: Some(serde_json::json!({"mode": "always_require"}).to_string()),
+                        message: message.clone(),
+                        expires_at: Some(now + 15 * 60),
+                        version: 1,
+                        strategy_id: None,
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    local_db::insert_approval_request(&approval).map_err(|e| e.to_string())?;
+                    audit::record("approval_created", "approval_request", Some(&approval.id), &approval);
                     return Ok(ChatAgentResponse::ApprovalRequired {
+                        approval_id: approval.id,
                         tool_name,
+                        approval_kind: approval.kind,
                         payload,
                         message,
+                        expires_at: approval.expires_at,
+                        version: approval.version,
                     });
                 }
                 ToolResult::Error { message } => {
@@ -298,4 +347,3 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
         }
     }
 }
-

@@ -31,7 +31,7 @@ type PortfolioTabId = "tokens" | "nfts" | "transactions";
 
 export function PortfolioView() {
   const { addresses, activeAddress, refreshWallets } = useWalletStore();
-  const { assets, totalValueLabel, dailyChangeLabel, chains, series, isLoading, isFetching, refetch, balanceError } = usePortfolio({
+  const { assets, totalValueLabel, dailyChangeLabel, chains, series, targetSeries, isLoading, isFetching, refetch, balanceError } = usePortfolio({
     addresses,
     activeAddress,
   });
@@ -90,13 +90,6 @@ export function PortfolioView() {
   );
 
   const hasWallets = addresses.length > 0;
-
-  const targetSeries = useMemo(() => {
-    return series.map((p) => ({
-      ...p,
-      value: p.value * (1 + (Math.random() * 0.1 - 0.05)),
-    }));
-  }, [series]);
 
   const handleHeroAction = (action: "send" | "swap" | "bridge" | "receive") => {
     if (action === "receive") {

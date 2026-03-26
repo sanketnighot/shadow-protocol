@@ -76,6 +76,9 @@ export function useTxConfirmationListener(): void {
   const addNotification = useUiStore((s) => s.addNotification);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+      return;
+    }
     const unsub = listen<{ txHash: string; status: string; error?: string }>(
       "tx_confirmation",
       (event) => {
@@ -111,6 +114,9 @@ export function useWalletSyncListeners(): void {
   const addNotification = useUiStore((s) => s.addNotification);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+      return;
+    }
     const unsubProgress = listen<SyncProgressPayload>(
       "wallet_sync_progress",
       (event) => {
@@ -159,6 +165,9 @@ export function useShadowAlertListener(): void {
   const openPanicModal = useUiStore((s) => s.openPanicModal);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+      return;
+    }
     const unsub = listen<ShadowAlertPayload>("shadow_alert", (event) => {
       const p = event.payload;
       

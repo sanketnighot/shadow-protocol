@@ -8,6 +8,7 @@ use tauri_plugin_biometry::{AuthOptions, BiometryExt, GetDataOptions};
 
 use crate::commands::wallet;
 use crate::session;
+use crate::services::audit;
 
 const BIOMETRY_DOMAIN: &str = "com.sanket.shadow";
 
@@ -74,6 +75,9 @@ pub async fn session_unlock(app: AppHandle, input: SessionUnlockInput) -> Result
     if let Err(auth_err) =
         app.biometry().authenticate("Unlock your Shadow wallet".to_string(), auth_opts)
     {
+        audit::record("session_unlock_failed", "wallet", Some(address), &serde_json::json!({
+            "reason": auth_err.to_string(),
+        }));
         return Err(auth_err.to_string());
     }
 
@@ -98,6 +102,7 @@ pub async fn session_unlock(app: AppHandle, input: SessionUnlockInput) -> Result
     };
 
     session::cache_key(address, hex_pk);
+    audit::record("session_unlocked", "wallet", Some(address), &serde_json::json!({}));
 
     let (locked, expires_at_secs) = session::status(address);
     Ok(SessionUnlockResult {
@@ -109,8 +114,14 @@ pub async fn session_unlock(app: AppHandle, input: SessionUnlockInput) -> Result
 #[tauri::command]
 pub fn session_lock(input: SessionLockInput) -> Result<SessionLockResult, String> {
     match input.address {
-        Some(addr) => session::clear_key(addr.trim()),
-        None => session::clear_all(),
+        Some(addr) => {
+            session::clear_key(addr.trim());
+            audit::record("session_locked", "wallet", Some(addr.trim()), &serde_json::json!({}));
+        }
+        None => {
+            session::clear_all();
+            audit::record("session_locked_all", "session", None, &serde_json::json!({}));
+        }
     }
     Ok(SessionLockResult { locked: true })
 }

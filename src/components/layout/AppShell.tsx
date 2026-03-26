@@ -48,7 +48,6 @@ export function AppShell() {
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
   const activeSignalPayload = useUiStore((state) => state.activeSignalPayload);
-  const activeSignalToolName = useUiStore((state) => state.activeSignalToolName);
   const themePreference = useUiStore((state) => state.themePreference);
   const { pendingApproval, approveAction, rejectAction } = useAgentChat();
   const { info, success } = useToast();
@@ -176,18 +175,9 @@ export function AppShell() {
 
   const handleApprove = async () => {
     if (pendingApprovalId === "signal-action") {
-      try {
-        await invoke("approve_agent_action", {
-          input: {
-            toolName: activeSignalToolName,
-            payload: activeSignalPayload,
-          },
-        });
-        clearPendingApproval();
-      } catch (err) {
-        info("Execution failed", String(err));
-        return;
-      }
+      clearPendingApproval();
+      info("Open Agent to approve", "Signal-based actions now require a persisted inline approval flow.");
+      return;
     } else {
       await approveAction();
     }
