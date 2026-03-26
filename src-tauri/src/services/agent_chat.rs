@@ -71,7 +71,7 @@ pub enum ResponseBlock {
 fn format_tool_result(tool_name: &str, content: &str) -> String {
     let parsed: serde_json::Value = match serde_json::from_str(content) {
         Ok(v) => v,
-        Err(_) => return format!("Data received. See details below."),
+        Err(_) => return "Data received. See details below.".to_string(),
     };
 
     match tool_name {

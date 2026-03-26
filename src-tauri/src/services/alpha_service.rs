@@ -45,7 +45,7 @@ async fn run_alpha_cycle(app: &AppHandle, client: &Client) -> Result<(), String>
     }
 
     // Use the first available model (ideally we would pull the user's preference from settings)
-    let model = status.models.get(0).ok_or("No models available")?;
+    let model = status.models.first().ok_or("No models available")?;
 
     // 2. Web research for general market alpha
     let query = "Top 3 DeFi yield opportunities and critical market catalysts today.";

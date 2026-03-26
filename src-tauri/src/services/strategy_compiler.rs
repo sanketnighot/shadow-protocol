@@ -1,203 +1,368 @@
-use serde_json::Value;
+//! Compile `StrategyDraft` into `CompiledStrategyPlan`.
 
-use super::strategy_types::{
-    default_preview, CompiledStrategyPlan, StrategyAction, StrategyCondition, StrategyDraft,
-    StrategyDraftNode, StrategyGuardrails, StrategySimulationResult, StrategyTrigger,
+use std::collections::HashMap;
+
+use crate::services::strategy_types::{
+    CompiledStrategyPlan, DraftNodeData, StrategyAction, StrategyCondition, StrategyDraft,
+    StrategyDraftNode, StrategyGuardrails, StrategyNodeType, StrategyTemplate, StrategyTrigger,
+    TargetAllocationSpec, TargetAllocationRow,
 };
-use super::strategy_validator::{validate_semantics, validate_structure};
+use crate::services::strategy_validator::validate_draft;
 
-fn parse_node<T: serde::de::DeserializeOwned>(
-    node: &StrategyDraftNode,
-    field_path: &str,
-) -> Result<T, super::strategy_types::StrategyValidationIssue> {
-    serde_json::from_value::<T>(node.data.clone()).map_err(|_| {
-        super::strategy_types::StrategyValidationIssue {
-            code: "node_parse_failed".to_string(),
-            severity: "error".to_string(),
-            message: format!("Unable to parse node '{}'.", node.id),
-            field_path: Some(field_path.to_string()),
-        }
-    })
-}
-
-pub fn normalize_guardrails(guardrails: &StrategyGuardrails) -> StrategyGuardrails {
-    let mut normalized = guardrails.clone();
-    if normalized.allowed_chains.is_empty() {
-        normalized.allowed_chains =
-            StrategyGuardrails::default().allowed_chains;
-    }
-    if normalized.max_per_trade_usd <= 0.0 {
-        normalized.max_per_trade_usd = StrategyGuardrails::default().max_per_trade_usd;
-    }
-    if normalized.max_daily_notional_usd <= 0.0 {
-        normalized.max_daily_notional_usd = StrategyGuardrails::default().max_daily_notional_usd;
-    }
-    if normalized.require_approval_above_usd < 0.0 {
-        normalized.require_approval_above_usd = 0.0;
-    }
-    if normalized.cooldown_seconds < 0 {
-        normalized.cooldown_seconds = StrategyGuardrails::default().cooldown_seconds;
-    }
-    normalized
-}
-
-pub fn compile_draft(
-    strategy_id: String,
-    version: i64,
-    draft: &StrategyDraft,
-) -> StrategySimulationResult {
-    let structure = validate_structure(draft);
-    if !structure.errors.is_empty() {
-        return StrategySimulationResult {
-            strategy_id: Some(strategy_id),
-            valid: false,
-            plan: None,
-            evaluation_preview: default_preview("no_op", "Invalid strategy graph".to_string()),
-            message: "Strategy graph is invalid.".to_string(),
-        };
-    }
-
-    let ordered_nodes: Vec<&StrategyDraftNode> = structure
-        .ordered_node_ids
-        .iter()
-        .filter_map(|id| draft.nodes.iter().find(|node| &node.id == id))
-        .collect();
-
-    let Some(trigger_node) = ordered_nodes.first() else {
-        return StrategySimulationResult {
-            strategy_id: Some(strategy_id),
-            valid: false,
-            plan: None,
-            evaluation_preview: default_preview("no_op", "Missing trigger".to_string()),
-            message: "Strategy graph is missing a trigger.".to_string(),
-        };
-    };
-    let Some(action_node) = ordered_nodes.last() else {
-        return StrategySimulationResult {
-            strategy_id: Some(strategy_id),
-            valid: false,
-            plan: None,
-            evaluation_preview: default_preview("no_op", "Missing action".to_string()),
-            message: "Strategy graph is missing an action.".to_string(),
-        };
-    };
-
-    let mut errors = Vec::new();
-    let mut warnings = structure.warnings;
-
-    let trigger = match parse_node::<StrategyTrigger>(trigger_node, "nodes.trigger") {
-        Ok(value) => value,
-        Err(issue) => {
-            errors.push(issue);
-            return StrategySimulationResult {
-                strategy_id: Some(strategy_id),
-                valid: false,
-                plan: None,
-                evaluation_preview: default_preview("no_op", "Invalid trigger".to_string()),
-                message: "Trigger configuration is invalid.".to_string(),
-            };
-        }
-    };
-
-    let mut conditions = Vec::new();
-    for condition_node in ordered_nodes.iter().skip(1).take(ordered_nodes.len().saturating_sub(2)) {
-        match parse_node::<StrategyCondition>(condition_node, "nodes.condition") {
-            Ok(value) => conditions.push(value),
-            Err(issue) => errors.push(issue),
-        }
-    }
-
-    let action = match parse_node::<StrategyAction>(action_node, "nodes.action") {
-        Ok(value) => value,
-        Err(issue) => {
-            errors.push(issue);
-            return StrategySimulationResult {
-                strategy_id: Some(strategy_id),
-                valid: false,
-                plan: None,
-                evaluation_preview: default_preview("no_op", "Invalid action".to_string()),
-                message: "Action configuration is invalid.".to_string(),
-            };
-        }
-    };
-
-    let (semantic_errors, semantic_warnings) = validate_semantics(draft, &trigger, &action);
-    errors.extend(semantic_errors);
-    warnings.extend(semantic_warnings);
-
-    let normalized_guardrails = normalize_guardrails(&draft.guardrails);
-    let valid = errors.is_empty();
-    let plan = CompiledStrategyPlan {
-        strategy_id: strategy_id.clone(),
-        version,
-        template: draft.template.clone(),
-        trigger: trigger.clone(),
-        conditions: conditions.clone(),
-        action: action.clone(),
-        normalized_guardrails,
-        valid,
-        validation_errors: errors.clone(),
-        warnings: warnings.clone(),
-    };
-
-    StrategySimulationResult {
-        strategy_id: Some(strategy_id),
-        valid,
-        plan: Some(plan),
-        evaluation_preview: default_preview(
-            if draft.mode == "monitor_only" {
-                "monitor_only"
-            } else if draft.mode == "pre_authorized" {
-                "pre_authorized"
-            } else {
-                "approval_required"
-            },
-            describe_action(&action),
-        ),
-        message: if valid {
-            "Strategy compiled successfully.".to_string()
-        } else {
-            "Strategy failed validation.".to_string()
-        },
+fn row_to_spec(row: &TargetAllocationRow) -> TargetAllocationSpec {
+    TargetAllocationSpec {
+        symbol: row.symbol.trim().to_string(),
+        percentage: row.percentage,
     }
 }
 
-pub fn describe_action(action: &StrategyAction) -> String {
-    match action {
-        StrategyAction::DcaBuy {
+fn map_trigger(data: &DraftNodeData) -> Result<StrategyTrigger, String> {
+    match data {
+        DraftNodeData::TimeInterval {
+            interval,
+            anchor_timestamp,
+            timezone,
+        } => Ok(StrategyTrigger::TimeInterval {
+            interval: interval.trim().to_string(),
+            anchor_timestamp: *anchor_timestamp,
+            timezone: timezone.clone(),
+        }),
+        DraftNodeData::DriftThreshold {
+            drift_pct,
+            evaluation_interval_seconds,
+            target_allocations,
+        } => Ok(StrategyTrigger::DriftThreshold {
+            drift_pct: *drift_pct,
+            evaluation_interval_seconds: *evaluation_interval_seconds,
+            target_allocations: target_allocations.iter().map(row_to_spec).collect(),
+        }),
+        DraftNodeData::Threshold {
+            metric,
+            operator,
+            value,
+            evaluation_interval_seconds,
+        } => Ok(StrategyTrigger::Threshold {
+            metric: metric.trim().to_string(),
+            operator: operator.trim().to_string(),
+            value: *value,
+            evaluation_interval_seconds: *evaluation_interval_seconds,
+        }),
+        _ => Err("Invalid trigger payload for this node.".to_string()),
+    }
+}
+
+fn map_condition(data: &DraftNodeData) -> Result<StrategyCondition, String> {
+    match data {
+        DraftNodeData::PortfolioFloor { min_portfolio_usd } => Ok(StrategyCondition::PortfolioFloor {
+            min_portfolio_usd: *min_portfolio_usd,
+        }),
+        DraftNodeData::MaxGas { max_gas_usd } => Ok(StrategyCondition::MaxGas {
+            max_gas_usd: *max_gas_usd,
+        }),
+        DraftNodeData::MaxSlippage { max_slippage_bps } => Ok(StrategyCondition::MaxSlippage {
+            max_slippage_bps: *max_slippage_bps,
+        }),
+        DraftNodeData::WalletAssetAvailable { symbol, min_amount } => {
+            Ok(StrategyCondition::WalletAssetAvailable {
+                symbol: symbol.trim().to_string(),
+                min_amount: *min_amount,
+            })
+        }
+        DraftNodeData::Cooldown { cooldown_seconds } => Ok(StrategyCondition::Cooldown {
+            cooldown_seconds: *cooldown_seconds,
+        }),
+        DraftNodeData::DriftMinimum { min_drift_pct } => Ok(StrategyCondition::DriftMinimum {
+            min_drift_pct: *min_drift_pct,
+        }),
+        _ => Err("Node is not a supported condition type.".to_string()),
+    }
+}
+
+fn map_action(data: &DraftNodeData) -> Result<StrategyAction, String> {
+    match data {
+        DraftNodeData::DcaBuy {
+            chain,
             from_symbol,
             to_symbol,
             amount_usd,
             amount_token,
-            ..
-        } => {
-            if let Some(amount) = amount_usd {
-                format!("Swap ${amount:.2} {from_symbol} into {to_symbol}.")
-            } else if let Some(amount) = amount_token {
-                format!("Swap {amount:.6} {from_symbol} into {to_symbol}.")
-            } else {
-                format!("Swap {from_symbol} into {to_symbol}.")
+        } => Ok(StrategyAction::DcaBuy {
+            chain: chain.trim().to_string(),
+            from_symbol: from_symbol.trim().to_string(),
+            to_symbol: to_symbol.trim().to_string(),
+            amount_usd: *amount_usd,
+            amount_token: *amount_token,
+        }),
+        DraftNodeData::RebalanceToTarget {
+            chain,
+            threshold_pct,
+            max_execution_usd,
+            target_allocations,
+        } => Ok(StrategyAction::RebalanceToTarget {
+            chain: chain.trim().to_string(),
+            threshold_pct: *threshold_pct,
+            target_allocations: target_allocations.iter().map(row_to_spec).collect(),
+            max_execution_usd: *max_execution_usd,
+        }),
+        DraftNodeData::AlertOnly {
+            title,
+            message_template,
+            severity,
+        } => Ok(StrategyAction::AlertOnly {
+            title: title.clone(),
+            message_template: message_template.clone(),
+            severity: severity.clone(),
+        }),
+        _ => Err("Invalid action payload for this node.".to_string()),
+    }
+}
+
+fn normalize_guardrails(draft: &StrategyDraft, template: &StrategyTemplate) -> StrategyGuardrails {
+    let mut g = draft.guardrails.clone();
+    if matches!(template, StrategyTemplate::AlertOnly) {
+        return g;
+    }
+    if g.max_per_trade_usd.is_none() {
+        g.max_per_trade_usd = Some(1_000.0);
+    }
+    if g.max_daily_notional_usd.is_none() {
+        g.max_daily_notional_usd = Some(2_500.0);
+    }
+    if g.min_portfolio_usd.is_none() {
+        g.min_portfolio_usd = Some(0.0);
+    }
+    if g.cooldown_seconds.is_none() {
+        g.cooldown_seconds = Some(300);
+    }
+    if g.max_slippage_bps.is_none() {
+        g.max_slippage_bps = Some(50);
+    }
+    if g.max_gas_usd.is_none() {
+        g.max_gas_usd = Some(25.0);
+    }
+    g
+}
+
+/// Returns ordered nodes from trigger to action inclusive, or None if structure is invalid.
+fn ordered_pipeline_nodes(draft: &StrategyDraft) -> Option<Vec<&StrategyDraftNode>> {
+    let triggers: Vec<_> = draft
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == StrategyNodeType::Trigger)
+        .collect();
+    let actions: Vec<_> = draft
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == StrategyNodeType::Action)
+        .collect();
+    if triggers.len() != 1 || actions.len() != 1 {
+        return None;
+    }
+    let trigger_id = triggers[0].id.as_str();
+    let action_id = actions[0].id.as_str();
+    let by_id: HashMap<&str, &StrategyDraftNode> =
+        draft.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+    let mut outgoing: HashMap<&str, &str> = HashMap::new();
+    for e in &draft.edges {
+        outgoing.insert(e.source.as_str(), e.target.as_str());
+    }
+    let mut out = Vec::new();
+    let mut cur = trigger_id;
+    loop {
+        let node = by_id.get(cur)?;
+        out.push(*node);
+        if cur == action_id {
+            break;
+        }
+        cur = outgoing.get(cur).copied()?;
+    }
+    if out.len() != draft.nodes.len() {
+        return None;
+    }
+    Some(out)
+}
+
+pub fn compile_draft(
+    draft: &StrategyDraft,
+    strategy_id: &str,
+    version: i64,
+) -> CompiledStrategyPlan {
+    let (mut errors, warnings) = validate_draft(draft);
+    let normalized_guardrails = normalize_guardrails(draft, &draft.template);
+
+    let Some(ordered) = ordered_pipeline_nodes(draft) else {
+        if errors.is_empty() {
+            errors.push(crate::services::strategy_types::StrategyValidationIssue {
+                code: "pipeline".to_string(),
+                severity: "error".to_string(),
+                message: "Could not derive a linear pipeline from the draft.".to_string(),
+                field_path: Some("nodes".to_string()),
+            });
+        }
+        return CompiledStrategyPlan {
+            strategy_id: strategy_id.to_string(),
+            version,
+            template: draft.template,
+            trigger: StrategyTrigger::TimeInterval {
+                interval: "daily".to_string(),
+                anchor_timestamp: None,
+                timezone: Some("UTC".to_string()),
+            },
+            conditions: vec![],
+            action: StrategyAction::AlertOnly {
+                title: "Invalid strategy".to_string(),
+                message_template: "Compile failed.".to_string(),
+                severity: "warning".to_string(),
+            },
+            normalized_guardrails,
+            valid: false,
+            validation_errors: errors,
+            warnings,
+        };
+    };
+
+    let trigger_node = ordered.first().expect("non-empty pipeline");
+    let action_node = ordered.last().expect("non-empty pipeline");
+
+    let trigger = match map_trigger(&trigger_node.data) {
+        Ok(t) => t,
+        Err(msg) => {
+            errors.push(crate::services::strategy_types::StrategyValidationIssue {
+                code: "map_trigger".to_string(),
+                severity: "error".to_string(),
+                message: msg,
+                field_path: Some(format!("nodes.{}", trigger_node.id)),
+            });
+            StrategyTrigger::TimeInterval {
+                interval: "daily".to_string(),
+                anchor_timestamp: None,
+                timezone: Some("UTC".to_string()),
             }
         }
-        StrategyAction::RebalanceToTarget { chain, .. } => {
-            format!("Rebalance portfolio toward target allocations on {chain}.")
+    };
+
+    let mut conditions = Vec::new();
+    for node in ordered.iter().skip(1).take(ordered.len().saturating_sub(2)) {
+        if node.node_type != StrategyNodeType::Condition {
+            continue;
         }
-        StrategyAction::AlertOnly { title, .. } => format!("Emit alert: {title}."),
+        match map_condition(&node.data) {
+            Ok(c) => conditions.push(c),
+            Err(msg) => {
+                errors.push(crate::services::strategy_types::StrategyValidationIssue {
+                    code: "map_condition".to_string(),
+                    severity: "error".to_string(),
+                    message: msg,
+                    field_path: Some(format!("nodes.{}", node.id)),
+                });
+            }
+        }
+    }
+
+    let action = match map_action(&action_node.data) {
+        Ok(a) => a,
+        Err(msg) => {
+            errors.push(crate::services::strategy_types::StrategyValidationIssue {
+                code: "map_action".to_string(),
+                severity: "error".to_string(),
+                message: msg,
+                field_path: Some(format!("nodes.{}", action_node.id)),
+            });
+            StrategyAction::AlertOnly {
+                title: "Invalid strategy".to_string(),
+                message_template: "Action mapping failed.".to_string(),
+                severity: "critical".to_string(),
+            }
+        }
+    };
+
+    let valid = errors.is_empty();
+    CompiledStrategyPlan {
+        strategy_id: strategy_id.to_string(),
+        version,
+        template: draft.template,
+        trigger,
+        conditions,
+        action,
+        normalized_guardrails,
+        valid,
+        validation_errors: errors,
+        warnings,
     }
 }
 
-pub fn infer_template_from_legacy(trigger: &Value, action: &Value) -> String {
-    let action_type = action.get("type").and_then(|value| value.as_str()).unwrap_or_default();
-    if matches!(action_type, "rebalance_to_target" | "rebalance" | "drift") {
-        return "rebalance_to_target".to_string();
-    }
-    if matches!(action_type, "alert_only" | "alert") {
-        return "alert_only".to_string();
-    }
-    let trigger_type = trigger.get("type").and_then(|value| value.as_str()).unwrap_or_default();
-    if matches!(action_type, "swap" | "dca_buy") || trigger_type == "time" {
-        return "dca_buy".to_string();
-    }
-    "alert_only".to_string()
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::strategy_types::{
+        DraftNodeData, Position, StrategyApprovalPolicy, StrategyDraft, StrategyDraftEdge,
+        StrategyDraftNode, StrategyExecutionPolicy, StrategyGuardrails, StrategyMode,
+        StrategyNodeType, StrategyTemplate,
+    };
 
+    fn minimal_dca_draft() -> StrategyDraft {
+        StrategyDraft {
+            id: None,
+            name: "Test".to_string(),
+            summary: None,
+            template: StrategyTemplate::DcaBuy,
+            mode: StrategyMode::ApprovalRequired,
+            nodes: vec![
+                StrategyDraftNode {
+                    id: "trigger-1".to_string(),
+                    node_type: StrategyNodeType::Trigger,
+                    position: Position { x: 0.0, y: 0.0 },
+                    data: DraftNodeData::TimeInterval {
+                        interval: "daily".to_string(),
+                        anchor_timestamp: None,
+                        timezone: Some("UTC".to_string()),
+                    },
+                },
+                StrategyDraftNode {
+                    id: "action-1".to_string(),
+                    node_type: StrategyNodeType::Action,
+                    position: Position { x: 100.0, y: 0.0 },
+                    data: DraftNodeData::DcaBuy {
+                        chain: "ethereum".to_string(),
+                        from_symbol: "USDC".to_string(),
+                        to_symbol: "ETH".to_string(),
+                        amount_usd: Some(10.0),
+                        amount_token: None,
+                    },
+                },
+            ],
+            edges: vec![StrategyDraftEdge {
+                id: "e1".to_string(),
+                source: "trigger-1".to_string(),
+                target: "action-1".to_string(),
+            }],
+            guardrails: StrategyGuardrails {
+                max_per_trade_usd: Some(100.0),
+                ..Default::default()
+            },
+            approval_policy: StrategyApprovalPolicy::default(),
+            execution_policy: StrategyExecutionPolicy::default(),
+        }
+    }
+
+    #[test]
+    fn compile_valid_dca_plan() {
+        let draft = minimal_dca_draft();
+        let plan = compile_draft(&draft, "sid", 1);
+        assert!(plan.valid, "{:?}", plan.validation_errors);
+        assert!(matches!(plan.trigger, StrategyTrigger::TimeInterval { .. }));
+        assert!(matches!(plan.action, StrategyAction::DcaBuy { .. }));
+    }
+
+    #[test]
+    fn compile_empty_name_invalid() {
+        let mut draft = minimal_dca_draft();
+        draft.name = "   ".to_string();
+        let plan = compile_draft(&draft, "sid", 1);
+        assert!(!plan.valid);
+        assert!(plan
+            .validation_errors
+            .iter()
+            .any(|e| e.code == "name_required"));
+    }
+}

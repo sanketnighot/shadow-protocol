@@ -272,6 +272,10 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
     ensure_column(conn, "active_strategies", "last_evaluation_at", "INTEGER")?;
     ensure_column(conn, "active_strategies", "disabled_reason", "TEXT")?;
     ensure_column(conn, "active_strategies", "updated_at", "INTEGER")?;
+
+    // After ensuring columns exist, run data migrations.
+    crate::services::strategy_legacy::migrate_legacy_strategies(conn)?;
+
     Ok(())
 }
 

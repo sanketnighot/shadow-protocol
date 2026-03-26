@@ -2,6 +2,7 @@ use tauri::AppHandle;
 use tokio::time::{Duration, interval};
 use tracing::{error, info};
 
+use crate::services::audit;
 use crate::services::local_db::{expire_stale_approvals, get_due_strategies, upsert_strategy};
 use crate::services::strategy_engine;
 
@@ -41,6 +42,20 @@ pub fn start(app: AppHandle) {
                     }
                     Err(err) => {
                         strategy.failure_count += 1;
+                        if strategy.failure_count >= 3 {
+                            strategy.status = "paused".to_string();
+                            strategy.disabled_reason =
+                                Some("consecutive_evaluation_failures".to_string());
+                            audit::record(
+                                "strategy_paused",
+                                "strategy",
+                                Some(&strategy.id),
+                                &serde_json::json!({
+                                    "reason": "auto_pause_failures",
+                                    "failureCount": strategy.failure_count,
+                                }),
+                            );
+                        }
                         let _ = upsert_strategy(&strategy);
                         error!(
                             strategy_id = %strategy.id,

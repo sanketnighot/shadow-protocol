@@ -16,6 +16,7 @@ pub mod settings;
 pub mod shadow_watcher;
 pub mod strategy_compiler;
 pub mod strategy_engine;
+pub mod strategy_legacy;
 pub mod strategy_scheduler;
 pub mod strategy_types;
 pub mod strategy_validator;

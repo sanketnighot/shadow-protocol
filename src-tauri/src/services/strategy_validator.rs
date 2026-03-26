@@ -1,303 +1,456 @@
+//! Structural and semantic validation for strategy drafts and compiled plans.
+
 use std::collections::{HashMap, HashSet};
 
-use super::strategy_types::{
-    StrategyAction, StrategyDraft, StrategyNodeType, StrategyTrigger, StrategyValidationIssue,
+use crate::services::strategy_types::{
+    DraftNodeData, StrategyDraft, StrategyMode, StrategyNodeType, StrategyTemplate,
+    StrategyValidationIssue,
 };
 
-fn issue(code: &str, severity: &str, message: impl Into<String>, field_path: Option<String>) -> StrategyValidationIssue {
-    StrategyValidationIssue {
-        code: code.to_string(),
-        severity: severity.to_string(),
-        message: message.into(),
-        field_path,
-    }
-}
+const MAX_NAME_LEN: usize = 120;
+const MAX_SUMMARY_LEN: usize = 2_000;
 
-pub struct StructureValidation {
-    pub ordered_node_ids: Vec<String>,
-    pub errors: Vec<StrategyValidationIssue>,
-    pub warnings: Vec<StrategyValidationIssue>,
-}
-
-pub fn validate_structure(draft: &StrategyDraft) -> StructureValidation {
-    let mut errors = Vec::new();
-    let warnings = Vec::new();
-
-    let trigger_ids: Vec<&str> = draft
-        .nodes
-        .iter()
-        .filter(|node| node.node_type == StrategyNodeType::Trigger)
-        .map(|node| node.id.as_str())
-        .collect();
-    let action_ids: Vec<&str> = draft
-        .nodes
-        .iter()
-        .filter(|node| node.node_type == StrategyNodeType::Action)
-        .map(|node| node.id.as_str())
-        .collect();
-
-    if trigger_ids.len() != 1 {
-        errors.push(issue(
-            "invalid_trigger_count",
-            "error",
-            "Strategy must contain exactly one trigger node.",
-            Some("nodes".to_string()),
-        ));
-    }
-
-    if action_ids.len() != 1 {
-        errors.push(issue(
-            "invalid_action_count",
-            "error",
-            "Strategy must contain exactly one action node.",
-            Some("nodes".to_string()),
-        ));
-    }
-
-    let mut node_index = HashMap::new();
-    for node in &draft.nodes {
-        if node_index.insert(node.id.clone(), node).is_some() {
-            errors.push(issue(
-                "duplicate_node_id",
-                "error",
-                format!("Duplicate node id '{}'.", node.id),
-                Some("nodes".to_string()),
-            ));
-        }
-    }
-
-    let mut out_degree: HashMap<&str, usize> = HashMap::new();
-    let mut in_degree: HashMap<&str, usize> = HashMap::new();
-    let mut next_by_source: HashMap<&str, &str> = HashMap::new();
-
-    for edge in &draft.edges {
-        if !node_index.contains_key(&edge.source) || !node_index.contains_key(&edge.target) {
-            errors.push(issue(
-                "dangling_edge",
-                "error",
-                format!("Edge '{}' references a missing node.", edge.id),
-                Some(format!("edges.{}", edge.id)),
-            ));
-            continue;
-        }
-        *out_degree.entry(edge.source.as_str()).or_insert(0) += 1;
-        *in_degree.entry(edge.target.as_str()).or_insert(0) += 1;
-        if next_by_source.insert(edge.source.as_str(), edge.target.as_str()).is_some() {
-            errors.push(issue(
-                "branching_not_supported",
-                "error",
-                "Branching graphs are not supported in v1.",
-                Some(format!("edges.{}", edge.id)),
-            ));
-        }
-    }
-
-    for node in &draft.nodes {
-        let in_count = *in_degree.get(node.id.as_str()).unwrap_or(&0);
-        let out_count = *out_degree.get(node.id.as_str()).unwrap_or(&0);
-        match node.node_type {
-            StrategyNodeType::Trigger => {
-                if in_count != 0 {
-                    errors.push(issue(
-                        "trigger_incoming_edge",
-                        "error",
-                        "Trigger node cannot have incoming edges.",
-                        Some(format!("nodes.{}", node.id)),
-                    ));
-                }
-                if out_count > 1 {
-                    errors.push(issue(
-                        "trigger_branching",
-                        "error",
-                        "Trigger node cannot branch to multiple targets.",
-                        Some(format!("nodes.{}", node.id)),
-                    ));
-                }
-            }
-            StrategyNodeType::Condition => {
-                if in_count != 1 || out_count != 1 {
-                    errors.push(issue(
-                        "condition_not_linear",
-                        "error",
-                        "Condition nodes must have exactly one incoming and one outgoing edge.",
-                        Some(format!("nodes.{}", node.id)),
-                    ));
-                }
-            }
-            StrategyNodeType::Action => {
-                if out_count != 0 {
-                    errors.push(issue(
-                        "action_outgoing_edge",
-                        "error",
-                        "Action node cannot have outgoing edges.",
-                        Some(format!("nodes.{}", node.id)),
-                    ));
-                }
-                if in_count != 1 && draft.nodes.len() > 1 {
-                    errors.push(issue(
-                        "action_missing_input",
-                        "error",
-                        "Action node must be the terminal node in the linear pipeline.",
-                        Some(format!("nodes.{}", node.id)),
-                    ));
-                }
-            }
-        }
-    }
-
-    let Some(start_id) = trigger_ids.first().copied() else {
-        return StructureValidation {
-            ordered_node_ids: Vec::new(),
-            errors,
-            warnings,
-        };
-    };
-
-    let mut ordered = Vec::new();
-    let mut visited = HashSet::new();
-    let mut current = Some(start_id);
-    while let Some(node_id) = current {
-        if !visited.insert(node_id.to_string()) {
-            errors.push(issue(
-                "cycle_detected",
-                "error",
-                "Strategy graph contains a cycle.",
-                Some("edges".to_string()),
-            ));
-            break;
-        }
-        ordered.push(node_id.to_string());
-        current = next_by_source.get(node_id).copied();
-    }
-
-    if visited.len() != draft.nodes.len() {
-        errors.push(issue(
-            "disconnected_graph",
-            "error",
-            "All nodes must be connected in a single linear pipeline.",
-            Some("nodes".to_string()),
-        ));
-    }
-
-    StructureValidation {
-        ordered_node_ids: ordered,
-        errors,
-        warnings,
-    }
-}
-
-pub fn validate_semantics(
-    draft: &StrategyDraft,
-    trigger: &StrategyTrigger,
-    action: &StrategyAction,
-) -> (Vec<StrategyValidationIssue>, Vec<StrategyValidationIssue>) {
+pub fn validate_draft(draft: &StrategyDraft) -> (Vec<StrategyValidationIssue>, Vec<StrategyValidationIssue>) {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
-    if draft.name.trim().len() < 3 {
+    let name = draft.name.trim();
+    if name.is_empty() {
         errors.push(issue(
-            "name_too_short",
+            "name_required",
             "error",
-            "Strategy name must be at least 3 characters.",
-            Some("name".to_string()),
+            "Strategy name is required.",
+            Some("name"),
         ));
-    }
-
-    if !(draft.mode == "monitor_only"
-        || draft.mode == "approval_required"
-        || draft.mode == "pre_authorized")
-    {
+    } else if name.len() > MAX_NAME_LEN {
         errors.push(issue(
-            "invalid_mode",
+            "name_too_long",
             "error",
-            "Mode must be monitor_only, approval_required, or pre_authorized.",
-            Some("mode".to_string()),
+            "Strategy name is too long.",
+            Some("name"),
         ));
     }
 
-    if draft.guardrails.max_per_trade_usd <= 0.0 {
-        errors.push(issue(
-            "invalid_max_trade",
-            "error",
-            "Max per trade must be positive.",
-            Some("guardrails.maxPerTradeUsd".to_string()),
-        ));
-    }
-    if draft.guardrails.max_daily_notional_usd <= 0.0 {
-        errors.push(issue(
-            "invalid_daily_notional",
-            "error",
-            "Max daily notional must be positive.",
-            Some("guardrails.maxDailyNotionalUsd".to_string()),
-        ));
-    }
-    if draft.guardrails.cooldown_seconds < 0 {
-        errors.push(issue(
-            "invalid_cooldown",
-            "error",
-            "Cooldown must be zero or positive.",
-            Some("guardrails.cooldownSeconds".to_string()),
-        ));
-    }
-
-    let template = draft.template.as_str();
-    match (template, action) {
-        ("dca_buy", StrategyAction::DcaBuy { .. }) => {}
-        ("rebalance_to_target", StrategyAction::RebalanceToTarget { .. }) => {}
-        ("alert_only", StrategyAction::AlertOnly { .. }) => {}
-        _ => errors.push(issue(
-            "template_action_mismatch",
-            "error",
-            "Action does not match the selected strategy template.",
-            Some("template".to_string()),
-        )),
-    }
-
-    match (template, trigger) {
-        ("dca_buy", StrategyTrigger::TimeInterval { .. }) => {}
-        ("rebalance_to_target", StrategyTrigger::TimeInterval { .. })
-        | ("rebalance_to_target", StrategyTrigger::DriftThreshold { .. }) => {}
-        ("alert_only", StrategyTrigger::TimeInterval { .. })
-        | ("alert_only", StrategyTrigger::DriftThreshold { .. })
-        | ("alert_only", StrategyTrigger::Threshold { .. }) => {}
-        _ => errors.push(issue(
-            "template_trigger_mismatch",
-            "error",
-            "Trigger type is not supported by the selected strategy template.",
-            Some("template".to_string()),
-        )),
-    }
-
-    if draft.mode == "pre_authorized" && template == "alert_only" {
-        errors.push(issue(
-            "preauthorized_alert_only",
-            "error",
-            "Alert-only strategies cannot use pre-authorized mode.",
-            Some("mode".to_string()),
-        ));
-    }
-
-    if draft.mode == "pre_authorized" && !draft.execution_policy.enabled {
-        warnings.push(issue(
-            "preauthorized_execution_disabled",
-            "warning",
-            "Pre-authorized mode is enabled, but executionPolicy.enabled is false. The engine will fall back safely.",
-            Some("executionPolicy.enabled".to_string()),
-        ));
-    }
-
-    if let StrategyAction::RebalanceToTarget { target_allocations, .. } = action {
-        let total: f64 = target_allocations.iter().map(|item| item.percentage).sum();
-        if (total - 100.0).abs() > 0.5 {
-            warnings.push(issue(
-                "target_allocations_not_100",
-                "warning",
-                "Target allocations do not sum to exactly 100%. Rebalance evaluation may behave conservatively.",
-                Some("action.targetAllocations".to_string()),
+    if let Some(s) = &draft.summary {
+        if s.len() > MAX_SUMMARY_LEN {
+            errors.push(issue(
+                "summary_too_long",
+                "error",
+                "Summary is too long.",
+                Some("summary"),
             ));
         }
+    }
+
+    validate_mode_template(&draft.mode, &draft.template, &mut errors);
+
+    let triggers: Vec<_> = draft
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == StrategyNodeType::Trigger)
+        .collect();
+    let actions: Vec<_> = draft
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == StrategyNodeType::Action)
+        .collect();
+    let conditions: Vec<_> = draft
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == StrategyNodeType::Condition)
+        .collect();
+
+    if triggers.len() != 1 {
+        errors.push(issue(
+            "trigger_count",
+            "error",
+            "Exactly one trigger node is required.",
+            Some("nodes"),
+        ));
+    }
+    if actions.len() != 1 {
+        errors.push(issue(
+            "action_count",
+            "error",
+            "Exactly one action node is required.",
+            Some("nodes"),
+        ));
+    }
+
+    if triggers.len() == 1 && actions.len() == 1 {
+        let pipeline_ok =
+            validate_linear_pipeline(draft, triggers[0].id.as_str(), actions[0].id.as_str(), &mut errors);
+        if pipeline_ok {
+            validate_template_payload(
+                &draft.template,
+                triggers[0].data.clone(),
+                actions[0].data.clone(),
+                &mut errors,
+                &mut warnings,
+            );
+        }
+    }
+
+    validate_guardrails(&draft.guardrails, &draft.template, &mut errors, &mut warnings);
+
+    if conditions.len() > 20 {
+        warnings.push(issue(
+            "many_conditions",
+            "warning",
+            "Large condition chains are harder to reason about.",
+            Some("nodes"),
+        ));
     }
 
     (errors, warnings)
 }
 
+fn validate_mode_template(mode: &StrategyMode, template: &StrategyTemplate, errors: &mut Vec<StrategyValidationIssue>) {
+    if mode == &StrategyMode::PreAuthorized && matches!(template, StrategyTemplate::AlertOnly) {
+        errors.push(issue(
+            "preauth_alert",
+            "error",
+            "Pre-authorized mode is not allowed for alert-only strategies.",
+            Some("mode"),
+        ));
+    }
+}
+
+fn validate_linear_pipeline(
+    draft: &StrategyDraft,
+    trigger_id: &str,
+    action_id: &str,
+    errors: &mut Vec<StrategyValidationIssue>,
+) -> bool {
+    let ids: HashSet<&str> = draft.nodes.iter().map(|n| n.id.as_str()).collect();
+    let mut outgoing: HashMap<&str, &str> = HashMap::new();
+    let mut incoming_count: HashMap<&str, usize> = HashMap::new();
+
+    for edge in &draft.edges {
+        if !ids.contains(edge.source.as_str()) || !ids.contains(edge.target.as_str()) {
+            errors.push(issue(
+                "edge_unknown_node",
+                "error",
+                "Edge references an unknown node.",
+                Some("edges"),
+            ));
+            return false;
+        }
+        if outgoing.insert(edge.source.as_str(), edge.target.as_str()).is_some() {
+            errors.push(issue(
+                "fan_out",
+                "error",
+                "Each node may have at most one outgoing edge.",
+                Some("edges"),
+            ));
+            return false;
+        }
+        *incoming_count.entry(edge.target.as_str()).or_insert(0) += 1;
+    }
+
+    for node in &draft.nodes {
+        let id = node.id.as_str();
+        if id == trigger_id {
+            if incoming_count.get(id).copied().unwrap_or(0) > 0 {
+                errors.push(issue(
+                    "trigger_incoming",
+                    "error",
+                    "Trigger must not have incoming edges.",
+                    Some("edges"),
+                ));
+                return false;
+            }
+        } else if id == action_id {
+            if outgoing.contains_key(id) {
+                errors.push(issue(
+                    "action_outgoing",
+                    "error",
+                    "Action must not have outgoing edges.",
+                    Some("edges"),
+                ));
+                return false;
+            }
+        } else if incoming_count.get(id).copied().unwrap_or(0) > 1 {
+            errors.push(issue(
+                "fan_in",
+                "error",
+                "Each node may have at most one incoming edge.",
+                Some("edges"),
+            ));
+            return false;
+        }
+    }
+
+    let mut visited = Vec::new();
+    let mut cur = trigger_id;
+    let mut seen = HashSet::new();
+    loop {
+        if !seen.insert(cur) {
+            errors.push(issue(
+                "cycle",
+                "error",
+                "Strategy graph must not contain cycles.",
+                Some("edges"),
+            ));
+            return false;
+        }
+        visited.push(cur);
+        if cur == action_id {
+            break;
+        }
+        let Some(next) = outgoing.get(cur).copied() else {
+            errors.push(issue(
+                "broken_chain",
+                "error",
+                "Trigger is not connected to the action by a single linear chain.",
+                Some("edges"),
+            ));
+            return false;
+        };
+        cur = next;
+    }
+
+    if visited.len() != draft.nodes.len() {
+        errors.push(issue(
+            "disconnected",
+            "error",
+            "All nodes must be part of the trigger-to-action chain.",
+            Some("nodes"),
+        ));
+        return false;
+    }
+    true
+}
+
+fn validate_template_payload(
+    template: &StrategyTemplate,
+    trigger_data: DraftNodeData,
+    action_data: DraftNodeData,
+    errors: &mut Vec<StrategyValidationIssue>,
+    warnings: &mut Vec<StrategyValidationIssue>,
+) {
+    match template {
+        StrategyTemplate::DcaBuy => {
+            if !matches!(trigger_data, DraftNodeData::TimeInterval { .. }) {
+                errors.push(issue(
+                    "dca_trigger",
+                    "error",
+                    "DCA template requires a time interval trigger.",
+                    Some("nodes"),
+                ));
+            }
+            if !matches!(action_data, DraftNodeData::DcaBuy { .. }) {
+                errors.push(issue(
+                    "dca_action",
+                    "error",
+                    "DCA template requires a DCA buy action.",
+                    Some("nodes"),
+                ));
+            }
+        }
+        StrategyTemplate::RebalanceToTarget => {
+            let ok_trigger = matches!(
+                trigger_data,
+                DraftNodeData::TimeInterval { .. } | DraftNodeData::DriftThreshold { .. }
+            );
+            if !ok_trigger {
+                errors.push(issue(
+                    "rebalance_trigger",
+                    "error",
+                    "Rebalance template requires a time interval or drift threshold trigger.",
+                    Some("nodes"),
+                ));
+            }
+            if !matches!(action_data, DraftNodeData::RebalanceToTarget { .. }) {
+                errors.push(issue(
+                    "rebalance_action",
+                    "error",
+                    "Rebalance template requires a rebalance action.",
+                    Some("nodes"),
+                ));
+            }
+        }
+        StrategyTemplate::AlertOnly => {
+            if matches!(trigger_data, DraftNodeData::TimeInterval { .. }) {
+                warnings.push(issue(
+                    "alert_time_trigger",
+                    "warning",
+                    "Time-based alert strategies still require portfolio data for meaningful checks.",
+                    Some("nodes"),
+                ));
+            }
+            if !matches!(action_data, DraftNodeData::AlertOnly { .. }) {
+                errors.push(issue(
+                    "alert_action",
+                    "error",
+                    "Alert template requires an alert-only action.",
+                    Some("nodes"),
+                ));
+            }
+        }
+    }
+}
+
+fn validate_guardrails(
+    g: &crate::services::strategy_types::StrategyGuardrails,
+    template: &StrategyTemplate,
+    errors: &mut Vec<StrategyValidationIssue>,
+    warnings: &mut Vec<StrategyValidationIssue>,
+) {
+    if matches!(template, StrategyTemplate::AlertOnly) {
+        return;
+    }
+    let max_trade = g.max_per_trade_usd.unwrap_or(0.0);
+    if max_trade <= 0.0 {
+        errors.push(issue(
+            "guardrail_max_trade",
+            "error",
+            "maxPerTradeUsd must be positive for funds-moving strategies.",
+            Some("guardrails.maxPerTradeUsd"),
+        ));
+    }
+    if let Some(d) = g.max_daily_notional_usd {
+        if d <= 0.0 {
+            errors.push(issue(
+                "guardrail_daily",
+                "error",
+                "maxDailyNotionalUsd must be positive when set.",
+                Some("guardrails.maxDailyNotionalUsd"),
+            ));
+        }
+    }
+    if let Some(b) = g.max_slippage_bps {
+        if b > 10_000 {
+            errors.push(issue(
+                "guardrail_slippage",
+                "error",
+                "maxSlippageBps is out of range.",
+                Some("guardrails.maxSlippageBps"),
+            ));
+        }
+    }
+    if g.allowed_chains.as_ref().map(|c| c.is_empty()).unwrap_or(false) {
+        warnings.push(issue(
+            "guardrail_chains",
+            "warning",
+            "allowedChains is empty; no chain will pass allowlist checks at runtime.",
+            Some("guardrails.allowedChains"),
+        ));
+    }
+}
+
+fn issue(
+    code: &str,
+    severity: &str,
+    message: &str,
+    field_path: Option<&str>,
+) -> StrategyValidationIssue {
+    StrategyValidationIssue {
+        code: code.to_string(),
+        severity: severity.to_string(),
+        message: message.to_string(),
+        field_path: field_path.map(String::from),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::strategy_types::{
+        DraftNodeData, Position, StrategyApprovalPolicy, StrategyDraft, StrategyDraftEdge,
+        StrategyDraftNode, StrategyExecutionPolicy, StrategyGuardrails, StrategyMode,
+        StrategyNodeType, StrategyTemplate,
+    };
+
+    fn base_draft() -> StrategyDraft {
+        StrategyDraft {
+            id: None,
+            name: "Test".to_string(),
+            summary: None,
+            template: StrategyTemplate::DcaBuy,
+            mode: StrategyMode::ApprovalRequired,
+            nodes: vec![
+                StrategyDraftNode {
+                    id: "trigger-1".to_string(),
+                    node_type: StrategyNodeType::Trigger,
+                    position: Position { x: 0.0, y: 0.0 },
+                    data: DraftNodeData::TimeInterval {
+                        interval: "daily".to_string(),
+                        anchor_timestamp: None,
+                        timezone: Some("UTC".to_string()),
+                    },
+                },
+                StrategyDraftNode {
+                    id: "action-1".to_string(),
+                    node_type: StrategyNodeType::Action,
+                    position: Position { x: 100.0, y: 0.0 },
+                    data: DraftNodeData::DcaBuy {
+                        chain: "ethereum".to_string(),
+                        from_symbol: "USDC".to_string(),
+                        to_symbol: "ETH".to_string(),
+                        amount_usd: Some(10.0),
+                        amount_token: None,
+                    },
+                },
+            ],
+            edges: vec![StrategyDraftEdge {
+                id: "e1".to_string(),
+                source: "trigger-1".to_string(),
+                target: "action-1".to_string(),
+            }],
+            guardrails: StrategyGuardrails {
+                max_per_trade_usd: Some(100.0),
+                ..Default::default()
+            },
+            approval_policy: StrategyApprovalPolicy::default(),
+            execution_policy: StrategyExecutionPolicy::default(),
+        }
+    }
+
+    #[test]
+    fn valid_linear_dca_passes_structure() {
+        let d = base_draft();
+        let (errors, _) = validate_draft(&d);
+        assert!(
+            errors.iter().all(|e| e.code != "trigger_count" && e.code != "action_count"),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn two_triggers_fail() {
+        let mut d = base_draft();
+        d.nodes.push(StrategyDraftNode {
+            id: "trigger-2".to_string(),
+            node_type: StrategyNodeType::Trigger,
+            position: Position { x: 0.0, y: 0.0 },
+            data: DraftNodeData::TimeInterval {
+                interval: "hourly".to_string(),
+                anchor_timestamp: None,
+                timezone: None,
+            },
+        });
+        let (errors, _) = validate_draft(&d);
+        assert!(errors.iter().any(|e| e.code == "trigger_count"));
+    }
+
+    #[test]
+    fn preauth_with_alert_template_fails() {
+        let mut d = base_draft();
+        d.mode = StrategyMode::PreAuthorized;
+        d.template = StrategyTemplate::AlertOnly;
+        d.nodes[1].data = DraftNodeData::AlertOnly {
+            title: "t".to_string(),
+            message_template: "m".to_string(),
+            severity: "info".to_string(),
+        };
+        d.nodes[0].data = DraftNodeData::Threshold {
+            metric: "portfolio_value_usd".to_string(),
+            operator: "lte".to_string(),
+            value: 1.0,
+            evaluation_interval_seconds: None,
+        };
+        let (errors, _) = validate_draft(&d);
+        assert!(errors.iter().any(|e| e.code == "preauth_alert"));
+    }
+}

@@ -54,7 +54,11 @@ pub async fn calculate_drift(
         &wallet_addresses.iter().map(|s| s.as_str()).collect::<Vec<_>>()
     ).await.map_err(|e| e.to_string())?;
 
-    let total_value: f64 = portfolio.total_usd.replace('$', "").replace(',', "").parse().unwrap_or(0.0);
+    let total_value: f64 = portfolio
+        .total_usd
+        .replace(['$', ','], "")
+        .parse()
+        .unwrap_or(0.0);
     if total_value == 0.0 {
         return Ok(DriftReport { assets: vec![], total_drift_score: 0.0 });
     }
@@ -64,7 +68,9 @@ pub async fn calculate_drift(
 
     for target in target_allocations {
         let current_asset = portfolio.breakdown.iter().find(|b| b.token == target.symbol);
-        let current_val: f64 = current_asset.map(|a| a.value.replace('$', "").replace(',', "").parse().unwrap_or(0.0)).unwrap_or(0.0);
+        let current_val: f64 = current_asset
+            .map(|a| a.value.replace(['$', ','], "").parse().unwrap_or(0.0))
+            .unwrap_or(0.0);
         let current_pct = (current_val / total_value) * 100.0;
         let drift = current_pct - target.percentage;
         

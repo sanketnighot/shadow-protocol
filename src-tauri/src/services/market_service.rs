@@ -204,7 +204,7 @@ pub fn start(app: AppHandle) {
         loop {
             tick.tick().await;
             rounds += 1;
-            let include_research = rounds % 4 == 0;
+            let include_research = rounds.is_multiple_of(4);
             let input = MarketRefreshInput {
                 include_research: Some(include_research),
                 wallet_addresses: Some(commands::get_addresses(&app)),
