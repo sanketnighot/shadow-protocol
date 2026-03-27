@@ -1,18 +1,27 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RouterProvider } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 
+import { TauriDevContextMenu } from "@/components/system/TauriDevContextMenu";
+import { hasTauriRuntime } from "@/lib/tauri";
 import { createAppRouter } from "@/routes";
+import { useUiStore } from "@/store/useUiStore";
 
 function App() {
   const router = useMemo(() => createAppRouter(), []);
+  const [devMenu, setDevMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
-      if (import.meta.env.DEV) {
-        event.preventDefault();
-        invoke("open_devtools");
+      if (!hasTauriRuntime()) {
+        return;
       }
+      const allowInspect =
+        import.meta.env.DEV || useUiStore.getState().developerModeEnabled;
+      if (!allowInspect) {
+        return;
+      }
+      event.preventDefault();
+      setDevMenu({ x: event.clientX, y: event.clientY });
     };
 
     document.addEventListener("contextmenu", handleContextMenu);
@@ -22,7 +31,18 @@ function App() {
     };
   }, []);
 
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      {devMenu ? (
+        <TauriDevContextMenu
+          x={devMenu.x}
+          y={devMenu.y}
+          onClose={() => setDevMenu(null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
 export default App;

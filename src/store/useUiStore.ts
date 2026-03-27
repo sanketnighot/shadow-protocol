@@ -68,7 +68,8 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
 
 const DEFAULT_STATE = {
   privacyModeEnabled: true,
-  developerModeEnabled: false,
+  /** On in `vite`/Tauri dev; off in production builds. Persisted value still wins after first save. */
+  developerModeEnabled: import.meta.env.DEV,
   isSidebarOpen: false,
   pendingApprovalId: null,
   themePreference: "dark" as ThemePreference,
