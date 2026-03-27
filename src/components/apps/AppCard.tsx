@@ -1,7 +1,17 @@
-import { Zap, Waves, HardDrive, Globe, Lock, ScanFace, Play, Settings, Star, Download } from "lucide-react";
+import {
+  Zap,
+  Waves,
+  HardDrive,
+  Globe,
+  Lock,
+  ScanFace,
+  Play,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ShadowApp } from "@/data/apps";
+import type { ShadowApp } from "@/types/apps";
 import { cn } from "@/lib/utils";
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -21,7 +31,13 @@ type AppCardProps = {
   onEnable: (app: ShadowApp) => void;
 };
 
-export function AppCard({ app, onInstall, onConfigure, onDisable, onEnable }: AppCardProps) {
+export function AppCard({
+  app,
+  onInstall,
+  onConfigure,
+  onDisable,
+  onEnable,
+}: AppCardProps) {
   const Icon = ICON_MAP[app.icon] || Zap;
 
   return (
@@ -38,14 +54,18 @@ export function AppCard({ app, onInstall, onConfigure, onDisable, onEnable }: Ap
             </p>
           </div>
         </div>
-        
+
         {app.isInstalled && (
-          <div className={cn(
-            "flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-            app.status === "active" 
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" 
-              : "border-border bg-secondary text-muted"
-          )}>
+          <div
+            className={cn(
+              "flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+              app.status === "active"
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                : app.status === "error"
+                  ? "border-red-500/20 bg-red-500/10 text-red-400"
+                  : "border-border bg-secondary text-muted",
+            )}
+          >
             {app.status === "active" ? (
               <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
             ) : (
@@ -66,30 +86,31 @@ export function AppCard({ app, onInstall, onConfigure, onDisable, onEnable }: Ap
         {app.isInstalled ? (
           <>
             <div className="rounded-sm border border-border bg-secondary p-2">
-              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Version</p>
+              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">
+                Version
+              </p>
               <p className="mt-1 text-xs font-semibold text-foreground font-mono">{app.version}</p>
             </div>
             <div className="rounded-sm border border-border bg-secondary p-2 text-right">
-              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Usage</p>
+              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Health</p>
               <p className="mt-1 text-xs font-semibold text-foreground truncate">
-                {app.metrics?.value.split(" ")[0] || "12"} txs
+                {app.healthStatus ?? "—"}
               </p>
             </div>
           </>
         ) : (
           <>
             <div className="rounded-sm border border-border bg-secondary p-2">
-              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Rating</p>
-              <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-foreground">
-                <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                {app.rating || "4.5"}
-              </div>
+              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">
+                Release
+              </p>
+              <p className="mt-1 text-xs font-semibold text-foreground font-mono">{app.version}</p>
             </div>
             <div className="rounded-sm border border-border bg-secondary p-2 text-right">
-              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Installs</p>
-              <div className="mt-1 flex items-center justify-end gap-1 text-xs font-semibold text-foreground">
-                <Download className="size-3 text-primary" />
-                {app.installCount || "1.2k"}
+              <p className="text-[10px] tracking-[0.18em] text-muted uppercase font-mono">Trust</p>
+              <div className="mt-1 flex items-center justify-end gap-1 text-xs font-semibold text-emerald-400">
+                <ShieldCheck className="size-3.5" />
+                Bundled
               </div>
             </div>
           </>
@@ -134,7 +155,7 @@ export function AppCard({ app, onInstall, onConfigure, onDisable, onEnable }: Ap
             className="w-full rounded-sm text-xs font-semibold tracking-wider uppercase active:scale-95"
             onClick={() => onInstall(app)}
           >
-            Install Extension
+            Install
           </Button>
         )}
       </div>

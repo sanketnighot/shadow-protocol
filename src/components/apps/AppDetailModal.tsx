@@ -1,8 +1,24 @@
 import { useState } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Zap, Waves, HardDrive, Globe, Lock, ScanFace, Check, ArrowLeft, Sparkles, ShieldCheck } from "lucide-react";
-import { ShadowApp } from "@/data/apps";
+import {
+  Zap,
+  Waves,
+  HardDrive,
+  Globe,
+  Lock,
+  ScanFace,
+  Check,
+  ArrowLeft,
+  Sparkles,
+  ShieldCheck,
+} from "lucide-react";
+import type { ShadowApp } from "@/types/apps";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Zap,
@@ -17,33 +33,44 @@ type AppDetailModalProps = {
   app: ShadowApp | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInstall: (app: ShadowApp) => void;
+  onInstall: (app: ShadowApp, acknowledgePermissions: boolean) => Promise<void>;
+  isInstalling: boolean;
 };
 
-export function AppDetailModal({ app, open, onOpenChange, onInstall }: AppDetailModalProps) {
-  const [isInstalling, setIsInstalling] = useState(false);
+export function AppDetailModal({
+  app,
+  open,
+  onOpenChange,
+  onInstall,
+  isInstalling,
+}: AppDetailModalProps) {
+  const [ack, setAck] = useState(false);
 
   if (!app) return null;
 
   const Icon = ICON_MAP[app.icon] || Zap;
 
-  const handleInstall = () => {
-    setIsInstalling(true);
-    setTimeout(() => {
-      setIsInstalling(false);
-      onInstall(app);
-      onOpenChange(false);
-    }, 2000);
+  const handleInstall = async () => {
+    if (!ack) return;
+    await onInstall(app, true);
+    setAck(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-background border-border text-foreground p-0 overflow-hidden gap-0 rounded-sm">
         <div className="flex items-center gap-2 p-4 border-b border-border bg-secondary">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted hover:text-foreground rounded-sm" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted hover:text-foreground rounded-sm"
+            onClick={() => onOpenChange(false)}
+          >
             <ArrowLeft className="size-4" />
           </Button>
-          <span className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Back to Apps</span>
+          <span className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+            Integration detail
+          </span>
         </div>
 
         <div className="p-6 sm:p-8 overflow-y-auto max-h-[80vh] custom-scrollbar">
@@ -56,34 +83,20 @@ export function AppDetailModal({ app, open, onOpenChange, onInstall }: AppDetail
               <p className="text-lg text-muted">{app.shortDescription}</p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <div className="rounded-sm border border-border bg-secondary px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase text-muted">
-                  By {app.author}
+                  {app.author}
                 </div>
-                {app.rating && (
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                    <span className="text-yellow-500">★</span>
-                    {app.rating}
-                  </div>
-                )}
-                {app.installCount && (
-                   <div className="text-xs text-muted font-mono uppercase tracking-wider">
-                    {app.installCount} Installs
-                  </div>
-                )}
+                <div className="text-xs text-muted font-mono uppercase tracking-wider">
+                  v{app.version}
+                </div>
               </div>
             </div>
           </div>
 
           <div className="mt-10 space-y-8">
-            <div className="relative w-full aspect-video rounded-sm bg-secondary border border-border overflow-hidden flex items-center justify-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50" />
-              <div className="relative flex flex-col items-center text-muted gap-3">
-                <Icon className="size-16 opacity-10" />
-                <p className="font-mono text-[10px] tracking-[0.24em] uppercase opacity-40">Extension Preview</p>
-              </div>
-            </div>
-
             <div>
-              <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase mb-3">Overview</p>
+              <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase mb-3">
+                Overview
+              </p>
               <p className="text-sm leading-7 text-muted">{app.longDescription}</p>
             </div>
 
@@ -91,7 +104,9 @@ export function AppDetailModal({ app, open, onOpenChange, onInstall }: AppDetail
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Sparkles className="size-4 text-primary" />
-                  <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Key Features</p>
+                  <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+                    Capabilities
+                  </p>
                 </div>
                 <ul className="space-y-3">
                   {app.features.map((feature, i) => (
@@ -106,7 +121,9 @@ export function AppDetailModal({ app, open, onOpenChange, onInstall }: AppDetail
               <div className="rounded-sm border border-orange-400/10 bg-orange-400/5 p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <ShieldCheck className="size-4 text-orange-400" />
-                  <p className="font-mono text-[11px] tracking-[0.18em] text-orange-400 uppercase">Permissions</p>
+                  <p className="font-mono text-[11px] tracking-[0.18em] text-orange-400 uppercase">
+                    Permissions
+                  </p>
                 </div>
                 <ul className="space-y-2">
                   {app.permissions.map((perm, i) => (
@@ -118,16 +135,28 @@ export function AppDetailModal({ app, open, onOpenChange, onInstall }: AppDetail
                 </ul>
               </div>
             </div>
+
+            <div className="flex items-start gap-3 rounded-sm border border-border bg-secondary p-4">
+              <Checkbox
+                id="ack-perms"
+                checked={ack}
+                onCheckedChange={(v) => setAck(v === true)}
+              />
+              <Label htmlFor="ack-perms" className="text-sm text-muted leading-snug cursor-pointer">
+                I understand these capabilities and grant the listed permissions for this
+                integration.
+              </Label>
+            </div>
           </div>
         </div>
 
         <div className="p-6 border-t border-border bg-secondary">
           <Button
             className="w-full h-12 rounded-sm text-xs font-semibold tracking-[0.18em] uppercase active:scale-[0.98] transition-all"
-            onClick={handleInstall}
-            disabled={isInstalling}
+            onClick={() => void handleInstall()}
+            disabled={isInstalling || !ack}
           >
-            {isInstalling ? "Downloading dependencies..." : "Install Extension"}
+            {isInstalling ? "Installing…" : "Install integration"}
           </Button>
         </div>
       </DialogContent>
