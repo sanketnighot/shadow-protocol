@@ -38,6 +38,16 @@ export function SettingsPage() {
   const toggleDeveloperMode = useUiStore((state) => state.toggleDeveloperMode);
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
 
+  const handleDeveloperModeToggle = () => {
+    const turningOn = !developerModeEnabled;
+    toggleDeveloperMode();
+    if (turningOn && hasTauriRuntime()) {
+      void invoke("open_devtools").catch(() => {
+        /* Inspector may be unavailable in some builds */
+      });
+    }
+  };
+
   const { success, warning: toastWarning } = useToast();
   const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
 
@@ -428,11 +438,13 @@ export function SettingsPage() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Enable to see testnets (Ethereum Sepolia, Base Sepolia, Polygon
-            Amoy) in the Portfolio section.
+            Amoy) in the Portfolio section.             In the desktop app, right‑click opens a menu with Reload window and
+            Open DevTools; Cmd+Option+I (macOS) or Ctrl+Shift+I (Windows/Linux)
+            toggles the inspector.
           </p>
           <button
             type="button"
-            onClick={toggleDeveloperMode}
+            onClick={handleDeveloperModeToggle}
             className={cn(
               "mt-4 flex w-fit items-center gap-3 rounded-sm border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-95",
               developerModeEnabled
