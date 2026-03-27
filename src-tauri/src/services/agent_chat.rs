@@ -179,6 +179,9 @@ fn approval_kind(tool_name: &str) -> String {
     match tool_name {
         "execute_token_swap" => "swap",
         "create_automation_strategy" => "strategy_create",
+        "flow_protocol_prepare_sponsored_transaction" => "flow_tx",
+        "filecoin_protocol_request_backup" => "filecoin_backup",
+        "filecoin_protocol_request_restore" => "filecoin_restore",
         _ => "tool_action",
     }
     .to_string()
@@ -263,7 +266,7 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
         // Add the assistant's "Thought" or "Tool Call" to the history
         built_messages.push(("assistant".into(), response.clone()));
 
-        let results = tool_router::route_and_execute(&response, wallet, &wallet_addresses).await?;
+        let results = tool_router::route_and_execute(app, &response, wallet, &wallet_addresses).await?;
 
         let mut has_tools = false;
         let mut final_content = String::new();

@@ -10,6 +10,26 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+/// Opens the webview inspector (parity with browser devtools; Tauri also wires Cmd+Option+I / Ctrl+Shift+I via the webview plugin when devtools are enabled).
+#[tauri::command]
+fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found.".to_string())?;
+    window.open_devtools();
+    Ok(())
+}
+
+/// Closes the webview inspector if it is open.
+#[tauri::command]
+fn close_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found.".to_string())?;
+    window.close_devtools();
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = tracing_subscriber::fmt()
@@ -65,6 +85,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            open_devtools,
+            close_devtools,
             commands::chat_agent,
             commands::approve_agent_action,
             commands::reject_agent_action,
@@ -129,6 +151,19 @@ pub fn run() {
             commands::delete_strategy,
             commands::run_strategy_simulation,
             commands::get_strategy_executions,
+            commands::apps_marketplace_list,
+            commands::apps_install,
+            commands::apps_uninstall,
+            commands::apps_set_enabled,
+            commands::apps_set_config,
+            commands::apps_get_config,
+            commands::apps_list_backups,
+            commands::apps_runtime_health,
+            commands::apps_refresh_health,
+            commands::apps_lit_wallet_status,
+            commands::apps_flow_account_status,
+            commands::apps_set_secret,
+            commands::apps_remove_secret,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

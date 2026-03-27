@@ -217,6 +217,77 @@ CREATE TABLE IF NOT EXISTS market_provider_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_market_provider_runs_started_at ON market_provider_runs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS apps_catalog (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  short_description TEXT NOT NULL,
+  long_description TEXT NOT NULL,
+  icon_key TEXT NOT NULL,
+  version TEXT NOT NULL,
+  author TEXT NOT NULL,
+  features_json TEXT NOT NULL DEFAULT '[]',
+  permissions_json TEXT NOT NULL DEFAULT '[]',
+  secret_requirements_json TEXT NOT NULL DEFAULT '[]',
+  agent_tools_json TEXT NOT NULL DEFAULT '[]',
+  network_scopes_json TEXT NOT NULL DEFAULT '[]',
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS installed_apps (
+  app_id TEXT PRIMARY KEY,
+  lifecycle TEXT NOT NULL,
+  installed_version TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  health_status TEXT NOT NULL DEFAULT 'unknown',
+  health_message TEXT,
+  last_health_at INTEGER,
+  permissions_acknowledged_at INTEGER,
+  error_message TEXT,
+  installed_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_permissions (
+  app_id TEXT NOT NULL,
+  permission_id TEXT NOT NULL,
+  granted_at INTEGER NOT NULL,
+  PRIMARY KEY (app_id, permission_id)
+);
+
+CREATE TABLE IF NOT EXISTS app_configs (
+  app_id TEXT PRIMARY KEY,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_backups (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  cid TEXT NOT NULL,
+  encryption_version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  scope_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'complete',
+  size_bytes INTEGER,
+  notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_backups_app_created ON app_backups(app_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_scheduler_jobs (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  interval_secs INTEGER NOT NULL,
+  next_run_at INTEGER NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_scheduler_jobs_next ON app_scheduler_jobs(next_run_at);
 "#;
 
 #[derive(Debug, thiserror::Error)]
@@ -275,6 +346,7 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
 
     // After ensuring columns exist, run data migrations.
     crate::services::strategy_legacy::migrate_legacy_strategies(conn)?;
+    crate::services::apps::registry::seed_catalog_if_empty(conn).map_err(DbError::Sqlite)?;
 
     Ok(())
 }
@@ -420,6 +492,12 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM audit_log", [])?;
         conn.execute("DELETE FROM market_opportunities", [])?;
         conn.execute("DELETE FROM market_provider_runs", [])?;
+        conn.execute("DELETE FROM app_permissions", [])?;
+        conn.execute("DELETE FROM app_configs", [])?;
+        conn.execute("DELETE FROM installed_apps", [])?;
+        conn.execute("DELETE FROM apps_catalog", [])?;
+        conn.execute("DELETE FROM app_backups", [])?;
+        conn.execute("DELETE FROM app_scheduler_jobs", [])?;
         Ok(())
     })
 }

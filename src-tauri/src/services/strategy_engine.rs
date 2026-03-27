@@ -1,3 +1,9 @@
+//! Evaluates compiled automation strategies on the heartbeat tick.
+//!
+//! Flow and Filecoin “recurring” automation that targets external networks is primarily driven by
+//! [`crate::services::apps::scheduler`] (scheduler jobs → approvals / backups), not by adding new
+//! `StrategyAction` variants here. Native EVM strategy actions remain in this module.
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 

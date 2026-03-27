@@ -11,6 +11,30 @@ const ALCHEMY_KEY_NAME: &str = "api_key:alchemy";
 const OLLAMA_KEY_NAME: &str = "api_key:ollama";
 const BIOMETRY_DOMAIN: &str = "com.sanket.shadow.biometry";
 
+fn app_secret_entry_name(app_id: &str, key: &str) -> String {
+    format!("app_secret:{app_id}:{key}")
+}
+
+pub fn set_app_secret(app_id: &str, key: &str, value: &str) -> Result<(), keyring::Error> {
+    let entry = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key))?;
+    entry.set_password(value)?;
+    Ok(())
+}
+
+pub fn remove_app_secret(app_id: &str, key: &str) -> Result<(), keyring::Error> {
+    if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key)) {
+        let _ = entry.delete_password();
+    }
+    Ok(())
+}
+
+pub fn remove_app_secrets_for(app_id: &str) -> Result<(), keyring::Error> {
+    for key in ["api_token", "access_key", "rpc_override", "dek"] {
+        let _ = remove_app_secret(app_id, key);
+    }
+    Ok(())
+}
+
 pub fn set_perplexity_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
     entry.set_password(key)?;
@@ -88,6 +112,9 @@ pub async fn delete_all_app_data(app: &AppHandle) -> Result<(), String> {
     let _ = remove_perplexity_key();
     let _ = remove_alchemy_key();
     let _ = remove_ollama_key();
+    for app_id in ["lit-protocol", "flow", "filecoin-storage"] {
+        let _ = remove_app_secrets_for(app_id);
+    }
 
     // 3. Clear Wallet entries from Keychain and Biometry
     for addr in addresses {

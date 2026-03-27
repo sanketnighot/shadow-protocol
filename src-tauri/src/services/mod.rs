@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod agent_chat;
 pub mod agent_state;
 pub mod anonymizer;

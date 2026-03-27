@@ -1,15 +1,18 @@
 //! Routes tool requests from model output and dispatches execution.
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
+use super::apps::{self, flow, lit};
+use super::apps::state as apps_state;
+use super::local_db::{self, DbError};
+use super::sonar_client;
 use super::tool_registry;
 use super::tools::{
-    get_total_portfolio_value, get_total_portfolio_value_multi, get_token_price,
-    get_wallet_balances, get_wallet_balances_multi, prepare_swap_preview,
-    prepare_strategy_proposal, calculate_drift, build_panic_routes,
+    build_panic_routes, calculate_drift, get_token_price, get_total_portfolio_value,
+    get_total_portfolio_value_multi, get_wallet_balances, get_wallet_balances_multi,
+    prepare_strategy_proposal, prepare_swap_preview,
 };
-use super::local_db;
-use super::sonar_client;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ToolCall {
@@ -23,13 +26,11 @@ pub(crate) fn parse_tool_calls(text: &str) -> Vec<ToolCall> {
     let mut results = Vec::new();
     let mut current_pos = 0;
 
-    // Search for all occurrences of '{'
     while let Some(start) = text[current_pos..].find('{') {
         let abs_start = current_pos + start;
         let mut brace_count = 0;
         let mut end_pos = None;
 
-        // Find the matching '}'
         for (i, c) in text[abs_start..].chars().enumerate() {
             if c == '{' {
                 brace_count += 1;
@@ -49,7 +50,6 @@ pub(crate) fn parse_tool_calls(text: &str) -> Vec<ToolCall> {
             }
             current_pos = end + 1;
         } else {
-            // No matching closing brace found for this '{'
             current_pos = abs_start + 1;
         }
 
@@ -76,22 +76,43 @@ pub enum ToolResult {
     Error { message: String },
 }
 
+fn ensure_app_tool_gate(app: &AppHandle, def: &tool_registry::ToolDef) -> Result<(), String> {
+    if let Some(app_id) = def.required_app_id {
+        if !apps_state::is_tool_app_ready(app_id).map_err(|e: DbError| e.to_string())? {
+            return Err(format!(
+                "Install and enable the '{}' integration under Apps (complete permission review).",
+                app_id
+            ));
+        }
+        apps::permissions::assert_permissions_granted(app_id, def.required_permission_ids)?;
+    }
+    let _ = app;
+    Ok(())
+}
+
+fn router_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 pub async fn route_and_execute(
+    app: &AppHandle,
     model_output: &str,
     wallet_address: Option<&str>,
     wallet_addresses: &[String],
 ) -> Result<Vec<ToolResult>, String> {
     let calls = parse_tool_calls(model_output);
-    
+
     let mut results = Vec::new();
 
-    // Extract text that isn't part of any JSON tool call
     let mut text_content = model_output.to_string();
     for call in &calls {
         let call_json = serde_json::to_string(call).unwrap_or_default();
         text_content = text_content.replace(&call_json, "");
     }
-    
+
     let cleaned_text = text_content.trim();
     if !cleaned_text.is_empty() && !cleaned_text.starts_with('{') {
         results.push(ToolResult::AssistantMessage {
@@ -101,7 +122,7 @@ pub async fn route_and_execute(
 
     if calls.is_empty() {
         if results.is_empty() {
-             results.push(ToolResult::AssistantMessage {
+            results.push(ToolResult::AssistantMessage {
                 content: model_output.to_string(),
             });
         }
@@ -123,11 +144,17 @@ pub async fn route_and_execute(
         };
 
         let has_addresses = !wallet_addresses.is_empty();
-        let address = wallet_address.unwrap_or(wallet_addresses.first().map(String::as_str).unwrap_or(""));
+        let address = wallet_address
+            .unwrap_or(wallet_addresses.first().map(String::as_str).unwrap_or(""));
         if def.requires_wallet && !has_addresses && address.is_empty() {
             results.push(ToolResult::Error {
                 message: "No wallet address. Please connect a wallet first.".to_string(),
             });
+            continue;
+        }
+
+        if let Err(msg) = ensure_app_tool_gate(app, &def) {
+            results.push(ToolResult::Error { message: msg });
             continue;
         }
 
@@ -168,7 +195,9 @@ pub async fn route_and_execute(
                 }
             }
             "get_token_price" => {
-                let symbol = call.parameters.get("tokenSymbol")
+                let symbol = call
+                    .parameters
+                    .get("tokenSymbol")
                     .and_then(|v| v.as_str())
                     .unwrap_or("ETH");
                 let res = get_token_price(symbol).await.map_err(|e| e.to_string())?;
@@ -179,7 +208,9 @@ pub async fn route_and_execute(
                 }
             }
             "web_research" => {
-                let query = call.parameters.get("query")
+                let query = call
+                    .parameters
+                    .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing query for web_research")?;
                 let res = sonar_client::search(query).await?;
@@ -189,7 +220,9 @@ pub async fn route_and_execute(
                 }
             }
             "analyze_portfolio_history" => {
-                let limit = call.parameters.get("limit")
+                let limit = call
+                    .parameters
+                    .get("limit")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(10) as u32;
                 let snapshots = local_db::get_portfolio_snapshots(limit).map_err(|e| e.to_string())?;
@@ -200,10 +233,26 @@ pub async fn route_and_execute(
                 }
             }
             "execute_token_swap" => {
-                let from = call.parameters.get("fromToken").and_then(|v| v.as_str()).unwrap_or("USDC");
-                let to = call.parameters.get("toToken").and_then(|v| v.as_str()).unwrap_or("ETH");
-                let amount = call.parameters.get("amount").and_then(|v| v.as_str()).unwrap_or("0");
-                let chain = call.parameters.get("chain").and_then(|v| v.as_str()).unwrap_or("ETH");
+                let from = call
+                    .parameters
+                    .get("fromToken")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("USDC");
+                let to = call
+                    .parameters
+                    .get("toToken")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("ETH");
+                let amount = call
+                    .parameters
+                    .get("amount")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0");
+                let chain = call
+                    .parameters
+                    .get("chain")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("ETH");
                 let slippage = call.parameters.get("slippage").and_then(|v| v.as_f64());
 
                 match prepare_swap_preview(from, to, amount, chain, slippage) {
@@ -214,17 +263,45 @@ pub async fn route_and_execute(
                             payload,
                         }
                     }
-                    Err(e) => ToolResult::Error { message: e.to_string() }
+                    Err(e) => ToolResult::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
             "create_automation_strategy" => {
-                let name = call.parameters.get("name").and_then(|v| v.as_str()).unwrap_or("New Strategy");
-                let summary = call.parameters.get("summary").and_then(|v| v.as_str()).unwrap_or("");
-                let trigger = call.parameters.get("trigger").cloned().unwrap_or(serde_json::json!({}));
-                let action = call.parameters.get("action").cloned().unwrap_or(serde_json::json!({}));
-                let guardrails = call.parameters.get("guardrails").cloned().unwrap_or(serde_json::json!({}));
+                let name = call
+                    .parameters
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("New Strategy");
+                let summary = call
+                    .parameters
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let trigger = call
+                    .parameters
+                    .get("trigger")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
+                let action = call
+                    .parameters
+                    .get("action")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
+                let guardrails = call
+                    .parameters
+                    .get("guardrails")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
 
-                match prepare_strategy_proposal(name.to_string(), summary.to_string(), trigger, action, guardrails) {
+                match prepare_strategy_proposal(
+                    name.to_string(),
+                    summary.to_string(),
+                    trigger,
+                    action,
+                    guardrails,
+                ) {
                     Ok(proposal) => {
                         let payload = serde_json::to_value(&proposal).unwrap_or(serde_json::json!({}));
                         ToolResult::ApprovalRequired {
@@ -232,19 +309,28 @@ pub async fn route_and_execute(
                             payload,
                         }
                     }
-                    Err(e) => ToolResult::Error { message: e.to_string() }
+                    Err(e) => ToolResult::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
             "calculate_portfolio_drift" => {
-                let target_allocs = if let Some(arr) = call.parameters.get("targetAllocations").and_then(|v| v.as_array()) {
-                    arr.iter().filter_map(|v| {
-                        let symbol = v.get("symbol")?.as_str()?.to_string();
-                        let percentage = v.get("percentage")?.as_f64()?;
-                        Some(local_db::TargetAllocation { symbol, percentage })
-                    }).collect()
-                } else {
-                    local_db::get_target_allocations().map_err(|e| e.to_string())?
-                };
+                let target_allocs =
+                    if let Some(arr) = call
+                        .parameters
+                        .get("targetAllocations")
+                        .and_then(|v| v.as_array())
+                    {
+                        arr.iter()
+                            .filter_map(|v| {
+                                let symbol = v.get("symbol")?.as_str()?.to_string();
+                                let percentage = v.get("percentage")?.as_f64()?;
+                                Some(local_db::TargetAllocation { symbol, percentage })
+                            })
+                            .collect()
+                    } else {
+                        local_db::get_target_allocations().map_err(|e| e.to_string())?
+                    };
 
                 match calculate_drift(target_allocs, wallet_addresses).await {
                     Ok(res) => {
@@ -254,14 +340,27 @@ pub async fn route_and_execute(
                             content,
                         }
                     }
-                    Err(e) => ToolResult::Error { message: e.to_string() }
+                    Err(e) => ToolResult::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
             "build_emergency_eject_route" => {
-                let assets = call.parameters.get("assets").and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                let assets = call
+                    .parameters
+                    .get("assets")
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
                     .unwrap_or_default();
-                let destination = call.parameters.get("destination").and_then(|v| v.as_str()).unwrap_or("USDC");
+                let destination = call
+                    .parameters
+                    .get("destination")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("USDC");
 
                 match build_panic_routes(assets, destination.to_string(), wallet_addresses).await {
                     Ok(res) => {
@@ -271,24 +370,30 @@ pub async fn route_and_execute(
                             content,
                         }
                     }
-                    Err(e) => ToolResult::Error { message: e.to_string() }
+                    Err(e) => ToolResult::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
-            "list_automation_strategies" => {
-                match local_db::get_strategies() {
-                    Ok(res) => {
-                        let content = serde_json::to_string(&res).unwrap_or_else(|_| "[]".into());
-                        ToolResult::ToolOutput {
-                            tool_name: def.name.to_string(),
-                            content,
-                        }
+            "list_automation_strategies" => match local_db::get_strategies() {
+                Ok(res) => {
+                    let content = serde_json::to_string(&res).unwrap_or_else(|_| "[]".into());
+                    ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content,
                     }
-                    Err(e) => ToolResult::Error { message: e.to_string() }
                 }
-            }
+                Err(e) => ToolResult::Error {
+                    message: e.to_string(),
+                },
+            },
             "update_automation_strategy_status" => {
                 let id = call.parameters.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                let status = call.parameters.get("status").and_then(|v| v.as_str()).unwrap_or("active");
+                let status = call
+                    .parameters
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("active");
 
                 let strategies = match local_db::get_strategies() {
                     Ok(s) => s,
@@ -301,13 +406,231 @@ pub async fn route_and_execute(
                             tool_name: def.name.to_string(),
                             content: format!("Strategy '{}' status updated to {}.", strategy.name, status),
                         },
-                        Err(e) => ToolResult::Error { message: e.to_string() }
+                        Err(e) => ToolResult::Error {
+                            message: e.to_string(),
+                        },
                     }
                 } else {
-                    ToolResult::Error { message: "Strategy not found.".to_string() }
+                    ToolResult::Error {
+                        message: "Strategy not found.".to_string(),
+                    }
                 }
             }
-            _ => {                results.push(ToolResult::Error { message: format!("Unknown tool: {}", def.name) });
+            "lit_protocol_wallet_status" => {
+                let daily = call.parameters.get("dailyLimitUsd").and_then(|v| v.as_f64());
+                let mut cfg: serde_json::Value =
+                    serde_json::from_str(&apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string()))
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                if let Some(d) = daily {
+                    cfg["dailyLimitUsd"] = serde_json::json!(d);
+                }
+                match lit::wallet_status(app, cfg).await {
+                    Ok(v) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
+                    },
+                    Err(e) => ToolResult::Error { message: e },
+                }
+            }
+            "lit_protocol_connect_wallet" => {
+                let memo = call
+                    .parameters
+                    .get("memo")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let payload = serde_json::json!({ "memo": memo });
+                match lit::connect_wallet(app, payload).await {
+                    Ok(v) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
+                    },
+                    Err(e) => ToolResult::Error { message: e },
+                }
+            }
+            "lit_protocol_precheck_action" => {
+                let kind = call
+                    .parameters
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let notional = call.parameters.get("notionalUsd").and_then(|v| v.as_f64());
+                let action = serde_json::json!({ "kind": kind, "notionalUsd": notional });
+                match lit::precheck_action(app, action).await {
+                    Ok(v) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
+                    },
+                    Err(e) => ToolResult::Error { message: e },
+                }
+            }
+            "flow_protocol_account_status" => match flow::account_status(app).await {
+                Ok(v) => ToolResult::ToolOutput {
+                    tool_name: def.name.to_string(),
+                    content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
+                },
+                Err(e) => ToolResult::Error { message: e },
+            },
+            "flow_protocol_prepare_sponsored_transaction" => {
+                let summary = call
+                    .parameters
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Flow action");
+                let cadence = call
+                    .parameters
+                    .get("cadenceNote")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let payload = serde_json::json!({
+                    "summary": summary,
+                    "cadenceNote": cadence,
+                });
+                ToolResult::ApprovalRequired {
+                    tool_name: def.name.to_string(),
+                    payload,
+                }
+            }
+            "filecoin_protocol_list_backups" => {
+                let limit = call
+                    .parameters
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(20) as u32;
+                match apps_state::list_app_backups("filecoin-storage", limit) {
+                    Ok(rows) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()),
+                    },
+                    Err(e) => ToolResult::Error {
+                        message: format!("{e}"),
+                    },
+                }
+            }
+            "filecoin_protocol_request_backup" => {
+                let mem = call
+                    .parameters
+                    .get("includeAgentMemory")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let persona = call
+                    .parameters
+                    .get("includePersona")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let scope = serde_json::json!({
+                    "agentMemory": mem,
+                    "persona": persona,
+                    "configs": true,
+                });
+                ToolResult::ApprovalRequired {
+                    tool_name: def.name.to_string(),
+                    payload: serde_json::json!({ "scope": scope }),
+                }
+            }
+            "filecoin_protocol_request_restore" => {
+                let cid = call
+                    .parameters
+                    .get("cid")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if cid.len() < 8 {
+                    ToolResult::Error {
+                        message: "Invalid CID".to_string(),
+                    }
+                } else {
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload: serde_json::json!({ "cid": cid }),
+                    }
+                }
+            }
+            "apps_schedule_integration_job" => {
+                let Some(target) = call.parameters.get("appId").and_then(|v| v.as_str()) else {
+                    results.push(ToolResult::Error {
+                        message: "Missing appId".to_string(),
+                    });
+                    continue;
+                };
+                let kind = call
+                    .parameters
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let interval = call
+                    .parameters
+                    .get("intervalSeconds")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                if interval < 60 {
+                    results.push(ToolResult::Error {
+                        message: "intervalSeconds must be at least 60.".to_string(),
+                    });
+                    continue;
+                }
+                if target != "flow" && target != "filecoin-storage" {
+                    results.push(ToolResult::Error {
+                        message: "appId must be flow or filecoin-storage.".to_string(),
+                    });
+                    continue;
+                }
+                if !apps_state::is_tool_app_ready(target).unwrap_or(false) {
+                    results.push(ToolResult::Error {
+                        message: format!("App '{target}' must be active to schedule jobs."),
+                    });
+                    continue;
+                }
+                let perm_check = match kind {
+                    "flow_recurring_prepare" => {
+                        apps::permissions::assert_permissions_granted(
+                            "flow",
+                            &["flow.tx.prepare", "network.flow"],
+                        )
+                    }
+                    "filecoin_autobackup" => apps::permissions::assert_permissions_granted(
+                        "filecoin-storage",
+                        &["backup.read_local_state", "network.filecoin"],
+                    ),
+                    _ => Err("kind must be flow_recurring_prepare or filecoin_autobackup.".to_string()),
+                };
+                if let Err(m) = perm_check {
+                    results.push(ToolResult::Error { message: m });
+                    continue;
+                }
+                let payload = call
+                    .parameters
+                    .get("payload")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
+                let now = router_now();
+                let row = apps_state::AppSchedulerJobRow {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    app_id: target.to_string(),
+                    kind: kind.to_string(),
+                    payload_json: payload.to_string(),
+                    interval_secs: interval as i64,
+                    next_run_at: now,
+                    enabled: true,
+                    created_at: now,
+                    updated_at: now,
+                };
+                match apps_state::upsert_scheduler_job(&row) {
+                    Ok(_) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&serde_json::json!({
+                            "jobId": row.id,
+                            "nextRunAt": row.next_run_at
+                        }))
+                        .unwrap_or_else(|_| "{}".into()),
+                    },
+                    Err(e) => ToolResult::Error {
+                        message: format!("{e}"),
+                    },
+                }
+            }
+            _ => {
+                results.push(ToolResult::Error {
+                    message: format!("Unknown tool: {}", def.name),
+                });
                 continue;
             }
         };
@@ -341,12 +664,19 @@ pub fn tools_system_prompt(ctx: &AgentContext) -> String {
         serde_json::json!({
             "name": t.name,
             "description": t.description,
+            "requiresAppId": t.required_app_id,
             "parameters": serde_json::from_str::<serde_json::Value>(t.parameters).unwrap_or(serde_json::json!({"type": "object"}))
         })
     }).collect::<Vec<_>>()).unwrap_or_else(|_| "[]".to_string());
 
+    let integrations = apps::prompt_block();
+
     let ctx_block = if ctx.has_wallets() {
-        let multi = if ctx.is_multi_wallet() { " (multi-wallet; aggregate by default)" } else { "" };
+        let multi = if ctx.is_multi_wallet() {
+            " (multi-wallet; aggregate by default)"
+        } else {
+            ""
+        };
         format!(
             r#"
 ## APP CONTEXT (auto-inject; NEVER ask user for this)
@@ -396,6 +726,8 @@ When using a tool, you MUST output ONLY a valid JSON object in the following for
 {{"name": "tool_name", "parameters": {{"param1": "value1"}}}}
 
 {ctx_block}
+
+{integrations}
 
 Available tools:
 {tools_json}
