@@ -1,0 +1,307 @@
+//! Tauri commands for bundled Apps / integrations marketplace.
+
+use keyring::Error as KeyringError;
+use serde::{Deserialize, Serialize};
+
+use crate::services::apps::{flow, lit, permissions, runtime, state as apps_state};
+use crate::services::audit;
+use crate::services::local_db::DbError;
+
+fn require_unlocked_session_for_app_settings() -> Result<(), String> {
+    if !crate::session::has_unlocked_session() {
+        return Err(
+            "Unlock your wallet before changing integration settings or app secrets.".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_app_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 64 {
+        return Err("Invalid app id".to_string());
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err("Invalid app id characters".to_string());
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsMarketplaceResponse {
+    pub entries: Vec<apps_state::AppMarketplaceEntry>,
+}
+
+#[tauri::command]
+pub fn apps_marketplace_list() -> Result<AppsMarketplaceResponse, String> {
+    let entries = apps_state::list_marketplace().map_err(|e: DbError| e.to_string())?;
+    Ok(AppsMarketplaceResponse { entries })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsInstallInput {
+    pub app_id: String,
+    #[serde(default)]
+    pub acknowledge_permissions: bool,
+}
+
+#[tauri::command]
+pub async fn apps_install(
+    app: tauri::AppHandle,
+    input: AppsInstallInput,
+) -> Result<AppsMarketplaceResponse, String> {
+    let app_id = input.app_id.trim();
+    validate_app_id(app_id)?;
+    if !apps_state::catalog_has_id(app_id).map_err(|e: DbError| e.to_string())? {
+        return Err("Unknown app".to_string());
+    }
+    if !input.acknowledge_permissions {
+        return Err("Permission acknowledgement required".to_string());
+    }
+
+    let catalog = apps_state::list_marketplace()
+        .map_err(|e: DbError| e.to_string())?
+        .into_iter()
+        .find(|e| e.catalog.id == app_id)
+        .ok_or_else(|| "Catalog entry missing".to_string())?;
+    let version = catalog.catalog.version.clone();
+
+    apps_state::upsert_installed_app(app_id, "installing", &version, false)
+        .map_err(|e: DbError| e.to_string())?;
+
+    let ping = runtime::ping(&app).await;
+    let health_ok = ping.is_ok() && ping.as_ref().map(|p| p.ok).unwrap_or(false);
+    if !health_ok {
+        apps_state::upsert_installed_app(app_id, "error", &version, false)
+            .map_err(|e: DbError| e.to_string())?;
+        apps_state::set_health(
+            app_id,
+            "error",
+            Some("Apps runtime health check failed. Ensure bun is installed and apps-runtime is present."),
+        )
+        .map_err(|e: DbError| e.to_string())?;
+        audit::record(
+            "app_install",
+            "app",
+            Some(app_id),
+            &serde_json::json!({ "health": "error" }),
+        );
+        return apps_marketplace_list();
+    }
+
+    permissions::grant_manifest_permissions(app_id)?;
+    apps_state::acknowledge_permissions(app_id).map_err(|e: DbError| e.to_string())?;
+    apps_state::set_installed_enabled(app_id, true).map_err(|e: DbError| e.to_string())?;
+    apps_state::set_health(app_id, "ok", None).map_err(|e: DbError| e.to_string())?;
+
+    audit::record(
+        "app_install",
+        "app",
+        Some(app_id),
+        &serde_json::json!({ "health": "ok" }),
+    );
+
+    apps_marketplace_list()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsAppIdInput {
+    pub app_id: String,
+}
+
+#[tauri::command]
+pub fn apps_uninstall(input: AppsAppIdInput) -> Result<AppsMarketplaceResponse, String> {
+    let app_id = input.app_id.trim();
+    validate_app_id(app_id)?;
+    crate::services::settings::remove_app_secrets_for(app_id).map_err(|e: KeyringError| e.to_string())?;
+    apps_state::delete_installed_app(app_id).map_err(|e: DbError| e.to_string())?;
+    audit::record(
+        "app_uninstall",
+        "app",
+        Some(app_id),
+        &serde_json::json!({}),
+    );
+    apps_marketplace_list()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsSetEnabledInput {
+    pub app_id: String,
+    pub enabled: bool,
+}
+
+#[tauri::command]
+pub fn apps_set_enabled(input: AppsSetEnabledInput) -> Result<AppsMarketplaceResponse, String> {
+    let app_id = input.app_id.trim();
+    validate_app_id(app_id)?;
+    if apps_state::get_installed(app_id)
+        .map_err(|e: DbError| e.to_string())?
+        .is_none()
+    {
+        return Err("App is not installed".to_string());
+    }
+    apps_state::set_installed_enabled(app_id, input.enabled).map_err(|e: DbError| e.to_string())?;
+    audit::record(
+        "app_set_enabled",
+        "app",
+        Some(app_id),
+        &serde_json::json!({ "enabled": input.enabled }),
+    );
+    apps_marketplace_list()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsConfigInput {
+    pub app_id: String,
+    pub config: serde_json::Value,
+}
+
+#[tauri::command]
+pub fn apps_set_config(input: AppsConfigInput) -> Result<(), String> {
+    require_unlocked_session_for_app_settings()?;
+    let app_id = input.app_id.trim();
+    validate_app_id(app_id)?;
+    if apps_state::get_installed(app_id)
+        .map_err(|e: DbError| e.to_string())?
+        .is_none()
+    {
+        return Err("App is not installed".to_string());
+    }
+    let s = serde_json::to_string(&input.config).map_err(|e| e.to_string())?;
+    apps_state::set_app_config_json(app_id, &s).map_err(|e: DbError| e.to_string())?;
+    audit::record(
+        "app_config_update",
+        "app",
+        Some(app_id),
+        &serde_json::json!({}),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn apps_list_backups() -> Result<Vec<apps_state::AppBackupRow>, String> {
+    apps_state::list_app_backups("filecoin-storage", 50).map_err(|e: DbError| e.to_string())
+}
+
+#[tauri::command]
+pub fn apps_get_config(input: AppsAppIdInput) -> Result<serde_json::Value, String> {
+    let app_id = input.app_id.trim();
+    validate_app_id(app_id)?;
+    let raw = apps_state::get_app_config_json(app_id).map_err(|e: DbError| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn apps_runtime_health(app: tauri::AppHandle) -> Result<runtime::RuntimeResponse, String> {
+    runtime::ping(&app)
+        .await
+        .map_err(|e: runtime::AppsRuntimeError| e.to_string())
+}
+
+/// Re-ping the apps sidecar and refresh per-integration health rows (sync/status).
+#[tauri::command]
+pub async fn apps_refresh_health(app: tauri::AppHandle) -> Result<AppsMarketplaceResponse, String> {
+    let ping = runtime::ping(&app)
+        .await
+        .map_err(|e: runtime::AppsRuntimeError| e.to_string())?;
+    let entries = apps_state::list_marketplace().map_err(|e: DbError| e.to_string())?;
+    if ping.ok {
+        for e in &entries {
+            if let Some(inst) = &e.installed {
+                apps_state::set_health(&inst.app_id, "ok", None).map_err(|e: DbError| e.to_string())?;
+            }
+        }
+        audit::record(
+            "apps_health_refresh",
+            "apps",
+            None,
+            &serde_json::json!({ "ok": true }),
+        );
+    } else {
+        let msg = ping
+            .error_message
+            .as_deref()
+            .unwrap_or("Apps runtime unreachable");
+        for e in &entries {
+            if let Some(inst) = &e.installed {
+                apps_state::set_health(&inst.app_id, "error", Some(msg)).map_err(|e: DbError| e.to_string())?;
+            }
+        }
+        audit::record(
+            "apps_health_refresh",
+            "apps",
+            None,
+            &serde_json::json!({ "ok": false }),
+        );
+    }
+    apps_marketplace_list()
+}
+
+#[tauri::command]
+pub async fn apps_lit_wallet_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg: serde_json::Value = serde_json::from_str(
+        &apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string()),
+    )
+    .unwrap_or_else(|_| serde_json::json!({}));
+    lit::wallet_status(&app, cfg).await
+}
+
+#[tauri::command]
+pub async fn apps_flow_account_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    flow::account_status(&app).await
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsSecretInput {
+    pub app_id: String,
+    pub key: String,
+    pub value: String,
+}
+
+#[tauri::command]
+pub fn apps_set_secret(input: AppsSecretInput) -> Result<(), String> {
+    require_unlocked_session_for_app_settings()?;
+    validate_app_id(&input.app_id)?;
+    validate_secret_key(&input.key)?;
+    if input.value.len() > 4096 {
+        return Err("Secret too long".to_string());
+    }
+    crate::services::settings::set_app_secret(&input.app_id, &input.key, &input.value)
+        .map_err(|e| e.to_string())
+}
+
+fn validate_secret_key(key: &str) -> Result<(), String> {
+    if key.is_empty() || key.len() > 64 {
+        return Err("Invalid secret key".to_string());
+    }
+    if !key
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
+        return Err("Invalid secret key".to_string());
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsSecretKeyInput {
+    pub app_id: String,
+    pub key: String,
+}
+
+#[tauri::command]
+pub fn apps_remove_secret(input: AppsSecretKeyInput) -> Result<(), String> {
+    require_unlocked_session_for_app_settings()?;
+    validate_app_id(&input.app_id)?;
+    validate_secret_key(&input.key)?;
+    crate::services::settings::remove_app_secret(&input.app_id, &input.key).map_err(|e| e.to_string())
+}

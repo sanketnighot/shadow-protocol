@@ -1,3 +1,4 @@
+mod apps;
 mod agent_state;
 mod chat;
 mod market;
@@ -10,6 +11,7 @@ mod transfer;
 mod wallet;
 mod wallet_sync;
 
+pub use apps::*;
 pub use agent_state::*;
 pub use chat::*;
 pub use market::*;

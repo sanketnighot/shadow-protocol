@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
+use crate::services::apps::{backup_payload_from_scope, filecoin, flow};
+use crate::services::apps::state as apps_state;
 use crate::services::audit;
 use crate::services::local_db::{
     self, ActiveStrategy, ApprovalRecord, CommandLogEntry, ToolExecutionRecord,
@@ -348,7 +350,10 @@ pub async fn reject_agent_action(input: RejectAgentActionInput) -> Result<Reject
 }
 
 #[tauri::command]
-pub async fn approve_agent_action(input: ApproveAgentActionInput) -> Result<ApproveAgentActionResult, String> {
+pub async fn approve_agent_action(
+    app: tauri::AppHandle,
+    input: ApproveAgentActionInput,
+) -> Result<ApproveAgentActionResult, String> {
     let now = now_secs();
     local_db::expire_stale_approvals(now).map_err(|e| e.to_string())?;
 
@@ -440,6 +445,129 @@ pub async fn approve_agent_action(input: ApproveAgentActionInput) -> Result<Appr
             execution_id: Some(execution_id),
             message: format!("Strategy '{}' has been created and is now active.", strategy.name),
             tx_hash: None,
+        }
+    } else if tool_name == "flow_protocol_prepare_sponsored_transaction" {
+        let proposal = input
+            .payload
+            .get("original")
+            .cloned()
+            .unwrap_or_else(|| input.payload.clone());
+        match flow::prepare_sponsored_transaction(&app, proposal).await {
+            Ok(data) => {
+                execution.status = "succeeded".to_string();
+                execution.result_json =
+                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: "Flow transaction prepared (review prepared payload in execution log)."
+                        .to_string(),
+                    tx_hash: None,
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("flow_prepare_failed".to_string());
+                execution.error_message = Some(e.clone());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: e,
+                    tx_hash: None,
+                }
+            }
+        }
+    } else if tool_name == "filecoin_protocol_request_backup" {
+        let scope = input
+            .payload
+            .get("scope")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let bytes = backup_payload_from_scope(&app, &scope).map_err(|e| e.to_string())?;
+        let ciphertext_hex = hex::encode(&bytes);
+        match filecoin::prepare_encrypted_backup(&app, scope.clone(), ciphertext_hex).await {
+            Ok(data) => {
+                let cid = data
+                    .get("cid")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let row = apps_state::AppBackupRow {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    app_id: "filecoin-storage".to_string(),
+                    cid: cid.clone(),
+                    encryption_version: 1,
+                    created_at: now_secs(),
+                    scope_json: scope.to_string(),
+                    status: "complete".to_string(),
+                    size_bytes: Some(bytes.len() as i64),
+                    notes: Some("manual_backup".to_string()),
+                };
+                let _ = apps_state::insert_app_backup(&row);
+                execution.status = "succeeded".to_string();
+                execution.result_json =
+                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: format!("Backup completed. CID recorded: {cid}"),
+                    tx_hash: None,
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("filecoin_backup_failed".to_string());
+                execution.error_message = Some(e.clone());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: e,
+                    tx_hash: None,
+                }
+            }
+        }
+    } else if tool_name == "filecoin_protocol_request_restore" {
+        let cid = input
+            .payload
+            .get("cid")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "Missing cid".to_string())?;
+        match filecoin::prepare_restore(&app, cid).await {
+            Ok(data) => {
+                execution.status = "succeeded".to_string();
+                execution.result_json =
+                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: "Restore payload fetched (stub transport — verify before mainnet)."
+                        .to_string(),
+                    tx_hash: None,
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("filecoin_restore_failed".to_string());
+                execution.error_message = Some(e.clone());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: e,
+                    tx_hash: None,
+                }
+            }
         }
     } else {
         execution.status = "failed".to_string();
