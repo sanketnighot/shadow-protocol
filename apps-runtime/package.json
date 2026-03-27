@@ -1,0 +1,12 @@
+{
+  "name": "@shadow/apps-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.8.3"
+  }
+}
