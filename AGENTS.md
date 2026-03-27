@@ -119,16 +119,14 @@ src-tauri/
 - Agent chat input must be fixed at the bottom of the viewport; only the messages area scrolls
 - Prefer Touch ID (biometric) over password prompts for wallet unlock when available
 - Wallet unlock must prompt for Touch ID/biometric when that option is chosen; should not auto-unlock without verification
-- Agent: chat conversationally for greetings (no tools on hi/hello); when user asks about portfolio/balances/prices, call tools proactively and never ask user for data the app can fetch; portfolio display must show token amounts and per-wallet attribution, formatted in Rust from real API data; show approvals inline with Approve/Reject buttons, not in a popup
-- Agent LLM responses: proper structure, formatting, clean, and concise; avoid verbose or repetitive output
+- Agent: chat conversationally for greetings (no tools on hi/hello); for portfolio/balances/prices call tools proactively and never ask for data the app can fetch; portfolio display shows token amounts and per-wallet attribution (formatted in Rust); approvals inline with Approve/Reject (not popups); LLM replies structured, concise, non-repetitive
+- When executing a Cursor-attached implementation plan, do not edit the plan `.md` file; change application code only
 
 ## Learned Workspace Facts
 
 - Primary app navigation lives in the bottom dock; sidebar has been removed
-- Strategy builder is at `/strategy` with a **Builder** item in the bottom dock (`NAV_ITEMS`); Automation header also links to the builder
-- Supported chains: Ethereum, Base, Polygon (mainnet + testnet); no Arbitrum or Solana
-- Polygon Amoy native token ticker is POL (not MATIC)
-- Testnets: eth-sepolia, base-sepolia, polygon-amoy (Alchemy network names)
+- Strategy builder is at `/strategy` with a **Builder** item in the bottom dock (`NAV_ITEMS`); Automation header links to the builder; the strategy graph is modeled as linear and the canvas uses **`StrategyPipelineView`** (React Flow was removed—Tauri/WebView issues with sizing, controlled nodes, and `fitView`)
+- Chains: Ethereum, Base, Polygon (mainnet + testnets); testnets eth-sepolia, base-sepolia, polygon-amoy (Alchemy names); Polygon Amoy native ticker POL (not MATIC); no Arbitrum or Solana
 - Tauri: frontend in root `src/`; Rust and config in `src-tauri/`; titleBarStyle is Overlay with `hiddenTitle: true` and `startDragging` for drag support
 - Wallet address list is stored in `{appDataDir}/wallets.json` (plain file, no Keychain access on startup); only private keys remain in macOS Keychain
 - Session unlock: private key cached in RAM (`Zeroizing<String>`) for 30-min inactivity; cache cleared on `RunEvent::ExitRequested/Exit`; Tauri commands: `session_unlock`, `session_lock`, `session_status`
@@ -137,6 +135,7 @@ src-tauri/
 - Updates: ActivityBell floating bottom-right; archive deletes permanently (no Archived tab)
 - Tauri invoke: commands expect args under `input` key (e.g. `invoke("chat_agent", { input: payload })`)
 - Agent decision pipeline: deterministic DeFi execution engine; portfolio advice uses preprocessing, strict JSON, refusal detection, and fallback rules; demo mode simulates without execution
+- Apps/Integrations (v1): Rust-owned registry, SQLite persistence, and Tauri commands; `apps-runtime/` TypeScript sidecar for Lit, Flow, and Filecoin adapters (SDKs stay out of React); bundled first-party integrations only—not an open public marketplace
 
 ## Design System
 

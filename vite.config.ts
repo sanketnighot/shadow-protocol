@@ -19,6 +19,10 @@ export default defineConfig(async () => ({
     globals: true,
     setupFiles: "./vitest.setup.ts",
     css: true,
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "apps-runtime/**/*.{test,spec}.ts",
+    ],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

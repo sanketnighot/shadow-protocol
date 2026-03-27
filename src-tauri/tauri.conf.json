@@ -25,7 +25,8 @@
         "minWidth": 1200,
         "minHeight": 900,
         "width": 1200,
-        "height": 900
+        "height": 900,
+        "devtools": true
       }
     ],
     "security": {
@@ -53,6 +54,6 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
     },
-    "resources": []
+    "resources": ["../apps-runtime"]
   }
 }
