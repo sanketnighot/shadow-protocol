@@ -9,6 +9,10 @@ pub async fn prepare_encrypted_backup(
     scope: serde_json::Value,
     ciphertext_hex: String,
 ) -> Result<serde_json::Value, String> {
+    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
+        .unwrap_or(None)
+        .unwrap_or_default();
+
     let res = invoke_sidecar(
         app,
         RuntimeRequest {
@@ -17,6 +21,7 @@ pub async fn prepare_encrypted_backup(
             payload: serde_json::json!({
                 "scope": scope,
                 "ciphertextHex": ciphertext_hex,
+                "apiKey": api_key,
             }),
         },
     )
@@ -35,12 +40,19 @@ pub async fn prepare_restore(
     app: &AppHandle,
     cid: &str,
 ) -> Result<serde_json::Value, String> {
+    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
+        .unwrap_or(None)
+        .unwrap_or_default();
+
     let res = invoke_sidecar(
         app,
         RuntimeRequest {
             op: "filecoin.restore_fetch".to_string(),
             app_id: "filecoin-storage".to_string(),
-            payload: serde_json::json!({ "cid": cid }),
+            payload: serde_json::json!({ 
+                "cid": cid,
+                "apiKey": api_key 
+            }),
         },
     )
     .await

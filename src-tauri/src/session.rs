@@ -36,6 +36,15 @@ pub fn get_cached_key(address: &str) -> Option<Zeroizing<String>> {
     Some(cached.hex_pk.clone())
 }
 
+/// Returns the currently unlocked key (since only one is kept at a time). Refreshes expiry on use.
+pub fn get_unlocked_key() -> Option<Zeroizing<String>> {
+    let mut guard = cache().write().ok()?;
+    prune_expired_locked(&mut guard);
+    let (_, cached) = guard.iter_mut().next()?;
+    cached.expires_at = extend_expiry();
+    Some(cached.hex_pk.clone())
+}
+
 /// Refreshes expiry for a cached key. Call after successful transfer.
 pub fn refresh_expiry(address: &str) {
     let mut guard = match cache().write() {

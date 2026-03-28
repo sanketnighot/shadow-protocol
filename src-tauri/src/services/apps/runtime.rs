@@ -95,14 +95,38 @@ pub async fn invoke_sidecar(
         .take()
         .ok_or_else(|| AppsRuntimeError::Spawn("stdout".into()))?;
     let mut reader = BufReader::new(stdout);
-    let mut out_line = String::new();
-    timeout(Duration::from_secs(45), reader.read_line(&mut out_line))
-        .await
-        .map_err(|_| AppsRuntimeError::Timeout)??;
+    
+    let mut parsed_response: Option<RuntimeResponse> = None;
+    let start_time = std::time::Instant::now();
+    let timeout_duration = Duration::from_secs(45);
+    
+    loop {
+        if start_time.elapsed() > timeout_duration {
+            break;
+        }
+        let mut out_line = String::new();
+        match timeout(Duration::from_secs(1), reader.read_line(&mut out_line)).await {
+            Ok(Ok(0)) => break, // EOF
+            Ok(Ok(_)) => {
+                let trimmed = out_line.trim();
+                // Check if this line looks like our JSON output
+                if trimmed.starts_with('{') {
+                    if let Ok(resp) = serde_json::from_str::<RuntimeResponse>(trimmed) {
+                        parsed_response = Some(resp);
+                        break;
+                    }
+                }
+            }
+            Ok(Err(_)) => break, // OS read error
+            Err(_) => {
+                // Ignore the 1s timeout and recheck global elapsed time
+            }
+        }
+    }
 
     let _ = child.wait().await;
 
-    serde_json::from_str::<RuntimeResponse>(out_line.trim()).map_err(|_| AppsRuntimeError::InvalidResponse)
+    parsed_response.ok_or(AppsRuntimeError::InvalidResponse)
 }
 
 pub async fn ping(app: &AppHandle) -> Result<RuntimeResponse, AppsRuntimeError> {

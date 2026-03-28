@@ -58,7 +58,7 @@ pub fn bundled_catalog() -> &'static [CatalogSeedRow] {
             author: "SHADOW (bundled)",
             features_json: r#"["Encrypted backup","Restore workflow","CID history","Optional auto-backup"]"#,
             permissions_json: r#"["backup.read_local_state","network.filecoin"]"#,
-            secret_requirements_json: r#"[]"#,
+            secret_requirements_json: r#"["filecoinApiKey"]"#,
             agent_tools_json: r#"["filecoin_protocol_list_backups","filecoin_protocol_request_backup","filecoin_protocol_request_restore"]"#,
             network_scopes_json: r#"["filecoin"]"#,
         },
@@ -80,10 +80,6 @@ pub fn permission_labels() -> &'static [(&'static str, &'static str)] {
 }
 
 pub fn seed_catalog_if_empty(conn: &Connection) -> Result<(), rusqlite::Error> {
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM apps_catalog", [], |r| r.get(0))?;
-    if count > 0 {
-        return Ok(());
-    }
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -93,7 +89,20 @@ pub fn seed_catalog_if_empty(conn: &Connection) -> Result<(), rusqlite::Error> {
             r#"INSERT INTO apps_catalog (
                 id, name, short_description, long_description, icon_key, version, author,
                 features_json, permissions_json, secret_requirements_json, agent_tools_json, network_scopes_json, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                short_description = excluded.short_description,
+                long_description = excluded.long_description,
+                icon_key = excluded.icon_key,
+                version = excluded.version,
+                author = excluded.author,
+                features_json = excluded.features_json,
+                permissions_json = excluded.permissions_json,
+                secret_requirements_json = excluded.secret_requirements_json,
+                agent_tools_json = excluded.agent_tools_json,
+                network_scopes_json = excluded.network_scopes_json,
+                updated_at = excluded.updated_at"#,
             params![
                 row.id,
                 row.name,
