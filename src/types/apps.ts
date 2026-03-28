@@ -54,6 +54,7 @@ export type ShadowApp = {
   isInstalled: boolean;
   features: string[];
   permissions: string[];
+  secretRequirements: string[];
   healthStatus?: string;
   lifecycle?: string;
 };

@@ -162,6 +162,7 @@ export function marketplaceEntryToShadowApp(e: AppMarketplaceEntryIpc): ShadowAp
   const c = e.catalog;
   const features = parseJsonArray(c.featuresJson, []);
   const permissions = parseJsonArray(c.permissionsJson, []);
+  const secretRequirements = parseJsonArray(c.secretRequirementsJson, []);
   const installed = e.installed;
   const isInstalled = installed !== null;
 
@@ -192,6 +193,7 @@ export function marketplaceEntryToShadowApp(e: AppMarketplaceEntryIpc): ShadowAp
     isInstalled,
     features,
     permissions,
+    secretRequirements,
     healthStatus: installed?.healthStatus,
     lifecycle: installed?.lifecycle,
   };
@@ -238,6 +240,25 @@ export async function setAppConfig(
   config: unknown,
 ): Promise<void> {
   await invoke("apps_set_config", { input: { appId, config } });
+}
+
+export async function setAppSecret(
+  appId: string,
+  key: string,
+  value: string,
+): Promise<void> {
+  await invoke("apps_set_secret", {
+    input: { appId, key, value },
+  });
+}
+
+export async function removeAppSecret(
+  appId: string,
+  key: string,
+): Promise<void> {
+  await invoke("apps_remove_secret", {
+    input: { appId, key },
+  });
 }
 
 export type AppBackupRow = {

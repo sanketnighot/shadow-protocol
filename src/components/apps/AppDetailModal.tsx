@@ -19,6 +19,8 @@ import {
 import type { ShadowApp } from "@/types/apps";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { useSetAppSecretMutation } from "@/hooks/useApps";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Zap,
@@ -45,15 +47,28 @@ export function AppDetailModal({
   isInstalling,
 }: AppDetailModalProps) {
   const [ack, setAck] = useState(false);
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const setSecretMutation = useSetAppSecretMutation();
 
   if (!app) return null;
 
   const Icon = ICON_MAP[app.icon] || Zap;
+  const hasSecrets = app.secretRequirements && app.secretRequirements.length > 0;
+  const missingSecrets = hasSecrets && app.secretRequirements.some((k) => !secrets[k]?.trim());
 
   const handleInstall = async () => {
-    if (!ack) return;
+    if (!ack || missingSecrets) return;
+    
+    // Save all secrets first
+    for (const [key, value] of Object.entries(secrets)) {
+      if (value.trim()) {
+        await setSecretMutation.mutateAsync({ appId: app.id, key, value: value.trim() });
+      }
+    }
+    
     await onInstall(app, true);
     setAck(false);
+    setSecrets({});
   };
 
   return (
@@ -147,6 +162,35 @@ export function AppDetailModal({
                 integration.
               </Label>
             </div>
+
+            {hasSecrets && (
+              <div className="rounded-sm border border-blue-500/20 bg-blue-500/5 p-5 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="size-4 text-blue-400" />
+                  <p className="font-mono text-[11px] tracking-[0.18em] text-blue-400 uppercase">
+                    Configuration Required
+                  </p>
+                </div>
+                <p className="text-sm text-blue-200/80 mb-4">
+                  This integration requires additional secrets or API keys to function.
+                </p>
+                {app.secretRequirements.map((key) => (
+                  <div key={key} className="space-y-2">
+                    <Label htmlFor={`secret-${key}`} className="text-xs text-muted font-mono uppercase tracking-wider">
+                      {key.replace(/([A-Z])/g, ' $1').trim()}
+                    </Label>
+                    <Input
+                      id={`secret-${key}`}
+                      type="password"
+                      placeholder={`Enter your ${key}...`}
+                      value={secrets[key] || ""}
+                      onChange={(e) => setSecrets((s) => ({ ...s, [key]: e.target.value }))}
+                      className="rounded-sm bg-secondary border-border font-mono text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -154,7 +198,7 @@ export function AppDetailModal({
           <Button
             className="w-full h-12 rounded-sm text-xs font-semibold tracking-[0.18em] uppercase active:scale-[0.98] transition-all"
             onClick={() => void handleInstall()}
-            disabled={isInstalling || !ack}
+            disabled={isInstalling || !ack || missingSecrets}
           >
             {isInstalling ? "Installing…" : "Install integration"}
           </Button>

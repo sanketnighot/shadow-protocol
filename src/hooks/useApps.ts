@@ -10,6 +10,7 @@ import {
   setAppConfig,
   setAppEnabled,
   uninstallApp,
+  setAppSecret,
 } from "@/lib/apps";
 import type { ShadowApp } from "@/types/apps";
 
@@ -114,6 +115,23 @@ export function useSetAppConfigMutation() {
       await qc.invalidateQueries({ queryKey: ["apps", "config"] });
       await qc.invalidateQueries({ queryKey: QK });
     },
+  });
+}
+
+export function useSetAppSecretMutation() {
+  return useMutation({
+    mutationFn: async ({
+      appId,
+      key,
+      value,
+    }: {
+      appId: string;
+      key: string;
+      value: string;
+    }) => {
+      await setAppSecret(appId, key, value);
+    },
+    // We don't necessarily need to invalidate queries as secrets aren't fetched to the UI
   });
 }
 
