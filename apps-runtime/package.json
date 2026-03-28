@@ -8,5 +8,11 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "~5.8.3"
+  },
+  "dependencies": {
+    "@filoz/synapse-sdk": "^0.40.0",
+    "@lit-protocol/lit-node-client": "^7.4.0",
+    "@onflow/fcl": "^1.21.10",
+    "viem": "^2.47.6"
   }
 }

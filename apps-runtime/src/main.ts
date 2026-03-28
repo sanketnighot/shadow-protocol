@@ -6,6 +6,8 @@
 import * as readline from "node:readline";
 
 import { defaultFilecoinProvider } from "./providers/filecoin.js";
+import { defaultLitProvider } from "./providers/lit.js";
+import { defaultFlowProvider } from "./providers/flow.js";
 
 type RuntimeRequest = {
   op: string;
@@ -26,7 +28,7 @@ function respond(res: RuntimeResponse): void {
 
 function main(): void {
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
-  rl.once("line", (line) => {
+  rl.once("line", async (line) => {
     rl.close();
     let req: RuntimeRequest;
     try {
@@ -43,7 +45,7 @@ function main(): void {
     }
 
     try {
-      const out = dispatch(req);
+      const out = await dispatch(req);
       respond(out);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "adapter_error";
@@ -58,7 +60,7 @@ function main(): void {
   });
 }
 
-function dispatch(req: RuntimeRequest): RuntimeResponse {
+async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
   switch (req.op) {
     case "health.ping":
       return {
@@ -66,100 +68,70 @@ function dispatch(req: RuntimeRequest): RuntimeResponse {
         data: { version: "1", ts: Date.now() },
       };
     case "lit.wallet_connect": {
-      return {
-        ok: true,
-        data: {
-          connected: true,
-          address: "0x0000000000000000000000000000000000000002",
-          mode: "adapter_stub",
-          note: "Wire @lit-protocol/* Vincent/PKP here; payload is intentionally minimal.",
-        },
-      };
+      const data = await defaultLitProvider.walletConnect();
+      return { ok: true, data };
     }
     case "lit.wallet_status": {
       const g = req.payload as Record<string, unknown>;
-      const daily =
-        typeof g.dailySpendLimitUsd === "number"
-          ? g.dailySpendLimitUsd
-          : typeof g.dailyLimitUsd === "number"
-            ? g.dailyLimitUsd
-            : 500;
-      const perTrade =
-        typeof g.perTradeLimitUsd === "number" ? g.perTradeLimitUsd : 100;
-      const approvalThreshold =
-        typeof g.approvalThresholdUsd === "number" ? g.approvalThresholdUsd : 1000;
-      return {
-        ok: true,
-        data: {
-          mode: "vincent-shaped",
-          connected: true,
-          address: "0x0000000000000000000000000000000000000001",
-          guardrails: {
-            dailyLimitUsd: daily,
-            perTradeLimitUsd: perTrade,
-            approvalThresholdUsd: approvalThreshold,
-          },
-        },
-      };
+      const daily = typeof g.dailySpendLimitUsd === "number" ? g.dailySpendLimitUsd : 500;
+      const perTrade = typeof g.perTradeLimitUsd === "number" ? g.perTradeLimitUsd : 100;
+      const approvalThreshold = typeof g.approvalThresholdUsd === "number" ? g.approvalThresholdUsd : 1000;
+      const allowedProtocols = Array.isArray(g.allowedProtocols)
+        ? g.allowedProtocols.filter(x => typeof x === "string")
+        : ["uniswap", "aave"];
+
+      const data = await defaultLitProvider.walletStatus({
+        dailySpendLimitUsd: daily,
+        perTradeLimitUsd: perTrade,
+        approvalThresholdUsd: approvalThreshold,
+        allowedProtocols: allowedProtocols as string[]
+      });
+      return { ok: true, data };
     }
     case "lit.precheck": {
       const action = req.payload as { kind?: string; notionalUsd?: number };
-      const notional = typeof action.notionalUsd === "number" ? action.notionalUsd : 0;
-      const limit = 10_000;
-      const allowed = notional <= limit;
-      return {
-        ok: true,
-        data: {
-          allowed,
-          reason: allowed ? "within_shadow_limits" : "exceeds_shadow_limit",
-          reviewedNotionalUsd: notional,
-          limitUsd: limit,
-          actionKind: action.kind ?? "unknown",
-        },
-      };
+      const g = req.payload.guardrails as Record<string, unknown> ?? {};
+      const limit = typeof g.perTradeLimitUsd === "number" ? g.perTradeLimitUsd : 10000;
+
+      const data = await defaultLitProvider.precheck(action, {
+        dailySpendLimitUsd: typeof g.dailySpendLimitUsd === "number" ? g.dailySpendLimitUsd : 500,
+        perTradeLimitUsd: limit,
+        approvalThresholdUsd: typeof g.approvalThresholdUsd === "number" ? g.approvalThresholdUsd : 1000,
+        allowedProtocols: ["uniswap"]
+      });
+      return { ok: true, data };
     }
-    case "flow.account_status":
-      return {
-        ok: true,
-        data: {
-          connected: false,
-          address: null,
-          network: "mainnet-shaped",
-        },
-      };
+    case "flow.account_status": {
+      const p = req.payload as { apiKey?: string };
+      const data = await defaultFlowProvider.accountStatus(p.apiKey);
+      return { ok: true, data };
+    }
     case "flow.prepare_sponsored": {
-      const p = req.payload as { summary?: string };
-      return {
-        ok: true,
-        data: {
-          status: "prepared",
-          summary: p.summary ?? "Flow transaction shell",
-          cadencePreview: "// Cadence transaction (preview only)",
-          sponsorNote:
-            "SHADOW will attach fee payer / proposer via configured Flow access when credentials exist.",
-        },
-      };
+      const p = req.payload as { summary?: string; apiKey?: string };
+      const data = await defaultFlowProvider.prepareSponsored({ summary: p.summary }, p.apiKey);
+      return { ok: true, data };
     }
     case "filecoin.backup_upload": {
-      const p = req.payload as { ciphertextHex?: string; scope?: unknown };
+      const p = req.payload as { ciphertextHex?: string; scope?: unknown; apiKey?: string };
       const hex = p.ciphertextHex ?? "";
-      const out = defaultFilecoinProvider.uploadBackup({
+      const out = await defaultFilecoinProvider.uploadBackup({
         ciphertextHex: hex,
         scope: p.scope ?? {},
+        apiKey: p.apiKey,
       });
       return {
         ok: true,
         data: {
           cid: out.cid,
           bytesReported: out.bytesReported,
-          scope: p.scope ?? {},
+          scope: out.scope ?? {},
           transport: out.transport,
         },
       };
     }
     case "filecoin.restore_fetch": {
-      const p = req.payload as { cid?: string };
-      const prev = defaultFilecoinProvider.fetchRestorePreview(p.cid ?? "");
+      const p = req.payload as { cid?: string; apiKey?: string };
+      const prev = await defaultFilecoinProvider.fetchRestorePreview(p.cid ?? "", p.apiKey);
       return {
         ok: true,
         data: {
