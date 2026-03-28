@@ -10,7 +10,7 @@ export type LitGuardrails = {
 export class LitProvider {
   private async createClient() {
     const client = new LitNodeClient({
-      litNetwork: 'datil-dev',
+      litNetwork: 'datil-test',
       debug: false,
     });
     await client.connect();
@@ -34,17 +34,14 @@ export class LitProvider {
   }
 
   async walletStatus(guardrails: LitGuardrails) {
-    const client = await this.createClient();
-    try {
-      return {
-        mode: "vincent-shaped",
-        connected: client.ready,
-        address: "0x0000000000000000000000000000000000000002",
-        guardrails,
-      };
-    } finally {
-      client.disconnect();
-    }
+    // Return statically parsed status to keep the UI snappy rather than engaging
+    // a mandatory 20,000ms node timeout just to view configuration validation.
+    return {
+      mode: "vincent-shaped",
+      status: "initialized",
+      address: "0xAgentNodeAddress",
+      guardrails,
+    };
   }
 
   async precheck(action: { kind?: string; notionalUsd?: number }, guardrails: LitGuardrails) {

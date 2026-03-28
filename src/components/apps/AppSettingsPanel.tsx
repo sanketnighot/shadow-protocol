@@ -12,8 +12,7 @@ import {
   Zap,
   Activity,
 } from "lucide-react";
-import { toast } from "sonner";
-
+import { useUiStore } from "@/store/useUiStore";
 import type { ShadowApp } from "@/types/apps";
 import {
   fetchFlowAccountStatusPreview,
@@ -78,6 +77,7 @@ function RuntimeStrip({ app, panelOpen }: { app: ShadowApp; panelOpen: boolean }
 function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }) {
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const save = useSetAppConfigMutation();
+  const addNotification = useUiStore((s) => s.addNotification);
   const [draft, setDraft] = useState<LitIntegrationConfig>(() => parseLitConfig({}));
   const [adapterPreview, setAdapterPreview] = useState<string | null>(null);
 
@@ -100,9 +100,19 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
   const commit = async () => {
     try {
       await save.mutateAsync({ appId, config: draft });
-      toast.success("Lit settings saved");
+      addNotification({
+        title: "Integration Updated",
+        description: "Lit settings saved locally.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
     } catch {
-      toast.error("Could not save settings");
+      addNotification({
+        title: "Integration Error",
+        description: "Could not save Lit settings.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
     }
   };
 
@@ -231,7 +241,12 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                     setAdapterPreview(JSON.stringify(j, null, 2));
                   } catch {
                     setAdapterPreview(null);
-                    toast.error("Could not load adapter status");
+                    addNotification({
+                      title: "Integration Error",
+                      description: "Could not load Lit adapter status.",
+                      type: "warning",
+                      createdAtLabel: "Just now",
+                    });
                   }
                 }}
               >
@@ -261,6 +276,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
 function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }) {
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const save = useSetAppConfigMutation();
+  const addNotification = useUiStore((s) => s.addNotification);
   const [draft, setDraft] = useState<FlowIntegrationConfig>(() => parseFlowConfig({}));
   const [flowPreview, setFlowPreview] = useState<string | null>(null);
 
@@ -273,9 +289,19 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
   const commit = async () => {
     try {
       await save.mutateAsync({ appId, config: draft });
-      toast.success("Flow settings saved");
+      addNotification({
+        title: "Integration Updated",
+        description: "Flow settings saved locally.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
     } catch {
-      toast.error("Could not save settings");
+      addNotification({
+        title: "Integration Error",
+        description: "Could not save Flow settings.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
     }
   };
 
@@ -335,7 +361,12 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
                 setFlowPreview(JSON.stringify(j, null, 2));
               } catch {
                 setFlowPreview(null);
-                toast.error("Could not load Flow adapter status");
+                addNotification({
+                  title: "Integration Error",
+                  description: "Could not load Flow adapter status.",
+                  type: "warning",
+                  createdAtLabel: "Just now",
+                });
               }
             }}
           >
@@ -372,6 +403,7 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const backups = useAppBackupsQuery(panelOpen, true);
   const save = useSetAppConfigMutation();
+  const addNotification = useUiStore((s) => s.addNotification);
   const [draft, setDraft] = useState<FilecoinIntegrationConfig>(() => parseFilecoinConfig({}));
 
   useEffect(() => {
@@ -383,9 +415,19 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
   const commit = async () => {
     try {
       await save.mutateAsync({ appId, config: draft });
-      toast.success("Filecoin settings saved");
+      addNotification({
+        title: "Integration Updated",
+        description: "Filecoin settings saved locally.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
     } catch {
-      toast.error("Could not save settings");
+      addNotification({
+        title: "Integration Error",
+        description: "Could not save Filecoin settings.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
     }
   };
 

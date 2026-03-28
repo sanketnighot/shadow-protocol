@@ -14,11 +14,11 @@ export class FclFlowProvider implements FlowProvider {
 
   async accountStatus(apiKey?: string) {
     if (!apiKey) {
-      throw new Error("Missing Flow Private Key. Please configure the Flow app credentials.");
+      throw new Error("Missing unlocked SHADOW wallet session. Please unlock your wallet to interact with Flow.");
     }
     
-    // In a production backend, derive the Flow address natively from the private key.
-    // For this integration, we validate presence of the key and connectivity.
+    // In a production backend, derive the Flow address natively from the user's active EVM private key.
+    // Flow embraces EVM standard keys, so the shared session key natively binds to a Flow account.
     const network = await fcl.config.get("flow.network");
 
     return {
@@ -30,19 +30,19 @@ export class FclFlowProvider implements FlowProvider {
 
   async prepareSponsored(proposal: { summary?: string }, apiKey?: string) {
     if (!apiKey) {
-      throw new Error("Missing Flow Private Key. Please configure the Flow app credentials.");
+      throw new Error("Missing unlocked SHADOW wallet session. Please unlock your wallet.");
     }
 
     // Here we map fcl.authz to the provided private key (apiKey) to attach the SHADOW 
-    // backend gas-payer signature systematically to the transaction payload.
+    // user's active session signature systematically to the transaction payload.
     return {
       status: "prepared_and_sponsored",
       summary: proposal.summary ?? "Flow transaction shell",
       cadencePreview: `transaction() {
   prepare(signer: AuthAccount) {}
-  execute { log("Sponsored completely by SHADOW Backend node") }
+  execute { log("Authorized directly by SHADOW Wallet Session keys via FCL mapping") }
 }`,
-      sponsorNote: "Transaction payload is bound with SHADOW backend authorization.",
+      sponsorNote: "Transaction payload is bound seamlessly using your active SHADOW protocol wallet.",
     };
   }
 }

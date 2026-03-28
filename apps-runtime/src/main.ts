@@ -26,6 +26,13 @@ function respond(res: RuntimeResponse): void {
   process.stdout.write(`${JSON.stringify(res)}\n`);
 }
 
+// Redirect all console logs to stderr so they don't break the JSON IPC stdout boundary
+console.log = (...args) => process.stderr.write(args.join(" ") + "\n");
+console.error = (...args) => process.stderr.write(args.join(" ") + "\n");
+console.warn = (...args) => process.stderr.write(args.join(" ") + "\n");
+console.info = (...args) => process.stderr.write(args.join(" ") + "\n");
+console.debug = (...args) => process.stderr.write(args.join(" ") + "\n");
+
 function main(): void {
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   rl.once("line", async (line) => {
