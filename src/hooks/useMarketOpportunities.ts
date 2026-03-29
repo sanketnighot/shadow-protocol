@@ -18,7 +18,7 @@ const EMPTY_RESPONSE: MarketOpportunitiesResponse = {
   generatedAt: 0,
   nextRefreshAt: 0,
   stale: true,
-  availableChains: ["all", "ethereum", "base", "polygon", "multi_chain"],
+  availableChains: ["all", "ethereum", "base", "polygon", "flow", "multi_chain"],
   availableCategories: ["all", "yield", "spread_watch", "rebalance", "catalyst"],
 };
 

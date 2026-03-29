@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   marketplaceEntryToShadowApp,
   parseFlowConfig,
+  parseFilecoinBackupMetadata,
   parseFilecoinConfig,
   parseLitConfig,
 } from "@/lib/apps";
@@ -51,17 +52,44 @@ describe("parseFlowConfig", () => {
   });
 });
 
+describe("parseFilecoinBackupMetadata", () => {
+  it("returns empty for invalid json", () => {
+    expect(parseFilecoinBackupMetadata("")).toEqual({});
+    expect(parseFilecoinBackupMetadata("{")).toEqual({});
+  });
+
+  it("parses known fields", () => {
+    const m = parseFilecoinBackupMetadata(
+      JSON.stringify({
+        committedCopies: 2,
+        requestedCopies: 2,
+        storageRatePerMonthUsdfc: "0.01",
+        uploadComplete: true,
+      }),
+    );
+    expect(m.committedCopies).toBe(2);
+    expect(m.storageRatePerMonthUsdfc).toBe("0.01");
+  });
+});
+
 describe("parseFilecoinConfig", () => {
-  it("clamps hours and parses backup scope", () => {
-    const c = parseFilecoinConfig({ autoBackupIntervalHours: 999 });
-    expect(c.autoBackupIntervalHours).toBe(168);
+  it("uses defaults for empty config", () => {
+    const c = parseFilecoinConfig({});
+    expect(c.policy.ttl).toBe(180);
+    expect(c.policy.costLimit).toBe(0.01);
     expect(c.backupScope.agentMemory).toBe(true);
+  });
+  
+  it("parses valid config successfully", () => {
     const c2 = parseFilecoinConfig({
-      autoBackupIntervalHours: 1,
-      backupScope: { agentMemory: false, threadHistory: true, appConfigs: false, strategyMetadata: false },
+      policy: { ttl: 365, costLimit: 0.05, redundancy: 3, autoRenew: false },
+      backupScope: { agentMemory: false, configs: false, strategies: true },
     });
+    expect(c2.policy.ttl).toBe(365);
+    expect(c2.policy.redundancy).toBe(3);
+    expect(c2.policy.autoRenew).toBe(false);
     expect(c2.backupScope.agentMemory).toBe(false);
-    expect(c2.backupScope.threadHistory).toBe(true);
+    expect(c2.backupScope.strategies).toBe(true);
   });
 });
 

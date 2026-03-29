@@ -27,6 +27,19 @@ export async function fetchLitWalletStatusPreview(): Promise<unknown> {
   return invoke<unknown>("apps_lit_wallet_status", {});
 }
 
+export type LitPkpAddressResult = {
+  pkpAddress: string | null;
+  hasPkp: boolean;
+};
+
+export async function getLitPkpAddress(): Promise<LitPkpAddressResult> {
+  return invoke<LitPkpAddressResult>("apps_lit_pkp_address", {});
+}
+
+export async function mintLitPkp(): Promise<unknown> {
+  return invoke<unknown>("apps_lit_mint_pkp", {});
+}
+
 export async function fetchFlowAccountStatusPreview(): Promise<unknown> {
   return invoke<unknown>("apps_flow_account_status", {});
 }
@@ -36,6 +49,9 @@ export type LitIntegrationConfig = {
   perTradeLimitUsd: number;
   approvalThresholdUsd: number;
   allowedProtocols: string[];
+  pkpEthAddress?: string;
+  pkpPublicKey?: string;
+  pkpTokenId?: string;
 };
 
 export type FlowIntegrationConfig = {
@@ -43,16 +59,18 @@ export type FlowIntegrationConfig = {
   accountHint: string;
 };
 
-export type FilecoinBackupScope = {
-  agentMemory: boolean;
-  threadHistory: boolean;
-  appConfigs: boolean;
-  strategyMetadata: boolean;
-};
-
 export type FilecoinIntegrationConfig = {
-  autoBackupIntervalHours: number;
-  backupScope: FilecoinBackupScope;
+  backupScope: {
+    agentMemory: boolean;
+    configs: boolean;
+    strategies: boolean;
+  };
+  policy: {
+    ttl: number;
+    redundancy: number;
+    costLimit: number;
+    autoRenew: boolean;
+  };
 };
 
 const PROTOCOL_OPTIONS = [
@@ -95,6 +113,9 @@ export function parseLitConfig(raw: unknown): LitIntegrationConfig {
     perTradeLimitUsd: perTrade,
     approvalThresholdUsd: approval,
     allowedProtocols: protocols,
+    pkpEthAddress: typeof o.pkpEthAddress === "string" ? o.pkpEthAddress : undefined,
+    pkpPublicKey: typeof o.pkpPublicKey === "string" ? o.pkpPublicKey : undefined,
+    pkpTokenId: typeof o.pkpTokenId === "string" ? o.pkpTokenId : undefined,
   };
 }
 
@@ -111,40 +132,45 @@ export function parseFlowConfig(raw: unknown): FlowIntegrationConfig {
   return { network: net, accountHint: hint };
 }
 
-function parseBackupScope(raw: unknown): FilecoinBackupScope {
-  const fallback: FilecoinBackupScope = {
-    agentMemory: true,
-    threadHistory: true,
-    appConfigs: true,
-    strategyMetadata: true,
-  };
-  if (!raw || typeof raw !== "object") return fallback;
-  const o = raw as Record<string, unknown>;
-  return {
-    agentMemory: typeof o.agentMemory === "boolean" ? o.agentMemory : fallback.agentMemory,
-    threadHistory:
-      typeof o.threadHistory === "boolean" ? o.threadHistory : fallback.threadHistory,
-    appConfigs: typeof o.appConfigs === "boolean" ? o.appConfigs : fallback.appConfigs,
-    strategyMetadata:
-      typeof o.strategyMetadata === "boolean" ? o.strategyMetadata : fallback.strategyMetadata,
-  };
+export type FilecoinBackupMetadata = {
+  uploadComplete?: boolean;
+  requestedCopies?: number;
+  committedCopies?: number;
+  storageRatePerMonthUsdfc?: string;
+  depositNeededUsdfc?: string;
+  uploadReady?: boolean;
+};
+
+export function parseFilecoinBackupMetadata(raw: string | null | undefined): FilecoinBackupMetadata {
+  if (!raw || typeof raw !== "string" || raw.trim() === "") {
+    return {};
+  }
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!v || typeof v !== "object") return {};
+    return v as FilecoinBackupMetadata;
+  } catch {
+    return {};
+  }
 }
 
 export function parseFilecoinConfig(raw: unknown): FilecoinIntegrationConfig {
-  const fallback: FilecoinIntegrationConfig = {
-    autoBackupIntervalHours: 0,
-    backupScope: parseBackupScope({}),
-  };
-  if (!raw || typeof raw !== "object") return fallback;
-  const o = raw as Record<string, unknown>;
-  const h =
-    typeof o.autoBackupIntervalHours === "number" &&
-    Number.isFinite(o.autoBackupIntervalHours)
-      ? Math.min(168, Math.max(0, Math.floor(o.autoBackupIntervalHours)))
-      : 0;
+  const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  const scope = (typeof o.backupScope === "object" && o.backupScope !== null ? o.backupScope : {}) as Record<string, unknown>;
+  const policy = (typeof o.policy === "object" && o.policy !== null ? o.policy : {}) as Record<string, unknown>;
+  
   return {
-    autoBackupIntervalHours: h,
-    backupScope: parseBackupScope(o.backupScope),
+    backupScope: {
+      agentMemory: typeof scope.agentMemory === "boolean" ? scope.agentMemory : true,
+      configs: typeof scope.configs === "boolean" ? scope.configs : true,
+      strategies: typeof scope.strategies === "boolean" ? scope.strategies : true,
+    },
+    policy: {
+      ttl: typeof policy.ttl === "number" ? policy.ttl : 180,
+      redundancy: typeof policy.redundancy === "number" ? policy.redundancy : 2,
+      costLimit: typeof policy.costLimit === "number" ? policy.costLimit : 0.01,
+      autoRenew: typeof policy.autoRenew === "boolean" ? policy.autoRenew : true,
+    },
   };
 }
 
@@ -271,6 +297,8 @@ export type AppBackupRow = {
   status: string;
   sizeBytes: number | null;
   notes: string | null;
+  /** JSON string: uploadComplete, copiesMeta, storageRatePerMonthUsdfc, etc. */
+  metadataJson?: string;
 };
 
 export async function listAppBackups(): Promise<AppBackupRow[]> {

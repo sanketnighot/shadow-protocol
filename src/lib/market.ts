@@ -68,6 +68,8 @@ export function marketChainLabel(chain: string): string {
       return "Base";
     case "polygon":
       return "Polygon";
+    case "flow":
+      return "Flow";
     case "multi_chain":
       return "Multi-chain";
     default:

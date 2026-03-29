@@ -6,6 +6,7 @@ const CHAIN_OPTIONS: Array<{ id: string; label: string }> = [
   { id: "ethereum", label: "Ethereum" },
   { id: "base", label: "Base" },
   { id: "polygon", label: "Polygon" },
+  { id: "flow", label: "Flow" },
   { id: "eth-sepolia", label: "Sepolia" },
   { id: "base-sepolia", label: "Base Sepolia" },
   { id: "polygon-amoy", label: "Amoy" },

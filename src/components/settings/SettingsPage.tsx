@@ -438,7 +438,7 @@ export function SettingsPage() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             Enable to see testnets (Ethereum Sepolia, Base Sepolia, Polygon
-            Amoy) in the Portfolio section.             In the desktop app, right‑click opens a menu with Reload window and
+            Amoy, Flow Testnet) in the Portfolio section.             In the desktop app, right‑click opens a menu with Reload window and
             Open DevTools; Cmd+Option+I (macOS) or Ctrl+Shift+I (Windows/Linux)
             toggles the inspector.
           </p>

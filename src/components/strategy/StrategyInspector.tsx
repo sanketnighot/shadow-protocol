@@ -331,6 +331,7 @@ export function StrategyInspector({ node, onUpdate, validationIssues }: Strategy
                   <option value="ethereum">Ethereum</option>
                   <option value="base">Base</option>
                   <option value="polygon">Polygon</option>
+                  <option value="flow">Flow</option>
                 </select>,
               )}
               {renderField(
@@ -377,6 +378,7 @@ export function StrategyInspector({ node, onUpdate, validationIssues }: Strategy
                   <option value="ethereum">Ethereum</option>
                   <option value="base">Base</option>
                   <option value="polygon">Polygon</option>
+                  <option value="flow">Flow</option>
                 </select>,
               )}
               {renderField(

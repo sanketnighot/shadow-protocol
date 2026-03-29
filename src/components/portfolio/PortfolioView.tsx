@@ -19,6 +19,7 @@ import { WalletEmptyState } from "@/components/wallet/WalletEmptyState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { Button } from "@/components/ui/button";
+import { useAppsMarketplace } from "@/hooks/useApps";
 import { useNfts } from "@/hooks/useNfts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -42,6 +43,11 @@ export function PortfolioView() {
   });
   const { success } = useToast();
   const developerModeEnabled = useUiStore((s) => s.developerModeEnabled);
+  const { data: marketplaceApps } = useAppsMarketplace();
+  const installedAppIds = useMemo(
+    () => (marketplaceApps ?? []).filter((a) => a.isInstalled && a.status === "active").map((a) => a.id),
+    [marketplaceApps],
+  );
   const [activeTab, setActiveTab] = useState<PortfolioTabId>("tokens");
   const [isReceiveOpen, setReceiveOpen] = useState(false);
   const [chain, setChain] = useState("All");
@@ -65,7 +71,7 @@ export function PortfolioView() {
       const typeMatches = type === "All" || asset.type === type;
 
       const hasBalance = parseFloat(asset.balance.replace(/[^0-9.]/g, "")) > 0;
-      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY"].includes(asset.chain);
+      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY", "FLOW-TEST"].includes(asset.chain);
       const devModeMatches = !isTestnet || developerModeEnabled;
 
       return chainMatches && typeMatches && hasBalance && devModeMatches;
@@ -193,6 +199,7 @@ export function PortfolioView() {
                       sort={sort}
                       type={type}
                       developerModeEnabled={developerModeEnabled}
+                      installedAppIds={installedAppIds}
                       onChainChange={setChain}
                       onSortChange={setSort}
                       onTypeChange={setType}
