@@ -142,6 +142,11 @@ fn store_in_biometry(app: &AppHandle, address: &str, hex_pk: &str) {
     });
 }
 
+/// Public entry point for session module to migrate a keyring-only key into biometry.
+pub fn store_in_biometry_pub(app: &AppHandle, address: &str, hex_pk: &str) {
+    store_in_biometry(app, address, hex_pk);
+}
+
 fn remove_from_biometry(app: &AppHandle, address: &str) {
     let _ = app.biometry().remove_data(DataOptions {
         domain: BIOMETRY_DOMAIN.to_string(),

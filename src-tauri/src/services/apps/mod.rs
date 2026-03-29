@@ -12,4 +12,3 @@ pub mod scheduler;
 pub mod state;
 
 pub use integration_prompt::prompt_block;
-pub use payload::backup_payload_from_scope;

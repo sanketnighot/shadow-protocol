@@ -7,6 +7,19 @@ use super::chain::network_to_chain_display;
 
 const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "base-mainnet", "polygon-mainnet"];
 const TESTNET_NETWORKS: &[&str] = &["eth-sepolia", "base-sepolia", "polygon-amoy"];
+const FLOW_MAINNET: &str = "flow-mainnet";
+const FLOW_TESTNET: &str = "flow-testnet";
+
+/// Build the list of networks to query, conditionally including Flow when installed.
+fn active_networks() -> Vec<&'static str> {
+    let mut nets: Vec<&str> = MAINNET_NETWORKS.iter().chain(TESTNET_NETWORKS.iter()).copied().collect();
+    let flow_ready = super::apps::state::is_tool_app_ready("flow").unwrap_or(false);
+    if flow_ready {
+        nets.push(FLOW_MAINNET);
+        nets.push(FLOW_TESTNET);
+    }
+    nets
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum PortfolioError {
@@ -141,11 +154,7 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
         .build()
         .map_err(|_| PortfolioError::RequestFailed)?;
 
-    let networks: Vec<&str> = MAINNET_NETWORKS
-        .iter()
-        .chain(TESTNET_NETWORKS.iter())
-        .copied()
-        .collect();
+    let networks = active_networks();
 
     let url = format!(
         "https://api.g.alchemy.com/data/v1/{}/assets/tokens/by-address",
@@ -211,6 +220,9 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
                         }
                         "polygon-mainnet" | "matic-mainnet" | "polygon-amoy" | "matic-amoy" => {
                             "POL".to_string()
+                        }
+                        "flow-mainnet" | "flow-testnet" => {
+                            "FLOW".to_string()
                         }
                         _ => "Unknown".to_string(),
                     }

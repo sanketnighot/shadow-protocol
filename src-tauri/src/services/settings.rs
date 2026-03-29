@@ -1,6 +1,9 @@
 //! App settings management: secrets (keychain) and non-secrets (sqlite).
+//! API keys use an in-memory cache so the keychain is read at most once per
+//! app session, eliminating repeated macOS password prompts on startup.
 
 use keyring::Entry;
+use std::sync::{OnceLock, RwLock};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_biometry::BiometryExt;
 use tauri_plugin_biometry::{DataOptions};
@@ -10,6 +13,27 @@ const PERPLEXITY_KEY_NAME: &str = "api_key:perplexity";
 const ALCHEMY_KEY_NAME: &str = "api_key:alchemy";
 const OLLAMA_KEY_NAME: &str = "api_key:ollama";
 const BIOMETRY_DOMAIN: &str = "com.sanket.shadow.biometry";
+
+// ---------------------------------------------------------------------------
+// In-memory API key cache
+// ---------------------------------------------------------------------------
+// Outer Option: None = not loaded from keychain yet.
+// Inner Option: Some(key) = key exists, None = no key stored.
+struct ApiKeyCache {
+    alchemy: RwLock<Option<Option<String>>>,
+    perplexity: RwLock<Option<Option<String>>>,
+    ollama: RwLock<Option<Option<String>>>,
+}
+
+static API_CACHE: OnceLock<ApiKeyCache> = OnceLock::new();
+
+fn cache() -> &'static ApiKeyCache {
+    API_CACHE.get_or_init(|| ApiKeyCache {
+        alchemy: RwLock::new(None),
+        perplexity: RwLock::new(None),
+        ollama: RwLock::new(None),
+    })
+}
 
 fn app_secret_entry_name(app_id: &str, key: &str) -> String {
     format!("app_secret:{app_id}:{key}")
@@ -44,70 +68,133 @@ pub fn remove_app_secrets_for(app_id: &str) -> Result<(), keyring::Error> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Perplexity key (cached)
+// ---------------------------------------------------------------------------
+
 pub fn set_perplexity_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
     entry.set_password(key)?;
+    if let Ok(mut guard) = cache().perplexity.write() {
+        *guard = Some(Some(key.to_string()));
+    }
     Ok(())
 }
 
 pub fn get_perplexity_key() -> Result<Option<String>, keyring::Error> {
+    if let Ok(guard) = cache().perplexity.read() {
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
+        }
+    }
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
-    match entry.get_password() {
+    let result = match entry.get_password() {
         Ok(s) => Ok(Some(s)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(e),
+    };
+    if let Ok(ref val) = result {
+        if let Ok(mut guard) = cache().perplexity.write() {
+            *guard = Some(val.clone());
+        }
     }
+    result
 }
 
 pub fn remove_perplexity_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
     let _ = entry.delete_password();
+    if let Ok(mut guard) = cache().perplexity.write() {
+        *guard = Some(None);
+    }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Alchemy key (cached)
+// ---------------------------------------------------------------------------
 
 pub fn set_alchemy_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
     entry.set_password(key)?;
+    if let Ok(mut guard) = cache().alchemy.write() {
+        *guard = Some(Some(key.to_string()));
+    }
     Ok(())
 }
 
 pub fn get_alchemy_key() -> Result<Option<String>, keyring::Error> {
+    if let Ok(guard) = cache().alchemy.read() {
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
+        }
+    }
     let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
-    match entry.get_password() {
+    let result = match entry.get_password() {
         Ok(s) => Ok(Some(s)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(e),
+    };
+    if let Ok(ref val) = result {
+        if let Ok(mut guard) = cache().alchemy.write() {
+            *guard = Some(val.clone());
+        }
     }
+    result
 }
 
 pub fn remove_alchemy_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
     let _ = entry.delete_password();
+    if let Ok(mut guard) = cache().alchemy.write() {
+        *guard = Some(None);
+    }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Ollama key (cached)
+// ---------------------------------------------------------------------------
 
 pub fn set_ollama_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
     entry.set_password(key)?;
+    if let Ok(mut guard) = cache().ollama.write() {
+        *guard = Some(Some(key.to_string()));
+    }
     Ok(())
 }
 
 pub fn get_ollama_key() -> Result<Option<String>, keyring::Error> {
+    if let Ok(guard) = cache().ollama.read() {
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
+        }
+    }
     let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
-    match entry.get_password() {
+    let result = match entry.get_password() {
         Ok(s) => Ok(Some(s)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(e),
+    };
+    if let Ok(ref val) = result {
+        if let Ok(mut guard) = cache().ollama.write() {
+            *guard = Some(val.clone());
+        }
     }
+    result
 }
 
 pub fn remove_ollama_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
     let _ = entry.delete_password();
+    if let Ok(mut guard) = cache().ollama.write() {
+        *guard = Some(None);
+    }
     Ok(())
 }
 
-/// Returns the alchemy key from keychain, or falls back to env var ALCHEMY_API_KEY.
+/// Returns the alchemy key from cache/keychain, or falls back to env var ALCHEMY_API_KEY.
 pub fn get_alchemy_key_or_env() -> Option<String> {
     get_alchemy_key().ok().flatten().or_else(|| std::env::var("ALCHEMY_API_KEY").ok())
 }

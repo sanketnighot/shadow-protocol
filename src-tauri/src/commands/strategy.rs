@@ -1,7 +1,9 @@
 //! Tauri commands for typed strategy draft compile, persist, and history.
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
+use crate::services::apps::filecoin;
 use crate::services::audit;
 use crate::services::local_db::{self, ActiveStrategy};
 use crate::services::strategy_compiler::compile_draft;
@@ -226,6 +228,7 @@ pub async fn strategy_compile_draft(
 
 #[tauri::command]
 pub async fn strategy_create_from_draft(
+    app: AppHandle,
     input: StrategyCreateFromDraftInput,
 ) -> Result<StrategyPersistResult, String> {
     if input.draft.name.trim().len() < 2 {
@@ -235,11 +238,13 @@ pub async fn strategy_create_from_draft(
     let strategy = draft_to_active(input.draft, &id, &input.status, 1, None)?;
     local_db::upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_created", "strategy", Some(&strategy.id), &strategy);
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyPersistResult { strategy })
 }
 
 #[tauri::command]
 pub async fn strategy_update_from_draft(
+    app: AppHandle,
     input: StrategyUpdateFromDraftInput,
 ) -> Result<StrategyPersistResult, String> {
     let existing = local_db::get_strategy(&input.id)
@@ -258,6 +263,7 @@ pub async fn strategy_update_from_draft(
     )?;
     local_db::upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_updated", "strategy", Some(&strategy.id), &strategy);
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyPersistResult { strategy })
 }
 

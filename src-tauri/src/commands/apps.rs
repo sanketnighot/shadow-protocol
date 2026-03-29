@@ -3,7 +3,7 @@
 use keyring::Error as KeyringError;
 use serde::{Deserialize, Serialize};
 
-use crate::services::apps::{flow, lit, permissions, runtime, state as apps_state};
+use crate::services::apps::{flow, lit, filecoin, permissions, runtime, state as apps_state};
 use crate::services::audit;
 use crate::services::local_db::DbError;
 
@@ -164,7 +164,7 @@ pub struct AppsConfigInput {
 }
 
 #[tauri::command]
-pub fn apps_set_config(input: AppsConfigInput) -> Result<(), String> {
+pub fn apps_set_config(app: tauri::AppHandle, input: AppsConfigInput) -> Result<(), String> {
     require_unlocked_session_for_app_settings()?;
     let app_id = input.app_id.trim();
     validate_app_id(app_id)?;
@@ -182,6 +182,7 @@ pub fn apps_set_config(input: AppsConfigInput) -> Result<(), String> {
         Some(app_id),
         &serde_json::json!({}),
     );
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(())
 }
 
@@ -253,9 +254,80 @@ pub async fn apps_lit_wallet_status(app: tauri::AppHandle) -> Result<serde_json:
     lit::wallet_status(&app, cfg).await
 }
 
+/// Mint a new PKP wallet for the AI agent. Requires an unlocked session.
+#[tauri::command]
+pub async fn apps_lit_mint_pkp(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
+    if !apps_state::is_tool_app_ready("lit-protocol").map_err(|e: DbError| e.to_string())? {
+        return Err("Install and enable the Lit Protocol integration first.".to_string());
+    }
+
+    // Get active session key
+    let key = crate::session::get_unlocked_key()
+        .ok_or_else(|| "No active session key. Unlock your wallet first.".to_string())?;
+
+    let result = lit::mint_pkp(&app, &key).await?;
+
+    // Persist PKP address in app config
+    let pkp_address = result
+        .get("pkpEthAddress")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let pkp_public_key = result
+        .get("pkpPublicKey")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let token_id = result
+        .get("tokenId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if !pkp_address.is_empty() {
+        // Merge into existing config
+        let existing_raw =
+            apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string());
+        let mut existing: serde_json::Value =
+            serde_json::from_str(&existing_raw).unwrap_or_else(|_| serde_json::json!({}));
+        existing["pkpEthAddress"] = serde_json::json!(pkp_address);
+        existing["pkpPublicKey"] = serde_json::json!(pkp_public_key);
+        existing["pkpTokenId"] = serde_json::json!(token_id);
+
+        let s = serde_json::to_string(&existing).map_err(|e| e.to_string())?;
+        apps_state::set_app_config_json("lit-protocol", &s)
+            .map_err(|e: DbError| e.to_string())?;
+
+        audit::record(
+            "lit_pkp_minted",
+            "app",
+            Some("lit-protocol"),
+            &serde_json::json!({ "pkpAddress": pkp_address }),
+        );
+    }
+
+    Ok(result)
+}
+
+/// Return the stored PKP address (if one has been minted).
+#[tauri::command]
+pub fn apps_lit_pkp_address() -> Result<serde_json::Value, String> {
+    let addr = lit::stored_pkp_address();
+    Ok(serde_json::json!({
+        "pkpAddress": addr,
+        "hasPkp": addr.is_some(),
+    }))
+}
+
 #[tauri::command]
 pub async fn apps_flow_account_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     flow::account_status(&app).await
+}
+
+#[tauri::command]
+pub async fn apps_filecoin_auto_restore(app: tauri::AppHandle) -> Result<bool, String> {
+    filecoin::restore_latest_snapshot(&app).await
 }
 
 #[derive(Debug, Deserialize)]

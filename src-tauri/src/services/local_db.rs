@@ -270,7 +270,8 @@ CREATE TABLE IF NOT EXISTS app_backups (
   scope_json TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'complete',
   size_bytes INTEGER,
-  notes TEXT
+  notes TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE INDEX IF NOT EXISTS idx_app_backups_app_created ON app_backups(app_id, created_at DESC);
@@ -343,6 +344,13 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
     ensure_column(conn, "active_strategies", "last_evaluation_at", "INTEGER")?;
     ensure_column(conn, "active_strategies", "disabled_reason", "TEXT")?;
     ensure_column(conn, "active_strategies", "updated_at", "INTEGER")?;
+
+    ensure_column(
+        conn,
+        "app_backups",
+        "metadata_json",
+        "TEXT NOT NULL DEFAULT '{}'",
+    )?;
 
     // After ensuring columns exist, run data migrations.
     crate::services::strategy_legacy::migrate_legacy_strategies(conn)?;

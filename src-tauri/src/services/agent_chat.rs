@@ -343,6 +343,12 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
         }
 
         if !has_tools {
+            // Trigger autonomous Filecoin backup in background if active
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = crate::services::apps::filecoin::trigger_autonomous_backup(&app_clone).await;
+            });
+
             return Ok(ChatAgentResponse::AssistantMessage {
                 content: if final_content.is_empty() { response } else { final_content },
                 blocks,

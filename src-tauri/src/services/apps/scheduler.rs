@@ -7,11 +7,7 @@ use crate::services::local_db::{self, ApprovalRecord, DbError};
 
 use super::filecoin;
 use super::flow;
-use super::payload::backup_payload_from_scope;
-use super::state::{
-    self, insert_app_backup, is_tool_app_ready, record_scheduler_job_run, AppBackupRow,
-    AppSchedulerJobRow,
-};
+use super::state::{self, is_tool_app_ready, record_scheduler_job_run, AppSchedulerJobRow};
 
 pub async fn run_due_jobs(app: &AppHandle, now: i64) {
     let jobs = match state::list_due_scheduler_jobs(now) {
@@ -55,39 +51,13 @@ async fn run_filecoin_autobackup(app: &AppHandle, job: &AppSchedulerJobRow) -> R
     if !is_tool_app_ready("filecoin-storage").map_err(|e: DbError| e.to_string())? {
         return Err("Filecoin app not active".to_string());
     }
-    let mut scope: serde_json::Value = serde_json::from_str(&job.payload_json)
-        .unwrap_or_else(|_| serde_json::json!({ "agentMemory": true, "configs": true }));
-    if let Ok(cfg_raw) = state::get_app_config_json("filecoin-storage") {
-        if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&cfg_raw) {
-            if let Some(bs) = cfg.get("backupScope").cloned() {
-                if let (Some(s), Some(b)) = (scope.as_object_mut(), bs.as_object()) {
-                    for (k, v) in b {
-                        s.entry(k.clone()).or_insert(v.clone());
-                    }
-                }
-            }
-        }
-    }
-    let payload = backup_payload_from_scope(app, &scope)?;
-    let ciphertext_hex = hex::encode(&payload);
-    let data = filecoin::prepare_encrypted_backup(app, scope.clone(), ciphertext_hex).await?;
-    let cid = data
-        .get("cid")
-        .and_then(|v| v.as_str())
-        .unwrap_or("pending")
-        .to_string();
-    let row = AppBackupRow {
-        id: uuid::Uuid::new_v4().to_string(),
-        app_id: "filecoin-storage".to_string(),
-        cid,
-        encryption_version: 1,
-        created_at: now_secs(),
-        scope_json: scope.to_string(),
-        status: "complete".to_string(),
-        size_bytes: Some(payload.len() as i64),
-        notes: Some("auto_backup".to_string()),
-    };
-    insert_app_backup(&row).map_err(|e: DbError| e.to_string())?;
+    let base_scope: serde_json::Value = serde_json::from_str(&job.payload_json)
+        .unwrap_or_else(|_| serde_json::json!({ "agentMemory": true, "configs": true, "strategies": true }));
+    let cfg_raw = state::get_app_config_json("filecoin-storage").unwrap_or_else(|_| "{}".to_string());
+    let cfg: serde_json::Value = serde_json::from_str(&cfg_raw).unwrap_or_default();
+    let scope = filecoin::merge_filecoin_backup_scope(base_scope, &cfg);
+    let policy = cfg.get("policy").cloned();
+    filecoin::upload_and_record_snapshot(app, scope, policy).await?;
     Ok(())
 }
 

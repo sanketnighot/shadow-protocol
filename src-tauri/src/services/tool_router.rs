@@ -433,18 +433,24 @@ pub async fn route_and_execute(
                 }
             }
             "lit_protocol_connect_wallet" => {
-                let memo = call
-                    .parameters
-                    .get("memo")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let payload = serde_json::json!({ "memo": memo });
-                match lit::connect_wallet(app, payload).await {
-                    Ok(v) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
-                    },
-                    Err(e) => ToolResult::Error { message: e },
+                // First check connectivity
+                let connect_result = lit::connect_wallet(app, serde_json::json!({})).await;
+
+                // If no PKP exists and session is unlocked, offer to mint
+                let pkp_address = lit::stored_pkp_address();
+                let mut data = connect_result.unwrap_or(serde_json::json!({"connected": false}));
+
+                if pkp_address.is_none() {
+                    data["hasPkp"] = serde_json::json!(false);
+                    data["note"] = serde_json::json!("Connected to Lit network. No PKP agent wallet yet — create one from Apps settings.");
+                } else {
+                    data["hasPkp"] = serde_json::json!(true);
+                    data["pkpAddress"] = serde_json::json!(pkp_address);
+                }
+
+                ToolResult::ToolOutput {
+                    tool_name: def.name.to_string(),
+                    content: serde_json::to_string(&data).unwrap_or_else(|_| "{}".into()),
                 }
             }
             "lit_protocol_precheck_action" => {
@@ -454,13 +460,83 @@ pub async fn route_and_execute(
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
                 let notional = call.parameters.get("notionalUsd").and_then(|v| v.as_f64());
-                let action = serde_json::json!({ "kind": kind, "notionalUsd": notional });
+                let protocol = call
+                    .parameters
+                    .get("protocol")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let action = serde_json::json!({
+                    "kind": kind,
+                    "notionalUsd": notional,
+                    "protocol": protocol,
+                });
                 match lit::precheck_action(app, action).await {
                     Ok(v) => ToolResult::ToolOutput {
                         tool_name: def.name.to_string(),
                         content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
                     },
                     Err(e) => ToolResult::Error { message: e },
+                }
+            }
+            "lit_protocol_execute_swap" => {
+                let from = call.parameters.get("fromToken").and_then(|v| v.as_str()).unwrap_or("USDC");
+                let to = call.parameters.get("toToken").and_then(|v| v.as_str()).unwrap_or("ETH");
+                let amount = call.parameters.get("amountUsd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let chain = call.parameters.get("chain").and_then(|v| v.as_str()).unwrap_or("ethereum");
+                let protocol = call.parameters.get("protocol").and_then(|v| v.as_str()).unwrap_or("uniswap");
+
+                // Get PKP address
+                let pkp_address = lit::stored_pkp_address();
+
+                // Run precheck through Lit first
+                let precheck_payload = serde_json::json!({
+                    "kind": "swap",
+                    "notionalUsd": amount,
+                    "protocol": protocol,
+                });
+                let precheck_result = lit::precheck_action(app, precheck_payload).await;
+
+                let precheck_allowed = precheck_result
+                    .as_ref()
+                    .ok()
+                    .and_then(|v| v.get("allowed"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let precheck_reason = precheck_result
+                    .as_ref()
+                    .ok()
+                    .and_then(|v| v.get("reason"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                if !precheck_allowed {
+                    ToolResult::Error {
+                        message: format!(
+                            "Lit policy check denied: {}. Adjust guardrails in Lit Protocol settings.",
+                            precheck_reason
+                        ),
+                    }
+                } else {
+                    let payload = serde_json::json!({
+                        "action": "lit_pkp_swap",
+                        "fromToken": from,
+                        "toToken": to,
+                        "amountUsd": amount,
+                        "chain": chain,
+                        "protocol": protocol,
+                        "pkpAddress": pkp_address,
+                        "litPrecheckResult": {
+                            "allowed": true,
+                            "reason": precheck_reason,
+                            "enforcedBy": "lit-tee-nodes",
+                        },
+                        "note": "User approval required before PKP signs this transaction via Lit's MPC network.",
+                    });
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload,
+                    }
                 }
             }
             "flow_protocol_account_status" => match flow::account_status(app).await {

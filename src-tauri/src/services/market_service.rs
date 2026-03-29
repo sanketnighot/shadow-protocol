@@ -706,6 +706,7 @@ fn normalize_chain_code(chain_code: &str) -> &'static str {
         "ETH" => "ethereum",
         "BASE" => "base",
         "POL" => "polygon",
+        "FLOW" => "flow",
         _ => "multi_chain",
     }
 }
@@ -715,6 +716,7 @@ pub fn display_chain(chain: &str) -> &'static str {
         "ethereum" => "Ethereum",
         "base" => "Base",
         "polygon" => "Polygon",
+        "flow" => "Flow",
         "multi_chain" => "Multi-chain",
         _ => "Unknown",
     }
@@ -725,6 +727,7 @@ pub fn chain_symbol(chain: &str) -> &'static str {
         "ethereum" => "ETH",
         "base" => "ETH",
         "polygon" => "POL",
+        "flow" => "FLOW",
         _ => "USDC",
     }
 }

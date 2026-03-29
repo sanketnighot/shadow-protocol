@@ -46,6 +46,10 @@ pub fn run() {
                 let _ = services::local_db::init(&db_path);
             }
             let handle = app.handle().clone();
+            let restore_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = services::apps::filecoin::restore_latest_snapshot(&restore_handle).await;
+            });
             services::shadow_watcher::start(handle.clone());
             services::alpha_service::start(handle.clone());
             services::heartbeat::start(handle.clone());
@@ -161,7 +165,10 @@ pub fn run() {
             commands::apps_runtime_health,
             commands::apps_refresh_health,
             commands::apps_lit_wallet_status,
+            commands::apps_lit_mint_pkp,
+            commands::apps_lit_pkp_address,
             commands::apps_flow_account_status,
+            commands::apps_filecoin_auto_restore,
             commands::apps_set_secret,
             commands::apps_remove_secret,
         ])

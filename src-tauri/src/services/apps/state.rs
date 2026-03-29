@@ -59,6 +59,9 @@ pub struct AppBackupRow {
     pub status: String,
     pub size_bytes: Option<i64>,
     pub notes: Option<String>,
+    /// JSON: upload result extras (copy counts, dataset ids, pricing hints) for restore/prune tooling.
+    #[serde(default)]
+    pub metadata_json: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -284,6 +287,19 @@ pub fn list_granted_permissions(app_id: &str) -> Result<Vec<String>, DbError> {
     })
 }
 
+/// All non-secret app integration configs (for Filecoin snapshot scope).
+pub fn list_all_app_configs() -> Result<Vec<(String, String)>, DbError> {
+    local_db::with_connection(|conn| {
+        let mut stmt = conn.prepare("SELECT app_id, config_json FROM app_configs ORDER BY app_id ASC")?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    })
+}
+
 pub fn get_app_config_json(app_id: &str) -> Result<String, DbError> {
     local_db::with_connection(|conn| {
         let mut stmt = conn.prepare("SELECT config_json FROM app_configs WHERE app_id = ?1")?;
@@ -311,8 +327,8 @@ pub fn set_app_config_json(app_id: &str, config_json: &str) -> Result<(), DbErro
 pub fn insert_app_backup(row: &AppBackupRow) -> Result<(), DbError> {
     local_db::with_connection(|conn| {
         conn.execute(
-            r#"INSERT INTO app_backups (id, app_id, cid, encryption_version, created_at, scope_json, status, size_bytes, notes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+            r#"INSERT INTO app_backups (id, app_id, cid, encryption_version, created_at, scope_json, status, size_bytes, notes, metadata_json)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
             params![
                 row.id,
                 row.app_id,
@@ -323,6 +339,7 @@ pub fn insert_app_backup(row: &AppBackupRow) -> Result<(), DbError> {
                 row.status,
                 row.size_bytes,
                 row.notes,
+                row.metadata_json.as_str(),
             ],
         )?;
         Ok(())
@@ -332,7 +349,8 @@ pub fn insert_app_backup(row: &AppBackupRow) -> Result<(), DbError> {
 pub fn list_app_backups(app_id: &str, limit: u32) -> Result<Vec<AppBackupRow>, DbError> {
     local_db::with_connection(|conn| {
         let mut stmt = conn.prepare(
-            r#"SELECT id, app_id, cid, encryption_version, created_at, scope_json, status, size_bytes, notes
+            r#"SELECT id, app_id, cid, encryption_version, created_at, scope_json, status, size_bytes, notes,
+                      COALESCE(metadata_json, '{}') AS metadata_json
                FROM app_backups WHERE app_id = ?1 ORDER BY created_at DESC LIMIT ?2"#,
         )?;
         let rows = stmt.query_map(params![app_id, limit], |row| {
@@ -346,6 +364,7 @@ pub fn list_app_backups(app_id: &str, limit: u32) -> Result<Vec<AppBackupRow>, D
                 status: row.get(6)?,
                 size_bytes: row.get(7)?,
                 notes: row.get(8)?,
+                metadata_json: row.get(9)?,
             })
         })?;
         let mut out = Vec::new();

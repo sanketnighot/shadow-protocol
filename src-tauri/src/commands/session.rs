@@ -1,5 +1,9 @@
 //! Session unlock/lock/status commands for wallet key caching.
 //! Supports biometric (Touch ID) unlock when available, with keyring fallback.
+//! get_data() enforces Touch ID via SecAccessControl(UserPresence) — no separate
+//! authenticate() call needed in the happy path. On the fallback path (no biometry
+//! item, e.g. dev builds), authenticate() gates keyring access so the user always
+//! sees exactly one biometric prompt.
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -64,40 +68,49 @@ pub async fn session_unlock(app: AppHandle, input: SessionUnlockInput) -> Result
     // Erase all in-memory keys before loading from secure storage.
     session::clear_all();
 
-    // Always require Touch ID or device password before any key access.
-    // Keychain can return keys without prompting when Mac is unlocked; this forces auth every time.
-    let auth_opts = AuthOptions {
-        allow_device_credential: Some(true),
-        cancel_title: Some("Use Password".to_string()),
-        fallback_title: Some("Use Password".to_string()),
-        ..Default::default()
-    };
-    if let Err(auth_err) =
-        app.biometry().authenticate("Unlock your Shadow wallet".to_string(), auth_opts)
-    {
-        audit::record("session_unlock_failed", "wallet", Some(address), &serde_json::json!({
-            "reason": auth_err.to_string(),
-        }));
-        return Err(auth_err.to_string());
-    }
-
     let name = biometry_key_name(address);
 
-    // Try biometry store first, then Keychain.
+    // Try biometry store first — get_data() triggers Touch ID via SecAccessControl(UserPresence).
+    // If the biometry item exists, this is the ONLY auth prompt the user sees.
     let hex_pk = match app.biometry().get_data(GetDataOptions {
         domain: BIOMETRY_DOMAIN.to_string(),
         name: name.clone(),
         reason: "Unlock your Shadow wallet".to_string(),
-        cancel_title: Some("Use Password".to_string()),
+        cancel_title: Some("Cancel".to_string()),
     }) {
         Ok(res) => res.data,
         Err(e) => {
             let code = e.to_string();
-            if code.contains("authenticationFailed") || code.contains("biometryLockout") {
-                return Err(format!("Biometric unlock failed: {code}"));
+            if code.contains("authenticationFailed") || code.contains("biometryLockout")
+                || code.contains("userCancel")
+            {
+                audit::record("session_unlock_failed", "wallet", Some(address), &serde_json::json!({
+                    "reason": code,
+                }));
+                return Err(format!("Unlock cancelled or failed: {code}"));
             }
-            // itemNotFound / dev build: key only in Keychain (authenticate already passed above).
-            wallet::load_private_key(address).map_err(|e| e.to_string())?
+
+            // itemNotFound: biometry store has no item (dev build or legacy wallet).
+            // Gate keyring access with authenticate() so the user still sees Touch ID.
+            let auth_opts = AuthOptions {
+                allow_device_credential: Some(true),
+                cancel_title: Some("Cancel".to_string()),
+                fallback_title: Some("Use Password".to_string()),
+                ..Default::default()
+            };
+            if let Err(auth_err) =
+                app.biometry().authenticate("Unlock your Shadow wallet".to_string(), auth_opts)
+            {
+                audit::record("session_unlock_failed", "wallet", Some(address), &serde_json::json!({
+                    "reason": auth_err.to_string(),
+                }));
+                return Err(format!("Unlock cancelled or failed: {}", auth_err));
+            }
+
+            // Auth passed — read from keyring and migrate into biometry for next time.
+            let pk = wallet::load_private_key(address).map_err(|e| e.to_string())?;
+            wallet::store_in_biometry_pub(&app, address, &pk);
+            pk
         }
     };
 

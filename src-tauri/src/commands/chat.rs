@@ -3,8 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
-use crate::services::apps::{backup_payload_from_scope, filecoin, flow};
 use crate::services::apps::state as apps_state;
+use crate::services::apps::{filecoin, flow};
+use tauri::AppHandle;
 use crate::services::audit;
 use crate::services::local_db::{
     self, ActiveStrategy, ApprovalRecord, CommandLogEntry, ToolExecutionRecord,
@@ -112,7 +113,7 @@ pub async fn get_strategies() -> Result<Vec<ActiveStrategy>, String> {
 }
 
 #[tauri::command]
-pub async fn create_strategy(input: CreateStrategyInput) -> Result<StrategyResult, String> {
+pub async fn create_strategy(app: AppHandle, input: CreateStrategyInput) -> Result<StrategyResult, String> {
     let id = uuid::Uuid::new_v4().to_string();
     let name = input.name.trim().to_string();
     let summary = input.summary.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
@@ -134,11 +135,12 @@ pub async fn create_strategy(input: CreateStrategyInput) -> Result<StrategyResul
     strategy.next_run_at = Some(now_secs());
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_created", "strategy", Some(&strategy.id), &strategy);
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyResult { strategy })
 }
 
 #[tauri::command]
-pub async fn update_strategy(input: UpdateStrategyInput) -> Result<StrategyResult, String> {
+pub async fn update_strategy(app: AppHandle, input: UpdateStrategyInput) -> Result<StrategyResult, String> {
     let existing = db_get_strategies()
         .map_err(|e| e.to_string())?
         .into_iter()
@@ -203,42 +205,61 @@ pub async fn update_strategy(input: UpdateStrategyInput) -> Result<StrategyResul
 
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_updated", "strategy", Some(&strategy.id), &strategy);
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyResult { strategy })
 }
 
 #[tauri::command]
-pub async fn update_strategy_status(input: StrategyStatusInput) -> Result<StrategyResult, String> {
-    update_strategy(UpdateStrategyInput {
-        id: input.id,
-        name: None,
-        summary: None,
-        status: Some(input.status),
-        mode: None,
-        trigger: None,
-        action: None,
-        guardrails: None,
-        approval_policy: None,
-        execution_policy: None,
-    })
+pub async fn update_strategy_status(app: AppHandle, input: StrategyStatusInput) -> Result<StrategyResult, String> {
+    update_strategy(
+        app,
+        UpdateStrategyInput {
+            id: input.id,
+            name: None,
+            summary: None,
+            status: Some(input.status),
+            mode: None,
+            trigger: None,
+            action: None,
+            guardrails: None,
+            approval_policy: None,
+            execution_policy: None,
+        },
+    )
     .await
 }
 
 #[tauri::command]
-pub async fn pause_strategy(input: StrategyStatusInput) -> Result<StrategyResult, String> {
-    update_strategy_status(StrategyStatusInput { id: input.id, status: "paused".to_string() }).await
+pub async fn pause_strategy(app: AppHandle, input: StrategyStatusInput) -> Result<StrategyResult, String> {
+    update_strategy_status(
+        app,
+        StrategyStatusInput {
+            id: input.id,
+            status: "paused".to_string(),
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn resume_strategy(input: StrategyStatusInput) -> Result<StrategyResult, String> {
-    update_strategy_status(StrategyStatusInput { id: input.id, status: "active".to_string() }).await
+pub async fn resume_strategy(app: AppHandle, input: StrategyStatusInput) -> Result<StrategyResult, String> {
+    update_strategy_status(
+        app,
+        StrategyStatusInput {
+            id: input.id,
+            status: "active".to_string(),
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn delete_strategy(input: DeleteStrategyInput) -> Result<DeleteStrategyResult, String> {
+pub async fn delete_strategy(app: AppHandle, input: DeleteStrategyInput) -> Result<DeleteStrategyResult, String> {
     local_db::with_connection(|conn| {
         conn.execute("DELETE FROM active_strategies WHERE id = ?1", rusqlite::params![input.id])?;
         Ok(())
     }).map_err(|e| e.to_string())?;
+    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(DeleteStrategyResult { success: true })
 }
 
@@ -482,32 +503,22 @@ pub async fn approve_agent_action(
             }
         }
     } else if tool_name == "filecoin_protocol_request_backup" {
-        let scope = input
+        let base_scope = input
             .payload
             .get("scope")
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
-        let bytes = backup_payload_from_scope(&app, &scope).map_err(|e| e.to_string())?;
-        let ciphertext_hex = hex::encode(&bytes);
-        match filecoin::prepare_encrypted_backup(&app, scope.clone(), ciphertext_hex).await {
+        let cfg_raw = apps_state::get_app_config_json("filecoin-storage").unwrap_or_else(|_| "{}".to_string());
+        let cfg: serde_json::Value = serde_json::from_str(&cfg_raw).unwrap_or_default();
+        let scope = filecoin::merge_filecoin_backup_scope(base_scope, &cfg);
+        let policy = cfg.get("policy").cloned();
+        match filecoin::upload_and_record_snapshot(&app, scope, policy).await {
             Ok(data) => {
                 let cid = data
                     .get("cid")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string();
-                let row = apps_state::AppBackupRow {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    app_id: "filecoin-storage".to_string(),
-                    cid: cid.clone(),
-                    encryption_version: 1,
-                    created_at: now_secs(),
-                    scope_json: scope.to_string(),
-                    status: "complete".to_string(),
-                    size_bytes: Some(bytes.len() as i64),
-                    notes: Some("manual_backup".to_string()),
-                };
-                let _ = apps_state::insert_app_backup(&row);
                 execution.status = "succeeded".to_string();
                 execution.result_json =
                     Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));

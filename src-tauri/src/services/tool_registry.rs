@@ -207,7 +207,7 @@ pub fn all_tools() -> Vec<ToolDef> {
         ToolDef {
             name: "lit_protocol_connect_wallet",
             kind: ToolKind::Write,
-            description: "Requires Lit app. Create or refresh the Lit PKP/Vincent-shaped agent wallet session (stub until production Lit SDK is wired).",
+            description: "Requires Lit app. Create or refresh the Lit PKP agent wallet session. Mints a new PKP if none exists.",
             parameters: r#"{"type": "object", "properties": {"memo": {"type": "string"}}}"#,
             execution_mode: ExecutionMode::ReadAuto,
             requires_wallet: false,
@@ -216,6 +216,19 @@ pub fn all_tools() -> Vec<ToolDef> {
             example: "lit_protocol_connect_wallet()",
             required_app_id: Some("lit-protocol"),
             required_permission_ids: &["agent_wallet.manage", "network.lit"],
+        },
+        ToolDef {
+            name: "lit_protocol_execute_swap",
+            kind: ToolKind::Write,
+            description: "Requires Lit app. Execute a token swap through the Lit PKP agent wallet with decentralized policy enforcement. Requires user approval.",
+            parameters: r#"{"type": "object", "properties": {"fromToken": {"type": "string"}, "toToken": {"type": "string"}, "amountUsd": {"type": "number"}, "chain": {"type": "string"}, "protocol": {"type": "string", "default": "uniswap"}}, "required": ["fromToken", "toToken", "amountUsd"]}"#,
+            execution_mode: ExecutionMode::ApprovalRequired,
+            requires_wallet: true,
+            supports_multi_wallet: false,
+            supports_synthesis: false,
+            example: "lit_protocol_execute_swap(fromToken=\"USDC\", toToken=\"ETH\", amountUsd=20, chain=\"ethereum\", protocol=\"uniswap\")",
+            required_app_id: Some("lit-protocol"),
+            required_permission_ids: &["agent_wallet.manage", "execution.precheck", "network.lit"],
         },
         ToolDef {
             name: "flow_protocol_account_status",

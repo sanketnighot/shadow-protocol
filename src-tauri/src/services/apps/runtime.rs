@@ -18,6 +18,7 @@ pub enum AppsRuntimeError {
     Spawn(String),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[allow(dead_code)]
     #[error("timed out")]
     Timeout,
     #[error("invalid response")]

@@ -7,7 +7,7 @@ use super::chain::network_to_chain_display;
 use super::local_db::{self, NftRow, TokenRow, TransactionRow};
 use super::portfolio_service::{self, PortfolioAsset};
 
-const ALL_NETWORKS: &[&str] = &[
+const BASE_NETWORKS: &[&str] = &[
     "eth-mainnet",
     "base-mainnet",
     "polygon-mainnet",
@@ -15,6 +15,17 @@ const ALL_NETWORKS: &[&str] = &[
     "base-sepolia",
     "polygon-amoy",
 ];
+
+/// Build the list of networks to sync, conditionally including Flow when the app is installed.
+fn active_sync_networks() -> Vec<&'static str> {
+    let mut nets: Vec<&str> = BASE_NETWORKS.to_vec();
+    let flow_ready = super::apps::state::is_tool_app_ready("flow").unwrap_or(false);
+    if flow_ready {
+        nets.push("flow-mainnet");
+        nets.push("flow-testnet");
+    }
+    nets
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -332,12 +343,13 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
         },
     );
 
-    for (i, network) in ALL_NETWORKS.iter().enumerate() {
+    let sync_networks = active_sync_networks();
+    for (i, network) in sync_networks.iter().enumerate() {
         if let Ok(nfts) = fetch_nfts_for_network(&address, network, &api_key).await {
             let (_, chain_code) = network_to_chain_display(network);
             let _ = local_db::upsert_nfts(&address, chain_code, &nfts);
         }
-        let pct = 40 + (i + 1) * 26 / ALL_NETWORKS.len();
+        let pct = 40 + (i + 1) * 26 / sync_networks.len();
         emit_progress(
             &app,
             &SyncProgressPayload {
@@ -364,12 +376,13 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
         },
     );
 
-    for (i, network) in ALL_NETWORKS.iter().enumerate() {
+    let sync_networks_tx = active_sync_networks();
+    for (i, network) in sync_networks_tx.iter().enumerate() {
         if let Ok(txs) = fetch_asset_transfers_for_network(&address, network, &api_key).await {
             let (_, chain_code) = network_to_chain_display(network);
             let _ = local_db::upsert_transactions(&address, chain_code, &txs);
         }
-        let pct = 70 + (i + 1) * 30 / ALL_NETWORKS.len();
+        let pct = 70 + (i + 1) * 30 / sync_networks_tx.len();
         emit_progress(
             &app,
             &SyncProgressPayload {
