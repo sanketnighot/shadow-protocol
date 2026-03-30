@@ -50,6 +50,29 @@ describe("parseFlowConfig", () => {
     expect(parseFlowConfig({ network: "mainnet" }).network).toBe("mainnet");
     expect(parseFlowConfig({}).network).toBe("testnet");
   });
+
+  it("migrates legacy accountHint evm to linkedEvmAddress", () => {
+    const evm = "0x1111111111111111111111111111111111111111";
+    const c = parseFlowConfig({ accountHint: evm });
+    expect(c.linkedEvmAddress).toBe(evm);
+    expect(c.cadenceAddress).toBe("");
+  });
+
+  it("migrates legacy accountHint cadence to cadenceAddress", () => {
+    const cad = "0xabcdef0123456789";
+    const c = parseFlowConfig({ accountHint: cad });
+    expect(c.cadenceAddress).toBe(cad);
+    expect(c.linkedEvmAddress).toBe("");
+  });
+
+  it("prefers explicit cadenceAddress over accountHint", () => {
+    const c = parseFlowConfig({
+      cadenceAddress: "aaaaaaaaaaaaaaaa",
+      accountHint: "0x1111111111111111111111111111111111111111",
+    });
+    expect(c.cadenceAddress).toBe("aaaaaaaaaaaaaaaa");
+    expect(c.linkedEvmAddress).toBe("0x1111111111111111111111111111111111111111");
+  });
 });
 
 describe("parseFilecoinBackupMetadata", () => {

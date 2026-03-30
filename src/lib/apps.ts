@@ -56,6 +56,11 @@ export type LitIntegrationConfig = {
 
 export type FlowIntegrationConfig = {
   network: "mainnet" | "testnet";
+  /** Flow EVM wallet in SHADOW this Flow setup is associated with (`0x` + 40 hex). */
+  linkedEvmAddress: string;
+  /** Cadence-native Flow account: 16 hex characters (optional `0x`). Used for Cadence portfolio + tools. */
+  cadenceAddress: string;
+  /** @deprecated Use `cadenceAddress` / `linkedEvmAddress`; kept for parse/save compatibility. */
   accountHint: string;
 };
 
@@ -119,17 +124,45 @@ export function parseLitConfig(raw: unknown): LitIntegrationConfig {
   };
 }
 
+function isEvmAddressHint(s: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(s.trim());
+}
+
+function isCadenceAddressHint(s: string): boolean {
+  const t = s.trim();
+  const body = t.startsWith("0x") ? t.slice(2) : t;
+  return body.length === 16 && /^[a-fA-F0-9]+$/.test(body);
+}
+
 export function parseFlowConfig(raw: unknown): FlowIntegrationConfig {
   const fallback: FlowIntegrationConfig = {
     network: "testnet",
+    linkedEvmAddress: "",
+    cadenceAddress: "",
     accountHint: "",
   };
   if (!raw || typeof raw !== "object") return fallback;
   const o = raw as Record<string, unknown>;
   const net = o.network === "mainnet" ? "mainnet" : "testnet";
-  const hint =
-    typeof o.accountHint === "string" ? o.accountHint.slice(0, 256) : "";
-  return { network: net, accountHint: hint };
+  let linkedEvmAddress =
+    typeof o.linkedEvmAddress === "string" ? o.linkedEvmAddress.trim().slice(0, 42) : "";
+  let cadenceAddress =
+    typeof o.cadenceAddress === "string" ? o.cadenceAddress.trim().slice(0, 66) : "";
+  const hint = typeof o.accountHint === "string" ? o.accountHint.trim().slice(0, 256) : "";
+
+  if (!linkedEvmAddress && hint && isEvmAddressHint(hint)) {
+    linkedEvmAddress = hint.slice(0, 42);
+  }
+  if (!cadenceAddress && hint && isCadenceAddressHint(hint)) {
+    cadenceAddress = hint.slice(0, 66);
+  }
+
+  return {
+    network: net,
+    linkedEvmAddress,
+    cadenceAddress,
+    accountHint: hint,
+  };
 }
 
 export type FilecoinBackupMetadata = {

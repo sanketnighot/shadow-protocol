@@ -24,7 +24,7 @@ export type PortfolioAsset = {
   chainName: string;
   balance: string;
   valueUsd: string;
-  type: "token" | "stablecoin";
+  type: "token" | "stablecoin" | "native";
   tokenContract: string;
   decimals: number;
   walletAddress?: string | null;
