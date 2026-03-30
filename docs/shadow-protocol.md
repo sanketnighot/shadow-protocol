@@ -1,446 +1,409 @@
-## Secure Hybrid Autonomous DeFi Operations Workstation
+## SHADOW Protocol
+
+Detailed product and technical reference for the current codebase.
 
 ---
 
-## 🎯 Executive Summary
+## Executive Summary
 
-SHADOW Protocol is a **privacy-first, desktop-native DeFi automation platform** that combines **local AI intelligence** with **multi-chain crypto infrastructure** to give users autonomous financial operations without sacrificing privacy or control.
+SHADOW Protocol is a **privacy-first desktop DeFi workstation** built with:
 
-Unlike cloud-based DeFi tools that expose user data and strategies, SHADOW runs entirely on the user's machine—private keys, AI analysis, and automation logic never leave the device.
+- **React 19 + TypeScript + Vite** on the frontend
+- **Tauri 2 + Rust** on the backend
+- **Ollama** for local model workflows
+- **SQLite** for local persistence
+- **OS keychain + biometric unlock** for secret handling
 
-**Key Innovation:** Privacy + Autonomy + Multi-Chain in a secure desktop application.
+The core product direction is consistent across the repo:
 
----
+- keep sensitive operations local
+- make agent behavior visible and reviewable
+- use Rust for wallet/session/security-critical work
+- provide portfolio, strategy, automation, and integration surfaces in one desktop UI
 
-## 🚀 The Problem
-
-### Current DeFi Landscape Issues:
-
-1. **Privacy Crisis** (76% institutional demand, only 32% have tools)
-  - All transactions public on transparent blockchains
-    - Trading strategies exposed to front-runners
-    - Portfolio holdings visible to competitors
-    - Institutions won't adopt without privacy
-2. **Multi-Chain Complexity**
-  - Managing assets across 10+ chains is overwhelming
-    - Each chain requires different wallets, tools, UX
-    - Fragmented liquidity and opportunities
-3. **No Private AI for DeFi**
-  - Existing AI tools send sensitive financial data to cloud APIs
-    - Users can't use AI without exposing portfolio info
-    - No local, privacy-preserving financial intelligence
-4. **Manual DeFi Operations**
-  - Users must manually monitor markets 24/7
-    - No automated rebalancing without trusting centralized platforms
-    - Can't run sophisticated strategies without technical expertise
+The codebase already contains real functionality, but some roadmap ideas remain partial or aspirational. This document intentionally separates those areas.
 
 ---
 
-## ✨ The Solution: SHADOW Protocol
+## What The Project Solves
 
-SHADOW is a **Tauri-based desktop application** that solves all these problems:
+SHADOW is meant to reduce the operational burden of DeFi without giving up privacy or user control.
 
-### Core Features:
+### Main problems it addresses
 
-### 1. **Local AI Financial Intelligence**
+- fragmented portfolio management across chains and wallets
+- poor UX for reviewing agent-driven financial actions
+- too much sensitive logic living in browser-only environments
+- manual monitoring of portfolio health, opportunities, and automation tasks
+- lack of a local-first interface for AI-assisted DeFi workflows
 
-- **Qwen2.5-7B** or **Llama 3.2 3B** running entirely on user's machine
-- Zero API calls, zero data leakage
-- Analyzes market conditions, portfolio health, risk metrics
-- Suggests strategies based on user goals
-- 32K context window for deep analysis
+### Intended users
 
-### 2. **Military-Grade Privacy**
-
-- **Private keys stored locally** using OS keychain
-- **Zama FHE** integration for confidential transactions
-- All computation happens on-device
-- Optional transaction obfuscation
-- No cloud dependency for sensitive operations
-
-### 3. **True Multi-Chain Support**
-
-- Ethereum, Arbitrum, Base, Optimism, Polygon
-- Solana, Avalanche, BNB Chain
-- Single interface for all chains
-- Cross-chain swaps and bridges
-- Unified portfolio view
-
-### 4. **Autonomous Operations**
-
-- Background processes via **Rust Tokio**
-- Scheduled strategies (DCA, rebalancing, harvesting)
-- Runs 24/7 even when app minimized
-- System tray integration
-- User-defined guardrails and limits
-
-### 5. **Beautiful, Intuitive UI**
-
-- Next.js 14 + TailwindCSS + Framer Motion
-- Real-time portfolio tracking
-- Visual strategy builder
-- Transaction history with privacy filters
-- Mobile-responsive (future iOS/Android via Tauri)
+- privacy-conscious DeFi users
+- active portfolio managers and traders
+- users who want AI assistance without hidden execution
+- advanced users experimenting with guarded automation
 
 ---
 
-## 🏗️ Technical Architecture
+## Product Reality
 
-### Desktop Framework: Tauri 2.0
+### Implemented
 
-**Why Tauri over Electron:**
+- secure wallet creation/import/list/remove flows
+- OS keychain storage for private keys
+- biometric-backed unlock path where platform/build conditions allow it
+- in-memory session caching with expiry and clear-on-exit behavior
+- portfolio balances, history, allocation, transactions, and NFT retrieval
+- wallet sync pipeline with progress and completion events
+- market opportunities fetch/refresh/detail flows
+- local model management via Ollama
+- agent chat with tool execution and approval requests
+- strategy draft creation, update, simulation, and management commands
+- apps/integrations registry plus Lit, Flow, and Filecoin runtime paths
+- autonomous dashboard with guardrails, health, tasks, and orchestrator state
+- real EVM transfer execution
 
-- **10-20MB app size** vs Electron's 100-200MB
-- **Rust backend** = memory-safe, perfect for private keys
-- **Security by default** - APIs allowlisted, not exposed
-- **Native performance** - uses system WebView
-- **Better battery life** - no full Chromium per app
-- **Built-in cryptography** support via Rust
+### In Progress / Partial
 
-### Frontend Stack:
+- swap preview and approval-oriented flows
+- bridge UX
+- autonomous execution after task approval
+- some health/orchestrator reasoning paths
+- deeper strategy execution loops
 
-```tsx
-// Tech Stack
-{
-  framework: "Vite",
-  language: "TypeScript",
-  styling: "TailwindCSS + Framer Motion",
-  web3: "Viem",
-  state: "Zustand/Tanstack Query [As per requirements]",
-  ui: "shadcn/ui components"
-}
+### Planned / Not Yet Fully Backed By Code
+
+- full end-to-end DeFi swap execution across all surfaced flows
+- broad cross-chain execution beyond current supported paths
+- complete background autonomy that can be trusted as production-ready
+- richer marketplace/ecosystem behavior
+
+---
+
+## Supported Chains And Capability Notes
+
+Current code-backed support is narrower than some earlier marketing text.
+
+### Strongest supported paths
+
+- Ethereum
+- Base
+- Polygon
+- configured EVM testnets such as `eth-sepolia`, `base-sepolia`, `polygon-amoy`
+
+### Additional integration paths
+
+- Flow support exists through the apps runtime and related Rust services
+- Lit and Filecoin exist as integration/app surfaces rather than core portfolio chains
+
+### Important caveats
+
+- transfers are real
+- swaps are not yet fully end-to-end live in the same way as transfers
+- bridge flows are not fully wired
+- some mock/demo copy still references broader chain coverage than the backend currently guarantees
+
+---
+
+## System Architecture
+
+SHADOW is organized as a layered desktop application:
+
+```text
+Frontend UI (src/)
+  -> routes, components, hooks, stores, typed invoke helpers
+
+Tauri command layer (src-tauri/src/commands/)
+  -> thin IPC surface, argument validation, command registration
+
+Rust service layer (src-tauri/src/services/)
+  -> wallet, session, market, portfolio, strategy, agent, apps, autonomous logic
+
+Apps sidecar (apps-runtime/)
+  -> Bun-based isolated adapters for Lit / Flow / Filecoin
 ```
 
-## Backend (Rust):
+### Frontend architecture
 
-```jsx
-// Core Capabilities
-- Key Management (OS keychain integration)
-- Transaction Signing (secp256k1, ed25519)
-- Local AI Inference (llama.cpp bindings)
-- Background Task Scheduler (Tokio)
-- Multi-Chain RPC Manager
-- Encryption/Decryption (ring, sodiumoxide)
-```
+The frontend is a single-shell desktop UI with feature modules.
 
-## Local AI Integration:
+#### Main areas
 
-**Model: Ollama models[initially],** llama.cpp[Add Later if needed]
+- `src/routes.tsx`: route registration using `createHashRouter`
+- `src/components/layout/AppShell.tsx`: app shell, top bar, dock, toasts, onboarding, approvals, unlock modal
+- `src/components/agent/`: chat UI, thread management, approvals, result cards
+- `src/components/portfolio/`: balances, actions, NFTs, transactions, filters
+- `src/components/strategy/`: builder, pipeline view, simulation, inspector
+- `src/components/autonomous/`: task, guardrail, health, opportunities, control surfaces
+- `src/components/apps/`: marketplace and integration settings
+- `src/components/settings/`: theme, model, governance, API keys, destructive reset
 
-- Faster inference for lower-end devices
+#### Frontend state patterns
 
-- Multi-lingual support
-- Lower memory footprint (8GB RAM)
+- **Zustand** for UI/session/wallet/thread state
+- **TanStack Query** for async/server-style state
+- **Tauri event listeners** for push-style updates from Rust
+- typed invoke wrappers in `src/lib/`
 
-**Inference Engine:** `llama.cpp` (Rust bindings via `candle`)
+### Backend architecture
 
-## Privacy Layer:
+The Rust backend follows a thin-command, service-heavy pattern.
 
-**1. Local Key Management:**
+#### Command modules
 
-```rust
-// Keys never leave device
-- Encrypted at rest using OS keychain
-- In-memory only during signing
-- Auto-lock after inactivity
-- Biometric unlock support
-```
+Located in `src-tauri/src/commands/`:
 
-**2. Zama FHE Integration:**
+- `wallet.rs`
+- `wallet_sync.rs`
+- `session.rs`
+- `portfolio.rs`
+- `transfer.rs`
+- `chat.rs`
+- `strategy.rs`
+- `apps.rs`
+- `market.rs`
+- `settings.rs`
+- `ollama_manager.rs`
+- `autonomous.rs`
 
-```markdown
-// Confidential transactions using Fully Homomorphic Encryption
-- Private balance queries
-- Encrypted transaction amounts
-- Hidden trading strategies
-- Compliance-friendly privacy
-```
+#### Service modules
 
-**3. Multi-Chain Privacy:**
+Located in `src-tauri/src/services/`:
 
-- Optional Tornado Cash-style mixing (where legal)
-- Stealth addresses for supported chains
-- Transaction batching to obscure patterns
+- wallet/session-related services
+- portfolio and local database services
+- market ranking/provider/service modules
+- agent chat, tool router, tool registry, audit, and state
+- strategy compiler, validator, engine, scheduler, and legacy compatibility
+- autonomous orchestration, guardrails, health, tasks, and behavior learning
+- apps runtime, registry, provider-specific integration logic
 
-## Automation Architecture:
+#### Sidecar runtime
 
-```rust
-// Background Task Manager
-use tokio::time::{interval, Duration};
+`apps-runtime/` is used for isolated integration adapters. Rust spawns a Bun process per request, exchanges JSON over stdin/stdout, and exits. This helps keep external SDK complexity out of the React app and out of long-lived Rust process state where not needed.
 
-async fn strategy_executor() {
-    let mut interval = interval(Duration::from_secs(300)); // 5 min
+---
 
-    loop {
-        interval.tick().await;
+## Security Model
 
-        // Check market conditions (local AI)
-        let analysis = local_ai_analyze_markets().await;
+This is a security-sensitive application. The project rules correctly treat documentation claims as secondary to actual code behavior.
 
-        // Execute if conditions met + within guardrails
-        if analysis.should_execute() && check_user_limits() {
-            execute_strategy_safely().await;
-        }
-    }
-}
+### Wallet and key handling
+
+- private keys are stored in OS-backed secure storage
+- wallet addresses are stored separately in an app data JSON file
+- unlock happens through Rust commands, not through the frontend directly
+- unlocked keys are cached only in RAM for a bounded session window
+- session cache is cleared on explicit lock and on exit
+
+### Frontend security posture
+
+- frontend uses Tauri `invoke`, not localhost backend calls
+- sensitive state is intended to stay Rust-side
+- UI state is separated from backend-owned sensitive state
+- approvals are explicit and surfaced in the UI
+
+### Backend security posture
+
+- Rust owns wallet/session logic
+- service layer handles portfolio, execution, and tool routing logic
+- `zeroize` is used for in-memory key material
+- project rules require validation at command boundaries
+
+### Important reality check
+
+The codebase is security-minded, but not every roadmap idea is production-complete yet. In particular, full automation and full swap execution should not be described as already finished.
+
+---
+
+## Feature Areas
+
+## 1. Wallets And Sessions
+
+### Implemented
+
+- create wallet from mnemonic
+- import mnemonic
+- import raw private key
+- list and remove wallets
+- keychain-backed private key storage
+- biometric storage path where available
+- session unlock, lock, and status commands
+
+### Current UX behavior
+
+- React checks session state for the active wallet
+- if locked, the unlock dialog is shown
+- unlocking routes through Rust and may use biometry or keychain fallback
+- the active session is tracked in the frontend only as UI state, not as secret material
+
+## 2. Portfolio
+
+### Implemented
+
+- balances
+- multi-wallet balances
+- history
+- allocation summaries
+- NFTs
+- transactions
+- wallet attribution
+- portfolio sync notifications
+
+### Data sources
+
+- Alchemy-backed EVM portfolio fetching
+- local SQLite cache
+- Flow integration path where relevant
+
+### Caveats
+
+- mock/demo data still exists for some UI shaping
+- chain labels in demo data may be broader than real backend support
+
+## 3. Agent
+
+### Implemented
+
+- agent threads and message history
+- local model selection
+- tool result rendering
+- approval request rendering
+- execution log retrieval
+- agent soul/persona and memory storage
+
+### How it works
+
+- frontend sends chat input via Tauri invoke
+- Rust `chat_agent` runs agent orchestration
+- agent may call tools via the tool router
+- if a tool requires approval, an approval record is stored and returned
+- user approval/rejection is sent back through dedicated commands
+
+### Caveats
+
+- not every surfaced tool path is fully wired to real on-chain execution
+- some flows stop at preview/approval rather than live execution
+
+## 4. Strategies And Automation
+
+### Implemented
+
+- strategy drafts
+- compile/create/update/get flows
+- simulation commands
+- strategy management and status changes
+- automation center UI
+- pipeline-oriented builder UI
+
+### Caveats
+
+- strategy execution is not yet uniformly production-complete across all scenarios
+- parts of the engine are still approval-preview oriented
+
+## 5. Autonomous Subsystem
+
+### Implemented
+
+- guardrail get/set
+- kill switch
+- pending tasks
+- approve/reject task flows
+- task reasoning
+- portfolio health access
+- orchestrator state
+- opportunity surfacing
+- autonomous dashboard UI
+
+### Caveats
+
+- approval does not always mean full end-to-end execution is complete afterward
+- some health and orchestrator inputs remain placeholder-like or simplified
+
+## 6. Apps And Integrations
+
+### Implemented
+
+- apps marketplace surface
+- install/uninstall/enable/config flows
+- runtime health checks
+- sidecar runtime dispatch
+- Lit, Flow, and Filecoin provider paths
+
+### Architectural intent
+
+- keep external SDKs out of core React app logic
+- isolate risky or heavy adapter code in a short-lived sidecar process
+
+---
+
+## Data And Persistence
+
+### Frontend persistence
+
+- UI and preference state in Zustand persistence for non-secret settings
+- selected wallet names and some UX preferences persisted client-side
+
+### Backend persistence
+
+- SQLite database in app data directory
+- wallet address list in `wallets.json`
+- secrets in keychain, not app-level browser storage
+
+### Environment/config
+
+- `.env.example` currently documents `ALCHEMY_API_KEY`
+- additional keys can be managed through the in-app Settings page
+
+---
+
+## Build And Tooling
+
+### Frontend
+
+- Vite
+- strict TypeScript
+- Vitest + Testing Library
+- Tailwind CSS 4
+- shadcn/ui configuration in `components.json`
+
+### Backend
+
+- Cargo-managed Rust crate under `src-tauri/`
+- Tauri config in `src-tauri/tauri.conf.json`
+- app resources include `apps-runtime/`
+
+### Standard commands
+
+```bash
+bun run dev
+bun run tauri:dev
+bun run build
+bun run test:run
+
+cd src-tauri && cargo check
+cd src-tauri && cargo clippy -- -D warnings
+cd src-tauri && cargo test
 ```
 
 ---
 
-## 🎨 User Experience Flow
+## Documentation Rules Going Forward
 
-## 1. **First Launch:**
+To keep this repo trustworthy:
 
-```rust
-1. Download SHADOW (10MB installer)
-2. Create/Import wallet (keys stored locally)
-3. Connect to favorite chains
-4. Set privacy preferences
-5. Define strategy guardrails
-```
-
-## 2. **Daily Usage:**
-
-```rust
-1. Open app → See unified portfolio
-2. AI suggests: "Arbitrage opportunity on Base detected"
-3. Review strategy details
-4. Approve with one click
-5. Transaction executes privately
-6. Minimize to system tray
-7. Background automation continues
-```
-
-## 3. **Strategy Creation:**
-
-```rust
-Visual Builder:
-- Drag "If ETH price > $3000" trigger
-- Connect "Then DCA $100 weekly" action
-- Add "Stop if portfolio < $5000" guardrail
-- AI validates strategy safety
-- Deploy to background executor
-```
+- do not describe a flow as live if it stops at preview, approval, or toast-only UX
+- do not claim chain support that is not backed by Rust services or stable integration paths
+- clearly mark roadmap features as planned
+- prefer code-backed descriptions over pitch-deck language
 
 ---
 
-## 🎯 MVP Scope (5 Days)
+## Related Docs
 
-## Day 1-2: Core Infrastructure
-
-- ✅ Tauri app scaffold
-- ✅ Local key management
-- ✅ Multi-chain RPC connections
-- ✅ Basic UI framework
-
-## Day 3: AI Integration
-
-- ✅ Local Qwen 3B model integration
-- ✅ Market data fetching
-- ✅ Simple portfolio analysis
-- ✅ Strategy suggestions
-
-## Day 4: Automation
-
-- ✅ Background task scheduler
-- ✅ DCA strategy implementation
-- ✅ Simple rebalancing logic
-- ✅ Transaction execution
-
-## Day 5: Privacy + Polish
-
-- ✅ Zama FHE integration (basic)
-- ✅ Transaction privacy options
-- ✅ UI polish + demo video
-- ✅ Documentation
-
-## MVP Features:
-
-1. ✅ Secure local wallet
-2. ✅ Multi-chain connection (ETH, Base, Arbitrum)
-3. ✅ Local AI market analysis
-4. ✅ Automated DCA
-5. ✅ Simple portfolio rebalancing
-6. ✅ Privacy-focused transaction execution
-7. ✅ Beautiful desktop UI
-8. ✅ System tray background mode
-
----
-
-## 🌍 Real-World Impact
-
-## Target Users:
-
-**1. Privacy-Conscious DeFi Users (Retail)**
-
-- Want DeFi benefits without exposing strategies
-- Need automated portfolio management
-- Can't monitor markets 24/7
-- Don't trust centralized platforms
-
-**2. Institutions (Primary Growth Vector)**
-
-- 76% want crypto exposure, only 32% have privacy tools
-- Can't use DeFi with transparent transactions
-- Need confidential rebalancing capabilities
-- Require compliance-friendly privacy
-
-**3. Traders**
-
-- Front-running is $1B+ annual problem
-- Need private strategy execution
-- Want multi-chain arbitrage automation
-- Require sophisticated risk management
-
-## Market Opportunity:
-
-- **DeFi TVL:** $130-140B (early 2026)
-- **Privacy DeFi TVL:** Nascent but growing rapidly
-- **Institutional DeFi:** Largest untapped segment
-- **Multi-Chain Users:** Fastest growing cohort
-
-## Roadmap:
-
-**Phase 1 (Month 1-2):**
-
-- Add more chains (Cosmos, Near, Polkadot)
-- Advanced strategy templates
-- Community strategy marketplace
-- Mobile app beta (iOS/Android via Tauri)
-
-**Phase 2 (Month 3-6):**
-
-- Institutional features (multi-sig, compliance)
-- Plugin ecosystem for custom strategies
-- Hardware wallet integration
-- Advanced FHE features (Zama partnership)
-
-**Phase 3 (Month 6-12):**
-
-- DAO launch for governance
-- Revenue model (pro features)
-- Institutional sales
-- Potential Funding the Commons accelerator
-
----
-
-## 🔐 Security Considerations
-
-## Key Management:
-
-```rust
-- OS-level keychain (macOS Keychain, Windows Credential Manager)
-- Encrypted at rest with AES-256
-- Biometric unlock support
-- Auto-lock after 5 min inactivity
-- No keys in memory longer than necessary
-```
-
-## Code Security:
-
-```rust
-- Rust backend = memory-safe
-- Regular security audits (post-hackathon)
-- Open-source for transparency
-- Minimal dependencies
-- Supply chain attack prevention
-```
-
-## Transaction Safety:
-
-```rust
-- Simulation before execution
-- User-defined spending limits
-- Multi-step confirmation for large txs
-- Kill switch for emergency stops
-- Audit logs for all operations
-```
-
----
-
-## 📚 Technical Implementation Details
-
-## Key Components:
-
-## 1. Wallet Manager (Rust)
-
-```rust
-pub struct WalletManager {
-    keychain: KeychainAccess,
-    accounts: HashMap<ChainId, Account>,
-    signer: TransactionSigner,
-}
-
-impl WalletManager {
-    pub async fn sign_transaction(&self, tx: Transaction) -> Result<SignedTx> {
-        // Get key from OS keychain
-        let key = self.keychain.get_key(tx.from)?;
-
-        // Sign in memory
-        let signed = self.signer.sign(tx, &key).await?;
-
-        // Clear key from memory
-        drop(key);
-
-        Ok(signed)
-    }
-}
-```
-
-## 2. AI Analysis Engine (Rust + Python bindings)
-
-```rust
-pub struct LocalAI {
-    model: LlamaModel,
-    context_size: usize,
-}
-
-impl LocalAI {
-    pub async fn analyze_portfolio(&self, data: PortfolioData) -> Analysis {
-        let prompt = format!(
-            "Analyze this DeFi portfolio and suggest optimizations:\n{:?}",
-            data
-        );
-
-        let response = self.model.generate(prompt, self.context_size).await;
-
-        parse_analysis(response)
-    }
-}
-```
-
-## 3. Background Executor (Rust + Tokio)
-
-```rust
-#[tauri::command]
-async fn start_strategy(strategy: Strategy) -> Result<()> {
-    tokio::spawn(async move {
-        let executor = StrategyExecutor::new(strategy);
-        executor.run_loop().await;
-    });
-
-    Ok(())
-}
-```
-
-## 4. Multi-Chain Abstraction (TypeScript)
-
-```tsx
-class ChainManager {
-  private providers: Map<ChainId, Provider>;
-
-  async executeOnBestChain(operation: Operation): Promise<TxReceipt> {
-    // AI determines optimal chain
-    const chain = await this.ai.selectOptimalChain(operation);
-
-    // Execute with privacy
-    const tx = await this.providers.get(chain)
-      .sendTransaction(operation, { privacy: true });
-
-    return tx.wait();
-  }
-}
-```
-
----
+- `README.md`
+- `docs/ui-ux.md`
+- `AGENTS.md`
+- `CLAUDE.md`
 

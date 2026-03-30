@@ -1,392 +1,395 @@
-## **UI/UX Design for SHADOW Protocol**
+## UI/UX Design For SHADOW Protocol
 
-For a **privacy-first DeFi automation desktop app**, here's the complete design approach:
-
----
-
-## **🎨 Design Philosophy**
-
-**Core Principles:**
-
-1. **Privacy-First Visual Language** - Dark, secure, mysterious aesthetic
-2. **Clarity Over Complexity** - Multi-chain shouldn't feel complicated
-3. **Trust Through Transparency** - Show what the AI agent is doing
-4. **Professional Yet Approachable** - Not intimidating for non-devs
-
-**Think:** Arc Browser + Robinhood + ChatGPT interface
+This document describes the **current** design language and UX direction for the repo as it exists today, not an abstract future concept.
 
 ---
 
-## **📐 Layout Structure**
+## Design Principles
 
-### **Main App Layout (Desktop-Native)**
+The product is optimized for a desktop-native operating environment, not a lightweight browser dapp aesthetic.
 
-```
-┌──────────────────────────────────────────────────┐
-│  [Logo] SHADOW          [⚙️] [🔔] [Profile] [🌙]  │ ← Title Bar
-├────────┬─────────────────────────────────────────┤
-│        │                                         │
-│  📊    │         Main Content Area               │
-│  Home  │                                         │
-│        │    ┌────────────────────────────┐       │
-│  💬    │    │  Portfolio Overview        │       │
-│  Agent │    │  $12,345.67  (+2.3%)       │       │
-│        │    │                            │       │
-│  ⚡     │    │  [ETH] [ARB] [BASE]        │       │
-│  Auto  │    └─────────────────────────────┘      │
-│        │                                         │
-│  📈    │    ┌─────────────────────────────┐      │
-│  Market│    │  AI Suggestions             │      │
-│        │    │  "Found arbitrage on Base"  │      │
-│  ⚙️    │    │  [View Details] [Approve]   │      │
-│  Settings   └─────────────────────────────┘      │
-│        │                                         │
-└────────┴─────────────────────────────────────────┘
-```
+### Core principles
+
+1. **Privacy-first by feel**  
+   The interface should feel controlled, local, and deliberate.
+
+2. **Clarity over spectacle**  
+   Finance, approvals, and execution state should be easy to parse quickly.
+
+3. **Human-in-the-loop trust**  
+   The user should always understand what the agent wants to do and what has or has not actually executed.
+
+4. **Compact desktop density**  
+   The UI should stay tight, efficient, and information-rich without becoming noisy.
+
+5. **Shared system patterns over one-off screens**  
+   Reuse shell behavior, spacing, approval patterns, and card treatments across features.
 
 ---
 
-## **🏠 Key Screens & Components**
+## Actual App Shell
 
-### **1. Home Dashboard (Main View)**
+The current application shell is centered around:
 
-**Components:**
+- a **minimal top bar**
+- a **scrolling content area**
+- a **fixed bottom dock**
+- floating overlays for activity, approvals, command palette, onboarding, and modals
 
+### Layout model
+
+```text
+Top Bar
+  -> SHADOW mark
+  -> session indicator
+  -> command palette trigger
+
+Main Content
+  -> routed page content
+  -> agent page gets full-height treatment
+
+Bottom Dock
+  -> primary app navigation
+
+Global Overlays
+  -> activity bell
+  -> toasts
+  -> approval modal
+  -> unlock dialog
+  -> onboarding
+  -> Ollama setup
 ```
-┌─ Portfolio Card (Hero Section) ────────────────-┐
-│                                                 │
-│  Total Portfolio Value                          │
-│  $12,345.67            ↗ +2.3% (24h)            │
-│                                                 │
-│  ┌───────┬───────┬───────┬───────┐              │
-│  │ ETH   │ ARB   │ BASE  │ SOL   │ ← Chain Pills|
-│  │ $4.2k │ $3.1k │ $2.9k │ $2.1k │              │
-│  └───────┴───────┴───────┴───────┘              │
-│                                                 │
-│  [Sparkline Chart - 7 Days]                     │
-└─────────────────────────────────────────────────┘
 
-┌─ AI Agent Status Card ─────────────────────────┐
-│  🤖 Agent: Active                              │
-│  ⚡ Running 3 strategies                        │
-│  🛡️ All limits within guardrails               │
-│                                                │
-│  Latest Action: 2 min ago                      │
-│  "Executed DCA purchase: 0.01 ETH"             │
-│                                                │
-│  [View Agent Activity →]                       │
-└────────────────────────────────────────────────┘
+### Navigation pattern
 
-┌─ Quick Actions ────────────────────────────────┐
-│  [💸 Send] [🔄 Swap] [➕ Strategy] [📊 Report]  │
-└────────────────────────────────────────────────┘
-```
+Primary navigation lives in the **bottom dock**, not a persistent left sidebar.
+
+Current top-level destinations:
+
+- Home
+- Agent
+- Auto AI
+- Builder
+- Auto
+- Apps
+- Market
+- Portfolio
+- Account
+
+There is still a legacy `Sidebar` component in the repo, but the main application chrome is dock-first.
 
 ---
 
-### **2. AI Agent Chat Interface (Core Innovation)**
+## Visual Language
 
-**Design like ChatGPT but for DeFi:**
+The current styling system is dark-first, sharp-edged, and compact.
 
-```
-┌─ Agent Conversation ───────────────────────────┐
-│                                                │
-│  You:                                          │
-│  "Find me the best yield for USDC"             │
-│                                                │
-│  🤖 Shadow:                                    │
-│  Analyzing 127 pools across 8 chains...        │
-│                                                │
-│  Found 3 opportunities:                        │
-│  ┌─────────────────────────────────┐           │
-│  │ 1. Aave V3 on Arbitrum          │           │
-│  │    APY: 4.2%  TVL: $1.2B        │           │
-│  │    Risk: Low                    │           │
-│  │    [Deploy $500] [Details]      │           │
-│  └─────────────────────────────────┘           │
-│                                                │
-│  Would you like me to execute option 1?        │
-│  [Yes, proceed] [Show more options]            │
-│                                                │
-│  [Type your instruction...]                    │
-└────────────────────────────────────────────────┘
-```
+### Tone
 
-**Key Features:**
+- understated
+- operator-like
+- minimal
+- slightly futuristic
+- not playful or cartoonish
 
-- **Streaming responses** (like ChatGPT)
-- **Inline action cards** (approve/reject)
-- **Transaction previews** before execution
-- **Privacy indicators** (🔒 icon for private transactions)
+### Surface treatment
+
+- dark backgrounds
+- subtle glass panels
+- low-contrast thin borders
+- restrained blur
+- minimal shadow usage
+- high text contrast
+
+### Component shape
+
+- mostly **small radii**
+- tight paddings
+- compact tool and action controls
+- strong preference for flat, low-noise composition
 
 ---
 
-### **3. Strategy Builder (Visual No-Code)**
+## Color System
 
-**Drag-and-drop workflow:**
+The active token system is defined in `src/styles/design-tokens.css`.
 
-```
-┌─ Strategy Canvas ───────────────────────────-───┐
-│                                                 │
-│  [1] Trigger ───→ [2] Condition ───→ [3] Action │
-│                                                 │
-│  ┌────────────┐   ┌────────────┐   ┌─────────┐  │
-│  │  Every     │   │  If ETH    │   │  Buy    │  │
-│  │  Monday    │ → │  < $3000   │ → │  $100   │  │
-│  │  9am       │   │            │   │  ETH    │  │
-│  └────────────┘   └────────────┘   └─────────┘  │
-│                                                 │
-│  [+ Add Step]                                   │
-│                                                 │
-│  Guardrails:                                    │
-│  ✓ Max per trade: $1000                         │
-│  ✓ Stop if portfolio < $5000                    │
-│  ✓ Require approval for >$500                   │
-│                                                 │
-│  [Save Strategy] [Test Simulation]              │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-### **4. Automation Center**
-
-**Show running strategies:**
-
-```
-┌─ Active Strategies ────────────────────────────┐
-│                                                │
-│  ┌──────────────────────────────────────┐      │
-│  │ 🔄 Weekly DCA         [⏸️] [⚙️] [🗑️]  │      │
-│  │ Next run: Today 9:00 AM              |      │
-│  │ Executed: 12 times | Avg cost: $2,847|      │
-│  │                                      |      │
-│  │ ▓▓▓▓▓▓▓▓░░░░ Running (67%)           |      │
-│  └──────────────────────────────────────┘      │
-│                                                │
-│  ┌──────────────────────────────────────┐      │
-│  │ ⚡ Arbitrage Hunter   [▶️] [⚙️] [🗑️]   │      │
-│  │ Status: Monitoring                   |      │
-│  │ Opportunities found: 3 (1 executed)  |      │
-│  └──────────────────────────────────────┘      │
-│                                                │
-│  [+ Create New Strategy]                       │
-└────────────────────────────────────────────────┘
-```
-
----
-
-### **5. Multi-Chain Portfolio View**
-
-**Unified view across chains:**
-
-```
-┌─ All Assets ────────────────────────────────-───┐
-│                                                 │
-│  Chain: [All ▼] | Type: [All ▼] | Sort: [Value] │
-│                                                 │
-│  ┌──────────────────────────────────────┐       │
-│  │ ETH   Ethereum                       │       │
-│  │ 1.234 ETH          $3,456.78         │       │
-│  │ [Send] [Swap] [Bridge]               │       │
-│  └──────────────────────────────────────┘       │
-│                                                 │
-│  ┌──────────────────────────────────────┐       │
-│  │ USDC  Arbitrum                       │       │
-│  │ 2,500 USDC         $2,500.00         │       │
-│  │ [Send] [Swap] [Bridge]               │       │
-│  └──────────────────────────────────────┘       │
-│                                                 │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-### **6. Transaction Approval Modal (Human-in-Loop)**
-
-**Critical for trust:**
-
-```
-┌─ Approve Transaction ──────────────────────────┐
-│                                                │
-│  🤖 AI Agent wants to execute:                 │
-│                                                │
-│  Action: Swap USDC → ETH                       │
-│  Amount: 500 USDC (~0.175 ETH)                 │
-│  Chain: Arbitrum                               │
-│  Slippage: 0.5%                                │
-│  Gas: ~$0.42                                   │
-│                                                │
-│  Reason:                                       │
-│  "ETH price dipped below your target $2,850.   │
-│  Executing DCA strategy as planned."           │
-│                                                │
-│  Privacy: [🔒 Private Transaction] ←Toggle     │
-│                                                │
-│  ⚠️ This will be executed within 30 seconds    │
-│                                                │
-│  [❌ Reject]              [✅ Approve]         │
-│                                                │
-│  [ ] Don't ask again for this strategy         │
-└────────────────────────────────────────────────┘
-```
-
----
-
-## **🎨 Visual Design System**
-
-### **Color Palette (Dark Theme Primary)**
+### Dark theme
 
 ```css
-/* Primary - Privacy & Security */
---bg-primary: #0a0a0f;      /* Deep dark */
---bg-secondary: #14141a;    /* Card backgrounds */
---bg-tertiary: #1e1e28;     /* Hover states */
+--bg-primary: #000000;
+--bg-secondary: #09090b;
+--bg-tertiary: #18181b;
+--bg-elevated: rgba(9, 9, 11, 0.9);
 
-/* Accents - Trust & Action */
---accent-purple: #8b5cf6;   /* Primary CTA */
---accent-blue: #3b82f6;     /* Info */
---accent-green: #10b981;    /* Success/Profit */
---accent-red: #ef4444;      /* Danger/Loss */
+--accent-purple: #8b5cf6;
+--accent-blue: #3b82f6;
+--accent-green: #059669;
+--accent-amber: #d97706;
+--accent-red: #dc2626;
 
-/* Text */
 --text-primary: #f8fafc;
 --text-secondary: #94a3b8;
 --text-tertiary: #64748b;
-
-/* Privacy Indicators */
---privacy-on: #8b5cf6;      /* Purple glow */
---privacy-off: #64748b;     /* Gray */
 ```
 
-### **Typography**
+### Light theme
 
-```css
-/* Headings */
-font-family: 'Inter', system-ui;
---h1: 32px/40px  font-weight: 700;
---h2: 24px/32px  font-weight: 600;
+The app also supports a light theme through `html[data-theme="light"]`, but dark remains the dominant design mode and should remain the reference when designing new surfaces.
 
-/* Body */
---body: 16px/24px  font-weight: 400;
---small: 14px/20px font-weight: 400;
+### Usage guidance
 
-/* Monospace for numbers/addresses */
-font-family: 'JetBrains Mono', monospace;
-```
+- use **purple** as the primary identity/action accent
+- use **green** for positive/confirmed states
+- use **amber** for warning/caution states
+- use **red** for destructive/failure states
+- avoid adding bright accent colors that compete with the purple system
 
 ---
 
-## **✨ Key Animations & Interactions**
+## Typography
 
-### **1. Agent Thinking Animation**
+The active token file currently uses:
 
-```jsx
-// Pulsing dots when AI is processing
-<div className="flex gap-1">
-  <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-  <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse delay-75" />
-  <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse delay-150" />
-</div>
-```
+- **Manrope** for primary UI text
+- **JetBrains Mono** for mono text, numbers, and technical values
 
-### **2. Privacy Shield Toggle**
+### Typography behavior
 
-```jsx
-// Glowing effect when privacy mode enabled
-<button className={`
-  relative transition-all
-  ${privacyOn ? 'shadow-lg shadow-purple-500/50 scale-105' : ''}
-`}>
-  🔒 {privacyOn ? 'Private' : 'Public'}
-</button>
-```
-
-### **3. Balance Count-Up**
-
-```jsx
-// Numbers smoothly animate when balance changes
-<CountUp end={12345.67} duration={1.5} prefix="$" decimals={2} />
-```
-
-### **4. Micro-interactions**
-
-- **Hover cards** - Slight lift + shadow
-- **Button press** - Scale down (0.95)
-- **Success states** - Confetti/checkmark animation
-- **Loading states** - Skeleton screens (not spinners)
+- large headings should stay reserved for page anchors and important status panels
+- body text should remain compact
+- meta text and labels often use mono or uppercase tracking for an operator-console feel
+- addresses, balances, and machine-like values benefit from mono styling
 
 ---
 
-## **🔔 Notifications & System Tray**
+## Motion And Interaction
 
-### **In-App Notifications**
+Motion exists to support clarity, not decoration.
 
-```
-┌─ Notification Toast ───────────────────────────┐
-│ ⚡ Strategy Executed                            │
-│ Bought 0.01 ETH for $28.50                     │
-│ [View Transaction]                    [Dismiss]│
-└────────────────────────────────────────────────┘
-```
+### Current interaction patterns
 
-### **System Tray (macOS Menu Bar)**
+- route transitions use short fade/translate motion
+- sheets and drawers slide in with controlled spring motion
+- success feedback is brief and localized
+- toasts are lightweight and non-blocking
 
-```
-🔒 SHADOW
-├─ Portfolio: $12,345.67 (+2.3%)
-├─ Agent: Active
-├─ Last Action: 2 min ago
-├─────────────────
-├─ Show Window
-├─ Pause Agent
-└─ Quit
-```
+### Rules
+
+- keep motion short and responsive
+- avoid cinematic transitions
+- use animation to reinforce state changes, not to entertain
+- prefer subtle reveal and confirmation patterns over looping effects
 
 ---
 
-## **📱 Component Library (shadcn/ui + Custom)**
+## Key UX Surfaces
 
-**Install these:**
+## 1. Top Bar
 
-```bash
-npx shadcn@latest add button card dialog dropdown-menu
-npx shadcn@latest add table tabs toast badge avatar
-```
+The top bar should remain minimal and utility-focused.
 
-**Custom Components to Build:**
+### Current contents
 
-1. `ChainPill` - Multi-chain indicator
-2. `PrivacyToggle` - Shield with glow effect
-3. `AgentMessage` - Chat bubble with actions
-4. `StrategyCard` - Visual workflow preview
-5. `ApprovalModal` - Transaction review dialog
-6. `PortfolioChart` - Sparkline with tooltips
+- SHADOW mark
+- session indicator
+- command/search trigger
+
+### Behavior
+
+- drag area support for Tauri desktop windowing
+- command palette shortcut hint
+- no crowded action row
+
+## 2. Bottom Dock
+
+The dock is the primary navigation control.
+
+### Design requirements
+
+- fixed near the bottom center
+- clearly highlights the active destination
+- compact icon + label format
+- should feel stable and always available
+
+## 3. Agent Workspace
+
+The agent page is one of the most important UX surfaces.
+
+### Current structure
+
+- optional thread sidebar/drawer
+- full-height chat workspace
+- bottom-anchored chat input
+- inline cards for approvals, tool results, decisions, and strategy proposals
+
+### UX goals
+
+- keep the input anchored
+- let messages scroll independently
+- make agent state understandable without reading long paragraphs
+- never hide approval-critical information
+
+## 4. Portfolio
+
+The portfolio pages should feel operational, not decorative.
+
+### Important patterns
+
+- filters and wallet selectors should be easy to scan
+- asset rows should prioritize symbol, chain, value, and action affordances
+- actions like send/swap/bridge must visually distinguish between real and preview-only flows where relevant
+
+## 5. Strategy Builder
+
+The strategy builder uses a pipeline-style mental model rather than a sprawling node-graph experience.
+
+### Goals
+
+- reduce visual chaos
+- make sequence and guardrails easy to understand
+- keep inspection and simulation close to the draft
+
+## 6. Autonomous Dashboard
+
+This surface behaves like an operations console.
+
+### Current sections
+
+- tasks
+- health
+- opportunities
+- guardrails
+- control panel
+
+### UX goals
+
+- emphasize system state and risk
+- make approval bottlenecks obvious
+- separate monitoring from actual execution
 
 ---
 
-## **🎯 UX Principles**
+## Approval UX
 
-### **1. Progressive Disclosure**
+Approval design is one of the most important trust surfaces in the app.
 
-- **Simple by default** - Hide advanced features
-- **Power users** - Collapse panels for pro mode
+### Principles
 
-### **2. Zero Empty States**
+- approvals must be explicit
+- reason, action, amount, chain, and timing should be visible
+- the UI must not imply execution already happened if it did not
+- rejection must feel safe and normal, not hidden
 
-- **First launch** - Show demo strategies & sample data
-- **Empty wallet** - "Add funds" CTA with helpful copy
+### Current pattern
 
-### **3. Confidence Through Clarity**
+- agent or signal produces a pending approval
+- UI opens the approval modal or inline approval surface
+- user approves or rejects
+- the app then shows outcome feedback
 
-- **Always show** - Gas costs before approval
-- **Never hide** - What the AI is doing (transparency)
+### Documentation rule
 
-### **4. Accessibility**
-
-- **Keyboard shortcuts** - Cmd+K command palette
-- **Focus states** - Clear tab navigation
-- **Color blind safe** - Don't rely only on color
+When a flow is only preview-capable, the UI copy and docs should not overstate it as fully executed.
 
 ---
+
+## Notifications And Feedback
+
+Current notification behavior is intentionally lightweight.
+
+### Surfaces
+
+- toast notifications
+- floating activity bell
+- approval success feedback
+- panic/critical modal for severe alerts
+
+### Guidelines
+
+- notify users about real status transitions
+- prefer route-linked notifications for actionable follow-up
+- keep wording direct and specific
+- avoid spammy background chatter
+
+---
+
+## Empty States And First-Run Experience
+
+The app includes onboarding and setup-oriented flows rather than dropping the user into a blank shell.
+
+### Current expectations
+
+- onboarding helps establish agent memory/persona/setup
+- Ollama setup is surfaced when the local AI environment is incomplete
+- wallet empty states should point clearly to create/import actions
+
+### Guidance
+
+- empty states should be helpful, not verbose
+- they should reduce confusion without inventing fake capability
+
+---
+
+## Accessibility And Usability
+
+### Baseline expectations
+
+- keyboard access should remain functional
+- `Cmd+K` / `Ctrl+K` command palette behavior should stay reliable
+- focus states should remain visible
+- information should not depend on color alone
+- text density should remain readable despite the compact design
+
+### Desktop-specific considerations
+
+- drag regions must not interfere with interactive controls
+- modal and sheet interactions should feel native in a desktop app context
+
+---
+
+## Component Guidance
+
+### Preferred base
+
+- shadcn/ui primitives
+- Tailwind utility styling
+- shared app tokens from `design-tokens.css`
+
+### Custom components that define the brand
+
+- `Dock`
+- `MinimalTopBar`
+- `ApprovalModal`
+- `ActivityBell`
+- `SessionIndicator`
+- `AgentMessage`
+- `ThreadSidebar`
+- `StrategyPipelineView`
+- `PortfolioChart`
+
+### Rules for new components
+
+- keep responsibilities narrow
+- prefer composition over giant all-in-one panels
+- avoid introducing alternate visual systems for a single page
+- match the compact spacing and radius system already in use
+
+---
+
+## What To Avoid
+
+- large rounded consumer-fintech cards that clash with the current shell
+- bright multi-accent color systems
+- oversized typography
+- floating controls that duplicate dock or top-bar responsibilities
+- buried approval details
+- UI copy that implies unsupported execution capability
+- page-specific themes that break the global app identity
+
+---
+
+## Current UX Direction In One Sentence
+
+SHADOW should feel like a compact, trustworthy desktop operations console for privacy-first DeFi, where the user always knows what the system is thinking, what is actually possible, and what still requires their approval.
 
