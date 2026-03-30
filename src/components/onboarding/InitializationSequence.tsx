@@ -3,10 +3,7 @@ import { useEffect } from "react";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 
 import { Step0Welcome } from "./steps/Step0Welcome";
-import { Step1HowItWorks } from "./steps/Step1HowItWorks";
-import { Step3Uplink } from "./steps/Step3Uplink";
-import { Step3Persona } from "./steps/Step3Persona";
-import { Step4RiskProfile } from "./steps/Step4RiskProfile";
+import { StepQuickSetup } from "./steps/StepQuickSetup";
 import { Step5MemorySeeds } from "./steps/Step5MemorySeeds";
 import { Step6Vault } from "./steps/Step4Vault";
 import { Step7Deployment } from "./steps/Step5Deployment";
@@ -30,33 +27,24 @@ export function InitializationSequence() {
 
   if (hasCompleted && !isReplay) return null;
 
-  // Total steps: 8 (0-7)
+  // Streamlined 5-step flow:
   // 0: Welcome
-  // 1: How It Works
-  // 2: Uplink (API keys)
-  // 3: Persona
-  // 4: Risk Profile
-  // 5: Memory Seeds
-  // 6: Vault
-  // 7: Deployment
+  // 1: Quick Setup (Persona + Risk + Chains combined)
+  // 2: Preferences (optional - experience, goals, constraints)
+  // 3: Vault (wallet)
+  // 4: Deployment
 
   const renderStep = () => {
     switch (currentStep) {
       case 0:
         return <Step0Welcome />;
       case 1:
-        return <Step1HowItWorks />;
+        return <StepQuickSetup />;
       case 2:
-        return <Step3Uplink />;
-      case 3:
-        return <Step3Persona />;
-      case 4:
-        return <Step4RiskProfile />;
-      case 5:
         return <Step5MemorySeeds />;
-      case 6:
+      case 3:
         return <Step6Vault />;
-      case 7:
+      case 4:
         return <Step7Deployment />;
       default:
         return <Step0Welcome />;
@@ -83,7 +71,7 @@ export function InitializationSequence() {
 
       {/* Progress Indicators */}
       <div className="absolute top-8 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((step) => (
+        {[0, 1, 2, 3, 4].map((step) => (
           <div
             key={step}
             className={`h-1 rounded-sm transition-all duration-100 ease-out ${
@@ -101,7 +89,7 @@ export function InitializationSequence() {
       {isReplay && (
         <div className="absolute top-20 left-1/2 z-20 -translate-x-1/2">
           <span className="rounded-sm bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            Updating your configuration
+            Updating configuration
           </span>
         </div>
       )}
@@ -114,7 +102,7 @@ export function InitializationSequence() {
             initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="flex h-full w-full items-center justify-center"
           >
             {renderStep()}

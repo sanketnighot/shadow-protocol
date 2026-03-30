@@ -2,7 +2,10 @@ import { motion } from "framer-motion";
 import { CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useWalletStore } from "@/store/useWalletStore";
 import { AGENT_WELCOME_MESSAGES, PERSONA_ARCHETYPES } from "@/constants/personaArchetypes";
+import { updateAgentSoul } from "@/lib/agent";
+import { useToast } from "@/hooks/useToast";
 
 const CHECKS = [
   { text: "Initializing secure database...", type: "system" as const },
@@ -18,11 +21,33 @@ export function Step7Deployment() {
   const agentConfig = useOnboardingStore((s) => s.agentConfig);
   const isReplay = useOnboardingStore((s) => s.isReplay);
   const cancelReplay = useOnboardingStore((s) => s.cancelReplay);
+  const addresses = useWalletStore((s) => s.addresses);
+  const { success, warning } = useToast();
 
   const [activeCheck, setActiveCheck] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const allDone = activeCheck === CHECKS.length - 1;
+
+  // Persist config to backend
+  const persistConfig = async () => {
+    if (!agentConfig) return;
+    setIsSaving(true);
+    try {
+      await updateAgentSoul({
+        risk_appetite: agentConfig.riskAppetite,
+        preferred_chains: agentConfig.preferredChains,
+        persona: agentConfig.personaText,
+        custom_rules: agentConfig.constraints.custom,
+      });
+      success("Agent configured", "Your Shadow's preferences have been saved.");
+    } catch (e) {
+      warning("Save failed", "Agent config could not be saved. You can update it later in Settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (activeCheck < CHECKS.length - 1) {
@@ -31,6 +56,8 @@ export function Step7Deployment() {
       }, 600);
       return () => clearTimeout(timer);
     } else if (activeCheck === CHECKS.length - 1 && !showWelcome) {
+      // Persist config when animation completes
+      void persistConfig();
       const timer = setTimeout(() => {
         setShowWelcome(true);
       }, 400);
@@ -41,6 +68,7 @@ export function Step7Deployment() {
   const personaId = agentConfig?.persona || "custom";
   const personaName = PERSONA_ARCHETYPES.find((p) => p.id === personaId)?.name || "Your Shadow";
   const welcomeMessage = AGENT_WELCOME_MESSAGES[personaId] || AGENT_WELCOME_MESSAGES.custom;
+  const hasWallet = addresses.length > 0;
 
   const handleComplete = () => {
     if (isReplay) {
@@ -128,6 +156,9 @@ export function Step7Deployment() {
             </div>
             <p className="text-lg font-semibold text-foreground">{personaName}</p>
             <p className="mt-2 text-sm italic text-muted">"{welcomeMessage}"</p>
+            {!hasWallet && (
+              <p className="mt-2 text-xs text-amber-400">No wallet connected - you can add one in Settings.</p>
+            )}
           </motion.div>
         )}
       </motion.div>
@@ -140,13 +171,13 @@ export function Step7Deployment() {
       >
         <button
           onClick={handleComplete}
-          disabled={!allDone}
+          disabled={!allDone || isSaving}
           className="group relative flex items-center gap-3 overflow-hidden rounded-sm border border-primary/30 bg-primary/10 px-10 py-4 text-primary transition-all hover:bg-primary/20 hover:shadow-none active:scale-95 disabled:pointer-events-none border border-white/5"
         >
           <span className="relative z-10 font-mono font-bold tracking-widest uppercase">
-            {isReplay ? "Save Changes" : "Enter SHADOW Protocol"}
+            {isSaving ? "Saving..." : isReplay ? "Save Changes" : "Enter SHADOW Protocol"}
           </span>
-          <ChevronRight className="relative z-10 size-5 transition-transform group-hover:translate-x-1" />
+          {!isSaving && <ChevronRight className="relative z-10 size-5 transition-transform group-hover:translate-x-1" />}
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100 group-hover:animate-[scanline_2s_linear_infinite]" />
         </button>
       </motion.div>

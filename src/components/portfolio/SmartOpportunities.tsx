@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Lightbulb, ArrowRight, TrendingUp, Zap, Gift, Wallet } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMarketOpportunities } from "@/hooks/useMarketOpportunities";
 import { useWalletStore } from "@/store/useWalletStore";
 
@@ -79,14 +78,14 @@ export function SmartOpportunities() {
           ? Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={`skeleton-${i}`}
-                className="flex w-[280px] shrink-0 flex-col justify-between rounded-sm border border-border bg-surface-elevated p-4"
+                className="flex w-[280px] shrink-0 flex-col justify-between rounded-sm border border-border bg-surface-elevated p-4 animate-pulse"
               >
                 <div>
-                  <Skeleton className="mb-3 size-10 rounded-sm" />
-                  <Skeleton className="mb-2 h-4 w-24" />
-                  <Skeleton className="h-8 w-full" />
+                  <div className="mb-3 size-10 rounded-sm bg-secondary" />
+                  <div className="mb-2 h-4 w-24 rounded bg-secondary" />
+                  <div className="h-8 w-full rounded bg-secondary" />
                 </div>
-                <Skeleton className="mt-4 h-4 w-20" />
+                <div className="mt-4 h-4 w-20 rounded bg-secondary" />
               </div>
             ))
           : opportunities.map((opp) => (
