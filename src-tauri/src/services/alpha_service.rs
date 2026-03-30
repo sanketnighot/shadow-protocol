@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::time::interval;
 use serde::Serialize;
 use reqwest::Client;
-use tracing::error;
+use tracing::{error, warn, info};
 
 use super::sonar_client;
 use super::ollama_client;
@@ -13,6 +13,7 @@ use super::market_service::MarketOpportunity;
 use crate::services::agent_state::{read_soul, read_memory};
 
 const ALPHA_INTERVAL_SECS: u64 = 86400; // 24 hours
+const FIRST_RUN_LOG_DELAY_SECS: u64 = 10; // Delay first cycle
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,24 +26,53 @@ pub struct ShadowBrief {
 
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        // Delay first cycle to allow app initialization
+        tokio::time::sleep(Duration::from_secs(FIRST_RUN_LOG_DELAY_SECS)).await;
+
         let mut timer = interval(Duration::from_secs(ALPHA_INTERVAL_SECS));
         let client = Client::new();
+        let mut has_logged_skip = false;
 
         loop {
             timer.tick().await;
 
-            if let Err(e) = run_alpha_cycle(&app, &client).await {
-                error!("alpha_service.cycle_failed: {}", e);
+            match run_alpha_cycle(&app, &client).await {
+                Ok(()) => {
+                    has_logged_skip = false;
+                }
+                Err(e) => {
+                    if is_expected_failure(&e) {
+                        if !has_logged_skip {
+                            warn!("alpha_service skipped: {}", e);
+                            has_logged_skip = true;
+                        }
+                    } else {
+                        error!("alpha_service.cycle_failed: {}", e);
+                        has_logged_skip = false;
+                    }
+                }
             }
         }
     });
+}
+
+/// Check if an error is an "expected" failure that doesn't need ERROR level logging
+fn is_expected_failure(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("not running")
+        || lower.contains("no models")
+        || lower.contains("missing perplexity api key")
+        || lower.contains("missing api key")
+        || lower.contains("not configured")
+        || lower.contains("connection refused")
+        || lower.contains("timeout")
 }
 
 async fn run_alpha_cycle(app: &AppHandle, client: &Client) -> Result<(), String> {
     // 1. Check Ollama status and get available models
     let status = crate::commands::check_ollama_status().await?;
     if !status.running || status.models.is_empty() {
-        return Err("Ollama not running or no models installed".into());
+        return Err("Ollama not running or no models installed".to_string());
     }
 
     // Use the first available model (ideally we would pull the user's preference from settings)
@@ -52,7 +82,11 @@ async fn run_alpha_cycle(app: &AppHandle, client: &Client) -> Result<(), String>
     let query = "Top 3 DeFi yield opportunities and critical market catalysts today.";
     let news = match sonar_client::search(query).await {
         Ok(n) => n,
-        Err(_) => "No market news available.".into(),
+        Err(e) => {
+            info!("alpha_service: Skipping market research - {}", e);
+            // Continue without news - it's optional for the brief
+            String::new()
+        }
     };
 
     // 3. Read soul and memory for personalized context

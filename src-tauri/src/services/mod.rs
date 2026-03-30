@@ -1,15 +1,21 @@
 pub mod apps;
 pub mod agent_chat;
+pub mod agent_orchestrator;
 pub mod agent_state;
 pub mod anonymizer;
 pub mod audit;
+pub mod behavior_learner;
 pub mod chain;
-pub mod local_db;
+pub mod guardrails;
+pub mod health_monitor;
 pub mod heartbeat;
+pub mod local_db;
 pub mod market_actions;
 pub mod market_provider;
 pub mod market_ranker;
 pub mod market_service;
+pub mod opportunity_scanner;
+pub mod task_manager;
 pub mod wallet_sync;
 pub mod ollama_client;
 pub mod portfolio_service;
@@ -26,3 +32,4 @@ pub mod sonar_client;
 pub mod tool_registry;
 pub mod tool_router;
 pub mod tools;
+
