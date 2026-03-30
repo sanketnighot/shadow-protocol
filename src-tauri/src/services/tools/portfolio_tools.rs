@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
+use tauri::AppHandle;
 
 use crate::services::portfolio_service;
 
@@ -17,8 +18,8 @@ pub struct WalletBalanceItem {
     pub wallet_address: Option<String>,
 }
 
-pub async fn get_wallet_balances(address: &str) -> Result<Vec<WalletBalanceItem>, String> {
-    let assets = portfolio_service::fetch_balances(address)
+pub async fn get_wallet_balances(app: &AppHandle, address: &str) -> Result<Vec<WalletBalanceItem>, String> {
+    let assets = portfolio_service::fetch_balances_mixed(app, &[address.to_string()])
         .await
         .map_err(|e| e.to_string())?;
 
@@ -35,13 +36,11 @@ pub async fn get_wallet_balances(address: &str) -> Result<Vec<WalletBalanceItem>
 }
 
 pub async fn get_wallet_balances_multi(
+    app: &AppHandle,
     addresses: &[&str],
 ) -> Result<Vec<WalletBalanceItem>, String> {
-    let addrs: Vec<String> = addresses
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
-    let assets = portfolio_service::fetch_balances_multi(&addrs)
+    let addrs: Vec<String> = addresses.iter().map(|s| (*s).to_string()).collect();
+    let assets = portfolio_service::fetch_balances_mixed(app, &addrs)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -106,18 +105,19 @@ fn parse_amount_from_balance(balance: &str, symbol: &str) -> f64 {
     s.replace(',', "").parse().unwrap_or(0.0)
 }
 
-pub async fn get_total_portfolio_value(address: &str) -> Result<TotalPortfolioValue, String> {
-    let assets = portfolio_service::fetch_balances(address)
+pub async fn get_total_portfolio_value(app: &AppHandle, address: &str) -> Result<TotalPortfolioValue, String> {
+    let assets = portfolio_service::fetch_balances_mixed(app, &[address.to_string()])
         .await
         .map_err(|e| e.to_string())?;
     aggregate_to_total_portfolio_value(&assets, 1)
 }
 
 pub async fn get_total_portfolio_value_multi(
+    app: &AppHandle,
     addresses: &[&str],
 ) -> Result<TotalPortfolioValue, String> {
     let addrs: Vec<String> = addresses.iter().map(|s| (*s).to_string()).collect();
-    let assets = portfolio_service::fetch_balances_multi(&addrs)
+    let assets = portfolio_service::fetch_balances_mixed(app, &addrs)
         .await
         .map_err(|e| e.to_string())?;
     aggregate_to_total_portfolio_value(&assets, addresses.len() as u32)

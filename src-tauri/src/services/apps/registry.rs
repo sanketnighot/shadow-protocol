@@ -37,8 +37,8 @@ pub fn bundled_catalog() -> &'static [CatalogSeedRow] {
         CatalogSeedRow {
             id: "flow",
             name: "Flow",
-            short_description: "Flow account & sponsored transactions",
-            long_description: "Connect a Flow account and prepare sponsored Cadence transactions. Recurring flows are scheduled by SHADOW, not promised as a native Flow primitive.",
+            short_description: "Cadence Flow reads & transaction previews",
+            long_description: "Cadence-native portfolio reads via Flow access nodes; Flow EVM assets use Alchemy like other EVM chains. Sponsored Cadence execution is preview/approval-only until signing roles are fully integrated.",
             icon_key: "Waves",
             version: "1.0.0",
             author: "SHADOW (bundled)",

@@ -1,6 +1,8 @@
 //! Logic for autonomous strategy creation and drift calculation.
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+
 use crate::services::local_db;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,12 +49,14 @@ pub struct AssetDrift {
 }
 
 pub async fn calculate_drift(
+    app: &AppHandle,
     target_allocations: Vec<local_db::TargetAllocation>,
     wallet_addresses: &[String],
 ) -> Result<DriftReport, String> {
-    let portfolio = super::portfolio_tools::get_total_portfolio_value_multi(
-        &wallet_addresses.iter().map(|s| s.as_str()).collect::<Vec<_>>()
-    ).await.map_err(|e| e.to_string())?;
+    let addrs: Vec<&str> = wallet_addresses.iter().map(|s| s.as_str()).collect();
+    let portfolio = super::portfolio_tools::get_total_portfolio_value_multi(app, &addrs)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let total_value: f64 = portfolio
         .total_usd

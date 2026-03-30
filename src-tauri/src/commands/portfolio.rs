@@ -4,21 +4,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use tauri::AppHandle;
 
-use crate::services::chain::{chain_code_to_display, chain_to_explorer_base, network_to_chain_display};
+use crate::services::chain::{chain_code_to_display, chain_to_explorer_base};
+use crate::services::flow_domain::{is_cadence_flow_address, normalize_stored_wallet_token_chain};
 use crate::services::local_db;
 use crate::services::portfolio_service::{self, PortfolioAsset, PortfolioError};
 
-/// Check if an address looks like a Flow address (8 bytes / 16 hex chars)
-fn looks_like_flow_address(address: &str) -> bool {
-    let addr = address.strip_prefix("0x").unwrap_or(address);
-    // Flow addresses are 8 bytes = 16 hex characters
-    addr.len() == 16 && addr.chars().all(|c| c.is_ascii_hexdigit())
-}
 
 fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
     rows.into_iter()
         .map(|r| {
-            let chain_name = chain_code_to_display(&r.chain).to_string();
+            let chain = normalize_stored_wallet_token_chain(&r.chain, &r.wallet_address);
+            let chain_name = chain_code_to_display(&chain).to_string();
             let asset_type = if r.asset_type == "stablecoin" {
                 "stablecoin"
             } else {
@@ -27,7 +23,7 @@ fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
             PortfolioAsset {
                 id: r.id,
                 symbol: r.symbol,
-                chain: r.chain,
+                chain,
                 chain_name,
                 balance: r.balance,
                 value_usd: r.value_usd,
@@ -57,32 +53,17 @@ pub async fn portfolio_fetch_balances(
     }
 
     // Determine if this is a Flow address
-    let is_flow = chain.as_ref()
+    let is_flow = chain
+        .as_ref()
         .map(|c| c == "FLOW" || c == "FLOW-TEST")
         .unwrap_or(false)
-        || looks_like_flow_address(&address);
+        || is_cadence_flow_address(&address);
 
     tracing::info!("Address {} looks like Flow: {}", address, is_flow);
 
     if is_flow {
-        tracing::info!("Fetching Flow balances for {}", address);
-        match crate::services::apps::flow::fetch_balances(&app, &address).await {
-            Ok(flow_data) => {
-                tracing::info!("Flow data received: {:?}", flow_data);
-                let assets = convert_flow_assets(flow_data, &address);
-                tracing::info!("Converted {} Flow assets", assets.len());
-                if !assets.is_empty() {
-                    return Ok(assets);
-                }
-                // If no assets but Flow call succeeded, return empty (don't fallback to Alchemy)
-                return Ok(vec![]);
-            }
-            Err(e) => {
-                tracing::error!("Failed to fetch Flow balances: {}", e);
-                // Return error instead of falling through to Alchemy for Flow addresses
-                return Err(PortfolioError::FetchFailed(format!("Flow fetch failed: {}", e)));
-            }
-        }
+        tracing::info!("Fetching Flow / mixed balances for {}", address);
+        return portfolio_service::fetch_balances_mixed(&app, std::slice::from_ref(&address)).await;
     }
 
     // Fallback to Alchemy for EVM chains
@@ -90,63 +71,29 @@ pub async fn portfolio_fetch_balances(
     portfolio_service::fetch_balances(&address).await
 }
 
-/// Convert Flow assets to PortfolioAsset format
-fn convert_flow_assets(flow_data: serde_json::Value, address: &str) -> Vec<PortfolioAsset> {
-    let mut assets = Vec::new();
-
-    if let Some(data_obj) = flow_data.get("data").and_then(|d| d.get("assets")) {
-        if let Some(assets_arr) = data_obj.as_array() {
-            for asset in assets_arr {
-                let symbol = asset.get("symbol")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("FLOW")
-                    .to_string();
-                let balance = asset.get("balance")
-                    .and_then(|b| b.as_str())
-                    .unwrap_or("0")
-                    .to_string();
-                let chain = asset.get("chain")
-                    .and_then(|c| c.as_str())
-                    .unwrap_or("flow-testnet")
-                    .to_string();
-                let decimals = asset.get("decimals")
-                    .and_then(|d| d.as_i64())
-                    .unwrap_or(8) as u8;
-
-                let (chain_name, chain_code) = network_to_chain_display(&chain);
-
-                assets.push(PortfolioAsset {
-                    id: format!("{}-{}-{}", address, chain_code.to_lowercase(), symbol.to_lowercase()),
-                    symbol,
-                    chain: chain_code.to_string(),
-                    chain_name: chain_name.to_string(),
-                    balance,
-                    value_usd: "$0.00".to_string(),
-                    asset_type: "native".to_string(),
-                    token_contract: String::new(),
-                    decimals,
-                    wallet_address: Some(address.to_string()),
-                });
-            }
-        }
-    }
-
-    assets
-}
-
 #[tauri::command]
 pub async fn portfolio_fetch_balances_multi(
     addresses: Vec<String>,
+    app: AppHandle,
 ) -> Result<Vec<PortfolioAsset>, PortfolioError> {
     if addresses.is_empty() {
         return Ok(Vec::new());
     }
-    if let Ok(rows) = local_db::get_tokens_for_wallets(&addresses) {
-        if !rows.is_empty() {
-            return Ok(token_rows_to_assets(rows));
+    // Per-wallet cache: if *any* wallet had rows we used to return early and **dropped** wallets
+    // with no cached rows (e.g. a newly added `0x` address).
+    let mut combined: Vec<PortfolioAsset> = Vec::new();
+    let mut need_live: Vec<String> = Vec::new();
+    for addr in &addresses {
+        match local_db::get_tokens_for_wallets(std::slice::from_ref(addr)) {
+            Ok(rows) if !rows.is_empty() => combined.extend(token_rows_to_assets(rows)),
+            _ => need_live.push(addr.clone()),
         }
     }
-    portfolio_service::fetch_balances_multi(&addresses).await
+    if !need_live.is_empty() {
+        let fresh = portfolio_service::fetch_balances_mixed(&app, &need_live).await?;
+        combined.extend(fresh);
+    }
+    Ok(combined)
 }
 
 #[derive(Debug, Clone, Serialize)]

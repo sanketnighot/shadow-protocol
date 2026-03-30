@@ -1,15 +1,53 @@
 //! Flow adapter — account status, balance fetching, and sponsored transaction preparation (sidecar).
+//! Read-only operations do not forward session key material to the sidecar.
 
 use tauri::AppHandle;
 
 use super::runtime::{invoke_sidecar, RuntimeRequest};
+use super::state::get_app_config_json;
+
+/// Cadence account from Flow app settings (`cadenceAddress`, or legacy `accountHint` if 16-hex).
+/// Ignores `accountHint` when it is an EVM `0x` address.
+pub fn configured_cadence_address() -> Option<String> {
+    let raw = get_app_config_json("flow").ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let s = v
+        .get("cadenceAddress")
+        .and_then(|x| x.as_str())
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .or_else(|| {
+            v.get("accountHint")
+                .and_then(|x| x.as_str())
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+        })?;
+    if crate::services::flow_domain::is_flow_evm_style_address(s) {
+        return None;
+    }
+    let stripped = s.strip_prefix("0x").unwrap_or(s);
+    if stripped.len() == 16 && stripped.chars().all(|c| c.is_ascii_hexdigit()) {
+        Some(stripped.to_ascii_lowercase())
+    } else {
+        None
+    }
+}
+
+fn flow_saved_network() -> String {
+    let Ok(raw) = get_app_config_json("flow") else {
+        return "testnet".to_string();
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return "testnet".to_string();
+    };
+    match v.get("network").and_then(|n| n.as_str()) {
+        Some("mainnet") => "mainnet".to_string(),
+        _ => "testnet".to_string(),
+    }
+}
 
 pub async fn account_status(app: &AppHandle) -> Result<serde_json::Value, String> {
-    let api_key = crate::session::get_unlocked_key()
-        .map(|z| z.to_string())
-        .unwrap_or_default();
-
-    tracing::info!("Flow account_status called");
+    let network = flow_saved_network();
 
     let res = invoke_sidecar(
         app,
@@ -17,7 +55,7 @@ pub async fn account_status(app: &AppHandle) -> Result<serde_json::Value, String
             op: "flow.account_status".to_string(),
             app_id: "flow".to_string(),
             payload: serde_json::json!({
-                "apiKey": api_key,
+                "network": network,
             }),
         },
     )
@@ -29,19 +67,18 @@ pub async fn account_status(app: &AppHandle) -> Result<serde_json::Value, String
     if res.ok {
         Ok(res.data)
     } else {
-        let err = res.error_message.clone().unwrap_or_else(|| "Flow adapter error".to_string());
+        let err = res
+            .error_message
+            .clone()
+            .unwrap_or_else(|| "Flow adapter error".to_string());
         tracing::error!("Flow account_status error: {}", err);
         Err(err)
     }
 }
 
-/// Fetch Flow account balances using Flow's REST API
+/// Fetch Cadence-native Flow balances via the apps runtime (REST access node).
 pub async fn fetch_balances(app: &AppHandle, address: &str) -> Result<serde_json::Value, String> {
-    let api_key = crate::session::get_unlocked_key()
-        .map(|z| z.to_string())
-        .unwrap_or_default();
-
-    tracing::info!("Flow fetch_balances called for address: {}", address);
+    let network = flow_saved_network();
 
     let res = invoke_sidecar(
         app,
@@ -50,7 +87,7 @@ pub async fn fetch_balances(app: &AppHandle, address: &str) -> Result<serde_json
             app_id: "flow".to_string(),
             payload: serde_json::json!({
                 "address": address,
-                "apiKey": api_key,
+                "network": network,
             }),
         },
     )
@@ -60,12 +97,13 @@ pub async fn fetch_balances(app: &AppHandle, address: &str) -> Result<serde_json
         e.to_string()
     })?;
 
-    tracing::info!("Flow fetch_balances response: ok={}, data={:?}", res.ok, res.data);
-
     if res.ok {
         Ok(res.data)
     } else {
-        let err = res.error_message.clone().unwrap_or_else(|| "Failed to fetch Flow balances".to_string());
+        let err = res
+            .error_message
+            .clone()
+            .unwrap_or_else(|| "Failed to fetch Flow balances".to_string());
         tracing::error!("Flow fetch_balances error: {}", err);
         Err(err)
     }
@@ -79,10 +117,12 @@ pub async fn prepare_sponsored_transaction(
         .map(|z| z.to_string())
         .unwrap_or_default();
 
-    // clone the proposal so we can inject the api key into it
+    let network = flow_saved_network();
+
     let mut payload = proposal.clone();
     if let Some(obj) = payload.as_object_mut() {
         obj.insert("apiKey".to_string(), serde_json::json!(api_key));
+        obj.insert("network".to_string(), serde_json::json!(network));
     }
 
     let res = invoke_sidecar(

@@ -270,10 +270,7 @@ pub async fn get_pending_tasks() -> TasksResult {
         }
     };
 
-    let stats = match task_manager::get_task_stats() {
-        Ok(s) => s,
-        Err(_) => task_manager::TaskStats::default(),
-    };
+    let stats = task_manager::get_task_stats().unwrap_or_default();
 
     TasksResult {
         tasks: tasks.into_iter().map(TaskResponse::from).collect(),
