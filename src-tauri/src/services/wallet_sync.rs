@@ -405,11 +405,11 @@ pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, w
     // After a successful sync, capture a portfolio snapshot for historical tracking
     let addresses = crate::commands::get_addresses(&app);
     if !addresses.is_empty() {
-        let _h = app.clone();
+        let app_snap = app.clone();
         let market_addresses = addresses.clone();
         tokio::spawn(async move {
             let addrs_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
-            if let Ok(total) = super::tools::get_total_portfolio_value_multi(&addrs_refs).await {
+            if let Ok(total) = super::tools::get_total_portfolio_value_multi(&app_snap, &addrs_refs).await {
                 let top_assets = total.breakdown.iter().take(5).collect::<Vec<_>>();
                 let top_assets_json = serde_json::to_string(&top_assets).unwrap_or_else(|_| "[]".to_string());
                 let _ = local_db::insert_portfolio_snapshot(&total.total_usd, &top_assets_json);

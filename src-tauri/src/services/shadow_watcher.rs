@@ -83,7 +83,7 @@ async fn run_watcher_cycle(app: &AppHandle, client: &Client) -> Result<(), Strin
 
     // 2. Fetch current portfolio state from DB
     let addr_refs: Vec<&str> = addresses.iter().map(|s| s.as_str()).collect();
-    let portfolio = tools::get_total_portfolio_value_multi(&addr_refs)
+    let portfolio = tools::get_total_portfolio_value_multi(app, &addr_refs)
         .await
         .map_err(|e| e.to_string())?;
 

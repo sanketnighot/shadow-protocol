@@ -233,7 +233,7 @@ pub fn all_tools() -> Vec<ToolDef> {
         ToolDef {
             name: "flow_protocol_account_status",
             kind: ToolKind::Read,
-            description: "Requires Flow app. Read Flow account connectivity for sponsored transaction flows.",
+            description: "Requires Flow app. Reports Cadence access-node reachability for the configured Flow network (mainnet/testnet from app settings). Does not expose wallet keys.",
             parameters: r#"{"type": "object", "properties": {}}"#,
             execution_mode: ExecutionMode::ReadAuto,
             requires_wallet: false,
@@ -246,7 +246,7 @@ pub fn all_tools() -> Vec<ToolDef> {
         ToolDef {
             name: "flow_protocol_prepare_sponsored_transaction",
             kind: ToolKind::Write,
-            description: "Requires Flow app. Prepare a sponsored Flow transaction for user approval (SHADOW schedules recurring runs separately).",
+            description: "Requires Flow app. Returns a Cadence preview shell for approval workflow only — on-chain submit with proposer/payer/authorizer roles is not fully wired yet.",
             parameters: r#"{"type": "object", "properties": {"summary": {"type": "string"}, "cadenceNote": {"type": "string"}}, "required": ["summary"]}"#,
             execution_mode: ExecutionMode::ApprovalRequired,
             requires_wallet: false,

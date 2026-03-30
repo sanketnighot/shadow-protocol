@@ -323,10 +323,7 @@ pub fn get_preferences_map() -> HashMap<String, f64> {
     match get_all_preferences() {
         Ok(prefs) => prefs
             .into_iter()
-            .filter_map(|p| {
-                // Use confidence as preference strength
-                Some((p.preference_key, p.confidence))
-            })
+            .map(|p| (p.preference_key, p.confidence))
             .collect(),
         Err(_) => HashMap::new(),
     }

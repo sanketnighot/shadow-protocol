@@ -380,7 +380,7 @@ async fn run_task_generation_cycle() -> Result<u32, String> {
             created += 1;
 
             // Store reasoning chain
-            store_reasoning_chain(&gen).await;
+            store_reasoning_chain(gen).await;
         }
     }
 

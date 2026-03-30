@@ -166,9 +166,9 @@ pub async fn route_and_execute(
                     .filter(|s| !s.is_empty())
                     .collect();
                 let res = if addrs.is_empty() {
-                    get_wallet_balances(address).await
+                    get_wallet_balances(app, address).await
                 } else {
-                    get_wallet_balances_multi(&addrs).await
+                    get_wallet_balances_multi(app, &addrs).await
                 };
                 let res = res.map_err(|e| e.to_string())?;
                 let content = serde_json::to_string(&res).unwrap_or_else(|_| "[]".into());
@@ -184,9 +184,9 @@ pub async fn route_and_execute(
                     .filter(|s| !s.is_empty())
                     .collect();
                 let res = if addrs.is_empty() {
-                    get_total_portfolio_value(address).await
+                    get_total_portfolio_value(app, address).await
                 } else {
-                    get_total_portfolio_value_multi(&addrs).await
+                    get_total_portfolio_value_multi(app, &addrs).await
                 };
                 let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
                 ToolResult::ToolOutput {
@@ -332,7 +332,7 @@ pub async fn route_and_execute(
                         local_db::get_target_allocations().map_err(|e| e.to_string())?
                     };
 
-                match calculate_drift(target_allocs, wallet_addresses).await {
+                match calculate_drift(app, target_allocs, wallet_addresses).await {
                     Ok(res) => {
                         let content = serde_json::to_string(&res).unwrap_or_else(|_| "{}".into());
                         ToolResult::ToolOutput {

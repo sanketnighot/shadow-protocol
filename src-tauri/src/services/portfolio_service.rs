@@ -1,24 +1,162 @@
 //! Portfolio balance fetching via Alchemy. Shared by commands and agent tools.
+//! Cadence Flow balances are merged via the apps-runtime sidecar (`apps::flow`).
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
-use super::chain::network_to_chain_display;
+use super::chain::{chain_code_to_display, network_to_chain_display};
+use super::flow_domain::{cadence_account_key, is_cadence_flow_address, is_flow_evm_style_address};
 
 const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "base-mainnet", "polygon-mainnet"];
 const TESTNET_NETWORKS: &[&str] = &["eth-sepolia", "base-sepolia", "polygon-amoy"];
 const FLOW_MAINNET: &str = "flow-mainnet";
 const FLOW_TESTNET: &str = "flow-testnet";
 
-/// Build the list of networks to query, conditionally including Flow when installed.
-fn active_networks() -> Vec<&'static str> {
-    let mut nets: Vec<&str> = MAINNET_NETWORKS.iter().chain(TESTNET_NETWORKS.iter()).copied().collect();
-    let flow_ready = super::apps::state::is_tool_app_ready("flow").unwrap_or(false);
-    if flow_ready {
-        nets.push(FLOW_MAINNET);
-        nets.push(FLOW_TESTNET);
+/// Alchemy `data/v1/.../tokens/by-address` documents a **maximum of 5 networks per address**.
+const MAX_NETWORKS_PER_PORTFOLIO_REQUEST: usize = 5;
+
+fn core_evm_portfolio_networks() -> Vec<&'static str> {
+    MAINNET_NETWORKS.iter().chain(TESTNET_NETWORKS.iter()).copied().collect()
+}
+
+/// Flow EVM slugs for Portfolio API (best-effort; not gated on the Flow app so `0x` wallets see balances).
+fn flow_portfolio_networks() -> Vec<&'static str> {
+    vec![FLOW_MAINNET, FLOW_TESTNET]
+}
+
+/// Native FLOW on Flow EVM uses 18 decimals (standard EVM); Cadence FLOW uses 8.
+const FLOW_EVM_NATIVE_DECIMALS: u8 = 18;
+
+async fn post_alchemy_portfolio_tokens(
+    client: &Client,
+    api_key: &str,
+    address: &str,
+    networks: &[&str],
+) -> Result<Vec<AlchemyToken>, PortfolioError> {
+    if networks.is_empty() {
+        return Ok(Vec::new());
     }
-    nets
+
+    let url = format!(
+        "https://api.g.alchemy.com/data/v1/{}/assets/tokens/by-address",
+        api_key
+    );
+
+    let body = serde_json::json!({
+        "addresses": [{"address": address, "networks": networks}],
+        "withMetadata": true,
+        "withPrices": true,
+        "includeNativeTokens": true,
+        "includeErc20Tokens": true
+    });
+
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|_| PortfolioError::RequestFailed)?;
+
+    if !resp.status().is_success() {
+        return Err(PortfolioError::RequestFailed);
+    }
+
+    let body: AlchemyResponse = resp.json().await.map_err(|_| PortfolioError::RequestFailed)?;
+
+    if body.error.is_some() {
+        return Err(PortfolioError::RequestFailed);
+    }
+
+    Ok(body
+        .data
+        .and_then(|d| d.tokens)
+        .unwrap_or_default())
+}
+
+/// Best-effort `eth_getBalance` on Alchemy Flow EVM RPC (works when Portfolio omits Flow).
+async fn alchemy_flow_evm_native_balance_hex(
+    client: &Client,
+    api_key: &str,
+    network: &str,
+    address: &str,
+) -> Option<String> {
+    let url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1_u8,
+        "method": "eth_getBalance",
+        "params": [address, "latest"],
+    });
+    let resp = client.post(&url).json(&body).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let v: serde_json::Value = resp.json().await.ok()?;
+    if v.get("error").is_some() {
+        return None;
+    }
+    v.get("result")
+        .and_then(|r| r.as_str())
+        .map(std::string::ToString::to_string)
+}
+
+fn has_flow_evm_native_flow_asset(assets: &[PortfolioAsset], chain_code: &str) -> bool {
+    assets.iter().any(|a| {
+        a.chain == chain_code
+            && a.symbol == "FLOW"
+            && a.token_contract.trim().is_empty()
+    })
+}
+
+async fn merge_flow_evm_native_via_alchemy_rpc(
+    assets: &mut Vec<PortfolioAsset>,
+    address: &str,
+    client: &Client,
+    api_key: &str,
+) {
+    let price = get_token_price_usd("FLOW").await.unwrap_or(0.0);
+
+    let pairs = [
+        (FLOW_MAINNET, "FLOW-EVM", "Flow EVM"),
+        (FLOW_TESTNET, "FLOW-EVM-TEST", "Flow EVM Testnet"),
+    ];
+
+    for (network, chain_code, chain_name) in pairs {
+        if has_flow_evm_native_flow_asset(assets, chain_code) {
+            continue;
+        }
+        let Some(hex_bal) = alchemy_flow_evm_native_balance_hex(client, api_key, network, address).await
+        else {
+            continue;
+        };
+        let s = hex_bal.trim();
+        let raw = s.strip_prefix("0x").unwrap_or(s);
+        if raw.is_empty() || raw.chars().all(|c| c == '0') {
+            continue;
+        }
+        let amount = raw_balance_to_amount(&hex_bal, FLOW_EVM_NATIVE_DECIMALS);
+        if amount <= 0.0 {
+            continue;
+        }
+        let value_usd_f64 = amount * price;
+        let value_usd = format!("${:.2}", value_usd_f64);
+        let balance_formatted = format_balance_display(amount);
+        let balance_display = format!("{balance_formatted} FLOW");
+
+        assets.push(PortfolioAsset {
+            id: format!("asset-{chain_code}-flow-native"),
+            symbol: "FLOW".to_string(),
+            chain: chain_code.to_string(),
+            chain_name: chain_name.to_string(),
+            balance: balance_display,
+            value_usd,
+            asset_type: "native".to_string(),
+            token_contract: String::new(),
+            decimals: FLOW_EVM_NATIVE_DECIMALS,
+            wallet_address: Some(address.to_string()),
+        });
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -129,7 +267,7 @@ pub async fn fetch_balances_multi(addresses: &[String]) -> Result<Vec<PortfolioA
     let mut all = Vec::new();
     for addr in addresses {
         let addr = addr.trim();
-        if addr.is_empty() || !addr.starts_with("0x") || addr.len() != 42 {
+        if addr.is_empty() || !is_flow_evm_style_address(addr) {
             continue;
         }
         let mut assets = fetch_balances(addr).await?;
@@ -143,9 +281,146 @@ pub async fn fetch_balances_multi(addresses: &[String]) -> Result<Vec<PortfolioA
     Ok(all)
 }
 
+/// Parse sidecar JSON: `{ "assets": [...] }` or legacy `{ "data": { "assets": [...] } }`.
+pub fn assets_from_flow_sidecar_response(flow_data: serde_json::Value, address: &str) -> Vec<PortfolioAsset> {
+    let mut assets = Vec::new();
+
+    let assets_arr = flow_data
+        .get("assets")
+        .and_then(|a| a.as_array())
+        .or_else(|| {
+            flow_data
+                .get("data")
+                .and_then(|d| d.get("assets"))
+                .and_then(|a| a.as_array())
+        });
+
+    let Some(assets_arr) = assets_arr else {
+        return assets;
+    };
+
+    for asset in assets_arr {
+        let symbol = asset
+            .get("symbol")
+            .and_then(|s| s.as_str())
+            .unwrap_or("FLOW")
+            .to_string();
+        let balance = asset
+            .get("balance")
+            .and_then(|b| b.as_str())
+            .unwrap_or("0")
+            .to_string();
+        let network = asset
+            .get("chain")
+            .and_then(|c| c.as_str())
+            .unwrap_or("flow-testnet")
+            .to_string();
+
+        let (chain_name, chain_code) = match network.as_str() {
+            "flow-mainnet" => (chain_code_to_display("FLOW"), "FLOW"),
+            "flow-testnet" => (chain_code_to_display("FLOW-TEST"), "FLOW-TEST"),
+            _ => network_to_chain_display(&network),
+        };
+
+        let decimals = asset.get("decimals").and_then(|d| d.as_i64()).unwrap_or(8) as u8;
+
+        assets.push(PortfolioAsset {
+            id: format!(
+                "{}-{}-{}",
+                address,
+                chain_code.to_lowercase(),
+                symbol.to_lowercase()
+            ),
+            symbol,
+            chain: chain_code.to_string(),
+            chain_name: chain_name.to_string(),
+            balance,
+            value_usd: "$0.00".to_string(),
+            asset_type: "native".to_string(),
+            token_contract: String::new(),
+            decimals,
+            wallet_address: Some(address.to_string()),
+        });
+    }
+
+    assets
+}
+
+/// EVM (`0x` 20-byte) addresses use Alchemy; Cadence Flow addresses use the Flow sidecar.
+async fn hydrate_cadence_flow_usd(assets: &mut [PortfolioAsset]) {
+    let Ok(px) = get_token_price_usd("FLOW").await else {
+        return;
+    };
+    for a in assets.iter_mut() {
+        if (a.chain == "FLOW" || a.chain == "FLOW-TEST") && a.symbol == "FLOW" {
+            let amt: f64 = a.balance.trim().parse().unwrap_or(0.0);
+            let usd = amt * px;
+            a.value_usd = format!("${usd:.2}");
+        }
+    }
+}
+
+pub async fn fetch_balances_mixed(
+    app: &AppHandle,
+    addresses: &[String],
+) -> Result<Vec<PortfolioAsset>, PortfolioError> {
+    let mut all = Vec::new();
+    let mut evm_addrs: Vec<String> = Vec::new();
+
+    for addr in addresses {
+        let a = addr.trim();
+        if a.is_empty() {
+            continue;
+        }
+        if is_cadence_flow_address(a) {
+            let flow_json = super::apps::flow::fetch_balances(app, a)
+                .await
+                .map_err(|e| PortfolioError::FetchFailed(format!("Flow fetch failed: {e}")))?;
+            let parsed = assets_from_flow_sidecar_response(flow_json, a);
+            if parsed.is_empty() {
+                // Successful empty account is valid; do not fall through to Alchemy.
+                continue;
+            }
+            all.extend(parsed);
+        } else if is_flow_evm_style_address(a) {
+            evm_addrs.push(a.to_string());
+        }
+    }
+
+    if !evm_addrs.is_empty() {
+        let evm_assets = fetch_balances_multi(&evm_addrs).await?;
+        all.extend(evm_assets);
+    }
+
+    if super::apps::state::is_tool_app_ready("flow").unwrap_or(false) {
+        if let Some(ref cad_key) = super::apps::flow::configured_cadence_address() {
+            let already = addresses.iter().filter_map(|a| cadence_account_key(a.trim())).any(|k| &k == cad_key);
+            if !already {
+                let flow_json = super::apps::flow::fetch_balances(app, cad_key)
+                    .await
+                    .map_err(|e| PortfolioError::FetchFailed(format!("Flow fetch failed: {e}")))?;
+                let parsed = assets_from_flow_sidecar_response(flow_json, cad_key);
+                if !parsed.is_empty() {
+                    all.extend(parsed);
+                }
+            }
+        }
+    }
+
+    hydrate_cadence_flow_usd(&mut all).await;
+
+    all.sort_by(|a, b| {
+        let a_val: f64 = a.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);
+        let b_val: f64 = b.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);
+        b_val.partial_cmp(&a_val).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    Ok(all)
+}
+
 pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, PortfolioError> {
     let address = address.trim();
-    if address.is_empty() || !address.starts_with("0x") || address.len() != 42 {
+    if address.is_empty() || !is_flow_evm_style_address(address) {
         return Err(PortfolioError::InvalidAddress);
     }
 
@@ -156,42 +431,19 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
         .build()
         .map_err(|_| PortfolioError::RequestFailed)?;
 
-    let networks = active_networks();
+    let mut tokens: Vec<AlchemyToken> = Vec::new();
 
-    let url = format!(
-        "https://api.g.alchemy.com/data/v1/{}/assets/tokens/by-address",
-        api_key
-    );
-
-    let body = serde_json::json!({
-        "addresses": [{"address": address, "networks": networks}],
-        "withMetadata": true,
-        "withPrices": true,
-        "includeNativeTokens": true,
-        "includeErc20Tokens": true
-    });
-
-    let resp = client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|_| PortfolioError::RequestFailed)?;
-
-    if !resp.status().is_success() {
-        return Err(PortfolioError::RequestFailed);
+    let core = core_evm_portfolio_networks();
+    for chunk in core.chunks(MAX_NETWORKS_PER_PORTFOLIO_REQUEST) {
+        let chunk_tokens = post_alchemy_portfolio_tokens(&client, &api_key, address, chunk).await?;
+        tokens.extend(chunk_tokens);
     }
 
-    let body: AlchemyResponse = resp.json().await.map_err(|_| PortfolioError::RequestFailed)?;
-
-    if body.error.is_some() {
-        return Err(PortfolioError::RequestFailed);
+    let flow_nets = flow_portfolio_networks();
+    if let Ok(flow_tokens) = post_alchemy_portfolio_tokens(&client, &api_key, address, &flow_nets).await
+    {
+        tokens.extend(flow_tokens);
     }
-
-    let tokens = body
-        .data
-        .and_then(|d| d.tokens)
-        .unwrap_or_default();
 
     let mut assets = Vec::new();
 
@@ -205,8 +457,8 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
             continue;
         }
 
-        let network = token.network.as_deref().unwrap_or("");
-        let (chain_name, chain_code) = network_to_chain_display(network);
+        let network_raw = token.network.as_deref().unwrap_or("");
+        let (chain_name, chain_code) = network_to_chain_display(network_raw);
         let metadata = token.token_metadata.unwrap_or_default();
         let decimals = metadata.decimals.unwrap_or(18);
         let symbol = metadata
@@ -216,16 +468,25 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
             .unwrap_or_else(|| {
                 let token_addr = token.token_address.as_deref().unwrap_or("");
                 if token_addr.is_empty() || token_addr.eq_ignore_ascii_case("null") {
-                    match network {
+                    match network_raw
+                        .trim()
+                        .to_lowercase()
+                        .replace('_', "-")
+                        .replace(' ', "")
+                        .as_str()
+                    {
                         "eth-mainnet" | "base-mainnet" | "eth-sepolia" | "base-sepolia" => {
                             "ETH".to_string()
                         }
                         "polygon-mainnet" | "matic-mainnet" | "polygon-amoy" | "matic-amoy" => {
                             "POL".to_string()
                         }
-                        "flow-mainnet" | "flow-testnet" => {
-                            "FLOW".to_string()
-                        }
+                        "flow-mainnet"
+                        | "flow-evm-mainnet"
+                        | "flowevm-mainnet"
+                        | "flow-testnet"
+                        | "flow-evm-testnet"
+                        | "flowevm-testnet" => "FLOW".to_string(),
                         _ => "Unknown".to_string(),
                     }
                 } else {
@@ -283,6 +544,8 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
         });
     }
 
+    merge_flow_evm_native_via_alchemy_rpc(&mut assets, address, &client, &api_key).await;
+
     assets.sort_by(|a, b| {
         let a_val: f64 = a.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);
         let b_val: f64 = b.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);
@@ -294,7 +557,7 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
 
 #[cfg(test)]
 mod tests {
-    use super::raw_balance_to_amount;
+    use super::{assets_from_flow_sidecar_response, raw_balance_to_amount};
 
     #[test]
     fn raw_balance_to_amount_parses_hex() {
@@ -306,6 +569,27 @@ mod tests {
     fn raw_balance_to_amount_handles_zero() {
         assert_eq!(raw_balance_to_amount("0", 18), 0.0);
         assert_eq!(raw_balance_to_amount("0x0", 18), 0.0);
+    }
+
+    #[test]
+    fn flow_sidecar_assets_top_level_shape() {
+        let v = serde_json::json!({
+            "assets": [{"symbol":"FLOW","balance":"2.5","chain":"flow-testnet","decimals":8}]
+        });
+        let out = assets_from_flow_sidecar_response(v, "0x1111111111111111");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].chain, "FLOW-TEST");
+        assert_eq!(out[0].symbol, "FLOW");
+    }
+
+    #[test]
+    fn flow_sidecar_assets_nested_data_shape() {
+        let v = serde_json::json!({
+            "data": { "assets": [{"symbol":"FLOW","balance":"1","chain":"flow-mainnet","decimals":8}] }
+        });
+        let out = assets_from_flow_sidecar_response(v, "abcd1234abcd1234");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].chain, "FLOW");
     }
 }
 

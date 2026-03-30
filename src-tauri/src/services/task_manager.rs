@@ -411,10 +411,7 @@ pub fn get_pending_tasks() -> Result<Vec<Task>, String> {
     let records = local_db::get_tasks(Some("suggested"), None, 50)
         .map_err(|e| format!("Failed to get tasks: {}", e))?;
 
-    records
-        .iter()
-        .map(|r| Task::from_record(r))
-        .collect()
+    records.iter().map(Task::from_record).collect()
 }
 
 /// Get a task by ID.

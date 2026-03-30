@@ -6,6 +6,7 @@ pub mod anonymizer;
 pub mod audit;
 pub mod behavior_learner;
 pub mod chain;
+pub mod flow_domain;
 pub mod guardrails;
 pub mod health_monitor;
 pub mod heartbeat;
