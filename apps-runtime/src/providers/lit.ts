@@ -13,7 +13,7 @@ import { ethers } from 'ethers';
 import {
   LitAbility,
   LitActionResource,
-  createSiweMessageWithRecaps,
+  createSiweMessageWithResources,
   generateAuthSig,
 } from '@lit-protocol/auth-helpers';
 
@@ -209,13 +209,12 @@ export class LitProvider {
           },
         ],
         authNeededCallback: async (params) => {
-          const toSign = await createSiweMessageWithRecaps({
+          const toSign = await createSiweMessageWithResources({
             uri: params.uri!,
             expiration: params.expiration!,
             resources: params.resourceAbilityRequests!,
             walletAddress: wallet.address,
             nonce: await client!.getLatestBlockhash(),
-            litNodeClient: client!,
           });
           return await generateAuthSig({
             signer: wallet as unknown as ethers.providers.JsonRpcSigner,
@@ -310,17 +309,16 @@ export class LitProvider {
         resourceAbilityRequests: [
           {
             resource: new LitActionResource('*'),
-            ability: LitAbility.LitActionExecution,
+            ability: LIT_ABILITY.LitActionExecution,
           },
         ],
         authNeededCallback: async (params) => {
-          const msg = await createSiweMessageWithRecaps({
+          const msg = await createSiweMessageWithResources({
             uri: params.uri!,
             expiration: params.expiration!,
             resources: params.resourceAbilityRequests!,
             walletAddress: wallet.address,
             nonce: await client!.getLatestBlockhash(),
-            litNodeClient: client!,
           });
           return await generateAuthSig({
             signer: wallet as unknown as ethers.providers.JsonRpcSigner,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Key, Save, Trash2, Cpu, AlertTriangle } from "lucide-react";
+import { Key, Save, Trash2, Cpu, AlertTriangle, RefreshCw } from "lucide-react";
 
 import packageJson from "../../../package.json";
 import { ModelSelector } from "@/components/ModelSelector";
@@ -21,6 +21,7 @@ import { logError } from "@/lib/logger";
 import { hasTauriRuntime } from "@/lib/tauri";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { type ThemePreference, useUiStore } from "@/store/useUiStore";
+import { getAgentSoul, getAgentMemory } from "@/lib/agent";
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "system"];
 
@@ -50,6 +51,22 @@ export function SettingsPage() {
 
   const { success, warning: toastWarning } = useToast();
   const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
+  const startReplay = useOnboardingStore((s) => s.startReplay);
+
+  const handleReplayOnboarding = async () => {
+    try {
+      const [soul, memory] = await Promise.all([getAgentSoul(), getAgentMemory()]);
+      const memories = memory.facts.map((f) => f.fact);
+      startReplay(soul, memories);
+      // Reload to restart onboarding flow
+      window.location.reload();
+    } catch (err) {
+      logError("Failed to load existing config", err);
+      // Start replay anyway with empty state
+      startReplay(null, []);
+      window.location.reload();
+    }
+  };
 
   const [perplexityKey, setPerplexityKey] = useState("");
   const [isKeySaved, setIsKeySaved] = useState(false);
@@ -536,11 +553,21 @@ export function SettingsPage() {
           clear all wallets, transaction history, and API keys from this device.
         </p>
 
+        <div className="mt-6 flex flex-wrap gap-4">
+          <Button
+            variant="outline"
+            className="rounded-sm border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+            onClick={handleReplayOnboarding}
+          >
+            <RefreshCw className="mr-2 size-4" />
+            Replay Onboarding
+          </Button>
+
         <Dialog>
           <DialogTrigger asChild>
             <Button
               variant="outline"
-              className="mt-6 rounded-sm border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+              className="rounded-sm border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
             >
               <Trash2 className="mr-2 size-4" />
               Delete All Data
@@ -568,6 +595,7 @@ export function SettingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </section>
     </div>
   );

@@ -29,6 +29,8 @@ pub enum PortfolioError {
     InvalidAddress,
     #[error("API request failed")]
     RequestFailed,
+    #[error("{0}")]
+    FetchFailed(String),
 }
 
 impl serde::Serialize for PortfolioError {

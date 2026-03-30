@@ -11,11 +11,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { useUiStore } from "@/store/useUiStore";
+
+const HEALTH_LABELS = {
+  healthy: "Healthy",
+  degraded: "Degraded",
+  error: "Error",
+};
 
 export function AgentStatusCard() {
   const setPendingApproval = useUiStore((state) => state.setPendingApproval);
   const { latestActivityLabel, suggestion } = useAgentChat();
+  const { runningCount, lastActivityLabel, healthStatus, isLoading } = useAgentStatus();
 
   return (
     <motion.div
@@ -41,15 +49,17 @@ export function AgentStatusCard() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Strategies</p>
-              <p className="mt-2 text-lg font-semibold">3 running</p>
+              <p className="mt-2 text-lg font-semibold">
+                {isLoading ? "—" : `${runningCount} running`}
+              </p>
             </div>
             <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Last action</p>
-              <p className="mt-2 text-lg font-semibold">2 min ago</p>
+              <p className="mt-2 text-lg font-semibold">{lastActivityLabel}</p>
             </div>
             <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.02]">
               <p className="text-xs tracking-[0.18em] text-muted uppercase">Watch status</p>
-              <p className="mt-2 text-lg font-semibold">Healthy</p>
+              <p className="mt-2 text-lg font-semibold">{HEALTH_LABELS[healthStatus]}</p>
             </div>
           </div>
 

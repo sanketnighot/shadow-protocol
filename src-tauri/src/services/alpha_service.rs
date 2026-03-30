@@ -10,6 +10,7 @@ use tracing::error;
 use super::sonar_client;
 use super::ollama_client;
 use super::market_service::MarketOpportunity;
+use crate::services::agent_state::{read_soul, read_memory};
 
 const ALPHA_INTERVAL_SECS: u64 = 86400; // 24 hours
 
@@ -29,7 +30,7 @@ pub fn start(app: AppHandle) {
 
         loop {
             timer.tick().await;
-            
+
             if let Err(e) = run_alpha_cycle(&app, &client).await {
                 error!("alpha_service.cycle_failed: {}", e);
             }
@@ -54,17 +55,26 @@ async fn run_alpha_cycle(app: &AppHandle, client: &Client) -> Result<(), String>
         Err(_) => "No market news available.".into(),
     };
 
-    // 3. Synthesize using local LLM
+    // 3. Read soul and memory for personalized context
+    let soul = read_soul(app).unwrap_or_default();
+    let memory = read_memory(app).unwrap_or_default();
+
+    let memory_facts = if memory.facts.is_empty() {
+        String::new()
+    } else {
+        let facts: Vec<String> = memory.facts.iter()
+            .map(|f| format!("- {}", f.fact))
+            .collect();
+        format!("\n\nUser Profile & Memory Facts:\n{}", facts.join("\n"))
+    };
+
+    // 4. Synthesize using local LLM with personalized context
     let prompt = format!(
-        "System: You are an elite market strategist.
-News:
-{}
-
-Task: Synthesize the news into a 2-sentence 'Daily Alpha Brief' for a high-net-worth user. 
-If a specific trade is mentioned, generate a JSON opportunity.
-
-Output format (JSON ONLY):
-{{\"headline\": \"short title\", \"summary\": \"2 sentences\", \"opportunity\": null or {{\"type\": \"swap\", \"asset\": \"...\"}}}}",
+        "System: {}\n\nRisk Appetite: {}\nPreferred Chains: {}{}\n\nTask: Synthesize the news into a 2-sentence 'Daily Alpha Brief' for a user with the above profile and context.\nIf a specific trade is mentioned, generate a JSON opportunity.\n\nToday's Market News:\n{}\n\nOutput format (JSON ONLY):\n{{\"headline\": \"short title\", \"summary\": \"2 sentences\", \"opportunity\": null or {{\"type\": \"swap\", \"asset\": \"...\"}}}}",
+        soul.persona,
+        soul.risk_appetite,
+        soul.preferred_chains.join(", "),
+        memory_facts,
         news
     );
 
@@ -92,7 +102,7 @@ fn parse_brief(text: &str) -> Option<ShadowBrief> {
     } else {
         text
     };
-    
+
     // In a real app, we'd map this to ShadowBrief properly
     serde_json::from_str(cleaned).ok()
 }

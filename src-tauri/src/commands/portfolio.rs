@@ -1,11 +1,19 @@
-//! Portfolio balance fetching: local DB first, Alchemy fallback.
+//! Portfolio balance fetching: local DB first, Alchemy fallback, Flow sidecar.
 
 use serde::Deserialize;
 use serde::Serialize;
+use tauri::AppHandle;
 
-use crate::services::chain::{chain_code_to_display, chain_to_explorer_base};
+use crate::services::chain::{chain_code_to_display, chain_to_explorer_base, network_to_chain_display};
 use crate::services::local_db;
 use crate::services::portfolio_service::{self, PortfolioAsset, PortfolioError};
+
+/// Check if an address looks like a Flow address (8 bytes / 16 hex chars)
+fn looks_like_flow_address(address: &str) -> bool {
+    let addr = address.strip_prefix("0x").unwrap_or(address);
+    // Flow addresses are 8 bytes = 16 hex characters
+    addr.len() == 16 && addr.chars().all(|c| c.is_ascii_hexdigit())
+}
 
 fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
     rows.into_iter()
@@ -33,13 +41,97 @@ fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
 }
 
 #[tauri::command]
-pub async fn portfolio_fetch_balances(address: String) -> Result<Vec<PortfolioAsset>, PortfolioError> {
+pub async fn portfolio_fetch_balances(
+    address: String,
+    chain: Option<String>,
+    app: AppHandle,
+) -> Result<Vec<PortfolioAsset>, PortfolioError> {
+    tracing::info!("portfolio_fetch_balances called for address: {}, chain: {:?}", address, chain);
+
+    // Check local DB first
     if let Ok(rows) = local_db::get_tokens_for_wallets(std::slice::from_ref(&address)) {
         if !rows.is_empty() {
+            tracing::info!("Found {} tokens in local DB for {}", rows.len(), address);
             return Ok(token_rows_to_assets(rows));
         }
     }
+
+    // Determine if this is a Flow address
+    let is_flow = chain.as_ref()
+        .map(|c| c == "FLOW" || c == "FLOW-TEST")
+        .unwrap_or(false)
+        || looks_like_flow_address(&address);
+
+    tracing::info!("Address {} looks like Flow: {}", address, is_flow);
+
+    if is_flow {
+        tracing::info!("Fetching Flow balances for {}", address);
+        match crate::services::apps::flow::fetch_balances(&app, &address).await {
+            Ok(flow_data) => {
+                tracing::info!("Flow data received: {:?}", flow_data);
+                let assets = convert_flow_assets(flow_data, &address);
+                tracing::info!("Converted {} Flow assets", assets.len());
+                if !assets.is_empty() {
+                    return Ok(assets);
+                }
+                // If no assets but Flow call succeeded, return empty (don't fallback to Alchemy)
+                return Ok(vec![]);
+            }
+            Err(e) => {
+                tracing::error!("Failed to fetch Flow balances: {}", e);
+                // Return error instead of falling through to Alchemy for Flow addresses
+                return Err(PortfolioError::FetchFailed(format!("Flow fetch failed: {}", e)));
+            }
+        }
+    }
+
+    // Fallback to Alchemy for EVM chains
+    tracing::info!("Fetching EVM balances via Alchemy for {}", address);
     portfolio_service::fetch_balances(&address).await
+}
+
+/// Convert Flow assets to PortfolioAsset format
+fn convert_flow_assets(flow_data: serde_json::Value, address: &str) -> Vec<PortfolioAsset> {
+    let mut assets = Vec::new();
+
+    if let Some(data_obj) = flow_data.get("data").and_then(|d| d.get("assets")) {
+        if let Some(assets_arr) = data_obj.as_array() {
+            for asset in assets_arr {
+                let symbol = asset.get("symbol")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("FLOW")
+                    .to_string();
+                let balance = asset.get("balance")
+                    .and_then(|b| b.as_str())
+                    .unwrap_or("0")
+                    .to_string();
+                let chain = asset.get("chain")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("flow-testnet")
+                    .to_string();
+                let decimals = asset.get("decimals")
+                    .and_then(|d| d.as_i64())
+                    .unwrap_or(8) as u8;
+
+                let (chain_name, chain_code) = network_to_chain_display(&chain);
+
+                assets.push(PortfolioAsset {
+                    id: format!("{}-{}-{}", address, chain_code.to_lowercase(), symbol.to_lowercase()),
+                    symbol,
+                    chain: chain_code.to_string(),
+                    chain_name: chain_name.to_string(),
+                    balance,
+                    value_usd: "$0.00".to_string(),
+                    asset_type: "native".to_string(),
+                    token_contract: String::new(),
+                    decimals,
+                    wallet_address: Some(address.to_string()),
+                });
+            }
+        }
+    }
+
+    assets
 }
 
 #[tauri::command]

@@ -2,9 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import {
-  AGENT_MESSAGES,
-  AGENT_SUGGESTION,
-  PENDING_APPROVAL_TX,
   type AgentMessage,
   type AgentMessageBlock,
   type AgentSuggestion,
@@ -95,6 +92,12 @@ type AgentThreadStore = {
   recordApprovalFollowUp: (threadId: string, approved: boolean) => void;
 };
 
+const EMPTY_SUGGESTION: AgentSuggestion = {
+  title: "Ready to assist",
+  summary: "Ask me anything about your portfolio or to execute DeFi actions.",
+  actionLabel: "Get started",
+};
+
 function createEmptyThread(): Thread {
   const now = Date.now();
   return {
@@ -104,9 +107,8 @@ function createEmptyThread(): Thread {
     rollingSummary: null,
     structuredFacts: null,
     isStreaming: false,
-    latestActivityLabel:
-      "Executed DCA purchase: 0.01 ETH with safety checks passed.",
-    suggestion: AGENT_SUGGESTION,
+    latestActivityLabel: "Ready to help.",
+    suggestion: EMPTY_SUGGESTION,
     pendingApproval: null,
     pendingAgentAction: null,
     createdAt: now,
@@ -114,26 +116,7 @@ function createEmptyThread(): Thread {
   };
 }
 
-function createInitialThread(): Thread {
-  const now = Date.now();
-  return {
-    id: crypto.randomUUID(),
-    title: "Find me the best yield for USDC",
-    messages: AGENT_MESSAGES,
-    rollingSummary: null,
-    structuredFacts: null,
-    isStreaming: false,
-    latestActivityLabel:
-      "Executed DCA purchase: 0.01 ETH with safety checks passed.",
-    suggestion: AGENT_SUGGESTION,
-    pendingApproval: PENDING_APPROVAL_TX,
-    pendingAgentAction: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-const INITIAL_THREAD = createInitialThread();
+const INITIAL_THREAD = createEmptyThread();
 
 export const useAgentThreadStore = create<AgentThreadStore>()(
   persist(

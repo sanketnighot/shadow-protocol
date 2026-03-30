@@ -1,16 +1,19 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, CheckCircle2, ChevronRight, AlertTriangle, Download } from "lucide-react";
-import { useState } from "react";
+import { Copy, CheckCircle2, ChevronRight, ChevronLeft, AlertTriangle, Download } from "lucide-react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { useWalletStore } from "@/store/useWalletStore";
 import { useToast } from "@/hooks/useToast";
+import { updateAgentSoul, addAgentMemory } from "@/lib/agent";
 
-export function Step4Vault() {
+export function Step6Vault() {
   const nextStep = useOnboardingStore((s) => s.nextStep);
   const prevStep = useOnboardingStore((s) => s.prevStep);
   const refreshWallets = useWalletStore((s) => s.refreshWallets);
   const { success, warning: toastWarning } = useToast();
+  const agentConfig = useOnboardingStore((s) => s.agentConfig);
+  const isReplay = useOnboardingStore((s) => s.isReplay);
 
   const [mode, setMode] = useState<"select" | "generate" | "import">("select");
   const [mnemonic, setMnemonic] = useState<string[]>([]);
@@ -18,6 +21,18 @@ export function Step4Vault() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  // Check if wallet already exists for replay mode
+  useEffect(() => {
+    if (isReplay) {
+      const addresses = useWalletStore.getState().addresses;
+      if (addresses.length > 0) {
+        setWalletAddress(addresses[0]);
+        setMode("select");
+      }
+    }
+  }, [isReplay]);
 
   const handleGenerate = async () => {
     setIsProcessing(true);
@@ -27,6 +42,7 @@ export function Step4Vault() {
         input: { word_count: 12 },
       });
       setMnemonic(result.mnemonic.split(" "));
+      setWalletAddress(result.address);
       await refreshWallets();
     } catch (e) {
       toastWarning("Failed to generate wallet", String(e));
@@ -40,19 +56,51 @@ export function Step4Vault() {
     if (!importKey) return;
     setIsProcessing(true);
     try {
+      let address: string;
       if (importKey.includes(" ")) {
-        await invoke("wallet_import_mnemonic", { input: { mnemonic: importKey } });
+        const result = await invoke<{ address: string }>("wallet_import_mnemonic", { input: { mnemonic: importKey } });
+        address = result.address;
       } else {
-        await invoke("wallet_import_private_key", { input: { private_key: importKey } });
+        const result = await invoke<{ address: string }>("wallet_import_private_key", { input: { private_key: importKey } });
+        address = result.address;
       }
+      setWalletAddress(address);
       await refreshWallets();
       success("Wallet imported", "Your identity has been secured in the vault.");
+      await persistAgentConfig();
       nextStep();
     } catch (e) {
       toastWarning("Import failed", String(e));
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const persistAgentConfig = async () => {
+    if (!agentConfig) return;
+
+    try {
+      await updateAgentSoul({
+        risk_appetite: agentConfig.riskAppetite,
+        preferred_chains: agentConfig.preferredChains,
+        persona: agentConfig.personaText,
+        custom_rules: [],
+      });
+
+      // Add custom rules as memory facts
+      for (const rule of agentConfig.constraints.custom) {
+        await addAgentMemory(rule);
+      }
+
+      success("Agent configured", "Your Shadow's personality and preferences have been saved.");
+    } catch (e) {
+      console.error("Failed to persist agent config:", e);
+    }
+  };
+
+  const handleSealVault = async () => {
+    await persistAgentConfig();
+    nextStep();
   };
 
   const handleCopy = () => {
@@ -69,34 +117,64 @@ export function Step4Vault() {
       exit={{ opacity: 0, scale: 0.95 }}
       className="flex w-full max-w-md flex-col gap-4"
     >
-      <button
-        onClick={handleGenerate}
-        disabled={isProcessing}
-        className="group relative flex flex-col items-center justify-center overflow-hidden rounded-sm border border-border bg-secondary p-8 backdrop-blur-md transition-all hover:border-emerald-500/30 hover:bg-emerald-500/10"
-      >
-        <div className="mb-4 rounded-sm bg-emerald-500/20 p-4 text-emerald-400">
-          <CheckCircle2 className="size-8" />
-        </div>
-        <h3 className="text-xl font-bold text-foreground">Generate New Identity</h3>
-        <p className="mt-2 text-center text-sm text-muted">Create a secure, local 12-word seed phrase. Never stored in the cloud.</p>
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent to-emerald-500/5 opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100" />
-      </button>
+      {isReplay && walletAddress && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 rounded-sm border border-primary/30 bg-primary/10 p-4"
+        >
+          <p className="text-sm text-foreground">
+            <CheckCircle2 className="mr-2 inline size-4 text-emerald-400" />
+            Wallet already configured: <span className="font-mono text-xs">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
+          </p>
+        </motion.div>
+      )}
 
-      <button
-        onClick={() => setMode("import")}
-        className="group flex items-center justify-between rounded-sm border border-border bg-secondary p-5 transition-all hover:bg-surface-elevated"
-      >
-        <div className="flex items-center gap-4">
-          <div className="rounded-sm bg-surface-elevated p-2 text-muted">
-            <Download className="size-5" />
-          </div>
-          <div className="text-left">
-            <h3 className="font-semibold text-foreground">Import Existing</h3>
-            <p className="text-xs text-muted">Use a seed phrase or private key.</p>
-          </div>
+      {!walletAddress && (
+        <>
+          <button
+            onClick={handleGenerate}
+            disabled={isProcessing}
+            className="group relative flex flex-col items-center justify-center overflow-hidden rounded-sm border border-border bg-secondary p-8 backdrop-blur-md transition-all hover:border-emerald-500/30 hover:bg-emerald-500/10"
+          >
+            <div className="mb-4 rounded-sm bg-emerald-500/20 p-4 text-emerald-400">
+              <CheckCircle2 className="size-8" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground">Generate New Identity</h3>
+            <p className="mt-2 text-center text-sm text-muted">Create a secure, local 12-word seed phrase. Never stored in the cloud.</p>
+            <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent to-emerald-500/5 opacity-0 transition-opacity duration-100 ease-out group-hover:opacity-100" />
+          </button>
+
+          <button
+            onClick={() => setMode("import")}
+            className="group flex items-center justify-between rounded-sm border border-border bg-secondary p-5 transition-all hover:bg-surface-elevated"
+          >
+            <div className="flex items-center gap-4">
+              <div className="rounded-sm bg-surface-elevated p-2 text-muted">
+                <Download className="size-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-foreground">Import Existing</h3>
+                <p className="text-xs text-muted">Use a seed phrase or private key.</p>
+              </div>
+            </div>
+            <ChevronRight className="size-5 text-muted transition-transform group-hover:translate-x-1" />
+          </button>
+        </>
+      )}
+
+      {walletAddress && (
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-muted">Your wallet is ready.</p>
+          <button
+            onClick={handleSealVault}
+            className="group flex items-center gap-2 rounded-sm bg-primary px-8 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+          >
+            Continue
+            <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
+          </button>
         </div>
-        <ChevronRight className="size-5 text-muted transition-transform group-hover:translate-x-1" />
-      </button>
+      )}
     </motion.div>
   );
 
@@ -111,7 +189,7 @@ export function Step4Vault() {
       <div className="mb-6 flex items-center gap-3 rounded-[16px] border border-orange-500/20 bg-orange-500/10 p-4 text-orange-200">
         <AlertTriangle className="size-5 shrink-0 text-orange-400" />
         <p className="text-sm">
-          Write these words down on paper. If you lose them, your assets are unrecoverable. 
+          Write these words down on paper. If you lose them, your assets are unrecoverable.
           SHADOW cannot restore your key.
         </p>
       </div>
@@ -211,12 +289,13 @@ export function Step4Vault() {
       >
         <button
           onClick={() => (mode === "select" ? prevStep() : setMode("select"))}
-          className="text-sm text-muted hover:text-foreground"
+          className="flex items-center gap-2 text-sm text-muted hover:text-foreground"
         >
+          <ChevronLeft className="size-4" />
           Back
         </button>
-        
-        {mode === "select" && (
+
+        {mode === "select" && !walletAddress && (
           <button
             onClick={nextStep}
             className="text-sm text-muted hover:text-foreground"
@@ -224,15 +303,24 @@ export function Step4Vault() {
             Skip for now
           </button>
         )}
-        
+
         {mode === "generate" && (
           <button
-            onClick={nextStep}
+            onClick={handleSealVault}
             disabled={!acknowledged}
             className="group flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             Seal Vault
             <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
+          </button>
+        )}
+
+        {mode === "import" && (
+          <button
+            onClick={() => setMode("select")}
+            className="text-sm text-muted hover:text-foreground"
+          >
+            Back
           </button>
         )}
       </motion.div>

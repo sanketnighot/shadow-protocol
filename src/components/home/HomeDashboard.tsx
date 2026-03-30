@@ -1,8 +1,11 @@
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 
 import { AgentStatusCard } from "@/components/home/AgentStatusCard";
 import { PortfolioCard } from "@/components/home/PortfolioCard";
 import { QuickActions } from "@/components/home/QuickActions";
+import { useMarketOpportunities } from "@/hooks/useMarketOpportunities";
+import { useWalletStore } from "@/store/useWalletStore";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -18,6 +21,40 @@ const itemVariants = {
 };
 
 export function HomeDashboard() {
+  const addresses = useWalletStore((state) => state.addresses);
+  const { items } = useMarketOpportunities({
+    category: undefined,
+    chain: "all",
+    includeResearch: true,
+    walletAddresses: addresses,
+    limit: 5,
+  });
+
+  const { topScore, marketStatus, topChains } = useMemo(() => {
+    if (items.length === 0) {
+      return { topScore: null, marketStatus: "Markets calm. Capital ready.", topChains: [] };
+    }
+    const scores = items.map((i) => i.score);
+    const maxScore = Math.max(...scores);
+    const avgConfidence = items.reduce((sum, i) => sum + i.confidence, 0) / items.length;
+    const topChainSet = [...new Set(items.slice(0, 3).map((i) => i.chain))];
+
+    let status = "Markets calm. Capital ready.";
+    if (maxScore >= 80) {
+      status = "High opportunity conditions detected.";
+    } else if (maxScore >= 60) {
+      status = "Moderate opportunities available.";
+    } else if (avgConfidence > 0.7) {
+      status = "Active monitoring in progress.";
+    }
+
+    return {
+      topScore: maxScore,
+      marketStatus: status,
+      topChains: topChainSet,
+    };
+  }, [items]);
+
   return (
     <motion.div
       className="space-y-8"
@@ -38,7 +75,7 @@ export function HomeDashboard() {
             Live posture
           </p>
           <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-foreground">
-            Markets calm. Capital ready.
+            {marketStatus}
           </h2>
           <p className="mt-4 text-sm leading-6 text-muted">
             SHADOW is watching volatility, liquidity depth, and execution slippage across your preferred chains.
@@ -48,10 +85,16 @@ export function HomeDashboard() {
               <p className="text-sm font-semibold text-foreground">Private routing armed</p>
               <p className="mt-1 text-sm text-muted">Transaction privacy defaults to on for agent-assisted flows.</p>
             </div>
-            <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.01]">
-              <p className="text-sm font-semibold text-foreground">Opportunity score: 82/100</p>
-              <p className="mt-1 text-sm text-muted">Most interesting movement is concentrated on Base and Arbitrum.</p>
-            </div>
+            {topScore !== null && (
+              <div className="rounded-sm border border-border bg-secondary p-4 transition-transform hover:scale-[1.01]">
+                <p className="text-sm font-semibold text-foreground">Opportunity score: {topScore}/100</p>
+                <p className="mt-1 text-sm text-muted">
+                  {topChains.length > 0
+                    ? `Most interesting movement is concentrated on ${topChains.join(" and ")}.`
+                    : "Scanning across all chains."}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
