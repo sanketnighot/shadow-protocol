@@ -171,6 +171,22 @@ pub fn run() {
             commands::apps_filecoin_auto_restore,
             commands::apps_set_secret,
             commands::apps_remove_secret,
+            // Autonomous agent commands
+            commands::get_guardrails,
+            commands::set_guardrails,
+            commands::activate_kill_switch,
+            commands::deactivate_kill_switch,
+            commands::get_pending_tasks,
+            commands::approve_task,
+            commands::reject_task,
+            commands::get_task_reasoning,
+            commands::get_portfolio_health,
+            commands::get_opportunities,
+            commands::get_orchestrator_state,
+            commands::start_autonomous,
+            commands::stop_autonomous,
+            commands::run_analysis_now,
+            commands::get_learned_preferences,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

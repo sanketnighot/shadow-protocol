@@ -1,5 +1,6 @@
-mod apps;
 mod agent_state;
+mod apps;
+mod autonomous;
 mod chat;
 mod market;
 mod ollama_manager;
@@ -11,8 +12,9 @@ mod transfer;
 mod wallet;
 mod wallet_sync;
 
-pub use apps::*;
 pub use agent_state::*;
+pub use apps::*;
+pub use autonomous::*;
 pub use chat::*;
 pub use market::*;
 pub use ollama_manager::*;
