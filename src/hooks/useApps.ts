@@ -111,9 +111,12 @@ export function useSetAppConfigMutation() {
     }) => {
       await setAppConfig(appId, config);
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, { appId }) => {
       await qc.invalidateQueries({ queryKey: ["apps", "config"] });
       await qc.invalidateQueries({ queryKey: QK });
+      if (appId === "flow") {
+        await qc.invalidateQueries({ queryKey: ["portfolio", "balances"] });
+      }
     },
   });
 }

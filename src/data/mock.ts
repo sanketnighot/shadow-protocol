@@ -118,7 +118,7 @@ export type Asset = {
   chainName: string;
   balance: string;
   valueUsd: string;
-  type: "token" | "stablecoin";
+  type: "token" | "stablecoin" | "native";
   /** Address of wallet that holds this asset (for filtering by wallet). */
   walletAddress?: string;
   /** Empty for native token, contract address for ERC20. */
@@ -149,9 +149,9 @@ export type GuardrailDefaults = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", description: "Portfolio pulse" },
   { href: "/agent", label: "Agent", description: "DeFi intelligence" },
-  { href: "/autonomous", label: "Auto AI", description: "Autonomous agent" },
-  { href: "/strategy", label: "Builder", description: "Strategy canvas" },
-  { href: "/automation", label: "Auto", description: "Running systems" },
+  { href: "/autonomous", label: "Shadow", description: "Autonomous agent" },
+  // { href: "/strategy", label: "Builder", description: "Strategy canvas" },
+  // { href: "/automation", label: "Auto", description: "Running systems" },
   { href: "/apps", label: "Apps", description: "Agent capabilities" },
   { href: "/market", label: "Market", description: "Opportunities & yields" },
   { href: "/portfolio", label: "Portfolio", description: "Cross-chain assets" },

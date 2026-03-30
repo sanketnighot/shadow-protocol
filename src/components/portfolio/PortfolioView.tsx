@@ -68,11 +68,20 @@ export function PortfolioView() {
     const parseValue = (value: string) => Number(value.replace(/[$,]/g, ""));
     const nextAssets = assets.filter((asset) => {
       const chainMatches = chain === "All" || asset.chain === chain;
-      const typeMatches = type === "All" || asset.type === type;
+      const typeMatches =
+        type === "All" ||
+        asset.type === type ||
+        (type === "token" && asset.type === "native");
 
       const hasBalance = parseFloat(asset.balance.replace(/[^0-9.]/g, "")) > 0;
-      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY", "FLOW-TEST"].includes(asset.chain);
-      const devModeMatches = !isTestnet || developerModeEnabled;
+      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY", "FLOW-TEST", "FLOW-EVM-TEST"].includes(
+        asset.chain,
+      );
+      // If the user picked a specific chain (e.g. Flow EVM Testnet), show those rows even when
+      // developer mode is off — otherwise the filter button and empty state contradict each other.
+      const viewingThisChainExplicitly = chain !== "All" && asset.chain === chain;
+      const devModeMatches =
+        !isTestnet || developerModeEnabled || viewingThisChainExplicitly;
 
       return chainMatches && typeMatches && hasBalance && devModeMatches;
     });

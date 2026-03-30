@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   Activity,
 } from "lucide-react";
 import { useUiStore } from "@/store/useUiStore";
+import { useWalletStore } from "@/store/useWalletStore";
 import type { ShadowApp } from "@/types/apps";
 import {
   fetchFlowAccountStatusPreview,
@@ -361,8 +362,16 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const save = useSetAppConfigMutation();
   const addNotification = useUiStore((s) => s.addNotification);
+  const addresses = useWalletStore((s) => s.addresses);
+  const activeAddress = useWalletStore((s) => s.activeAddress);
   const [draft, setDraft] = useState<FlowIntegrationConfig>(() => parseFlowConfig({}));
   const [flowPreview, setFlowPreview] = useState<string | null>(null);
+  const suggestedLinkedEvmRef = useRef(false);
+
+  const evmWalletChoices = useMemo(
+    () => addresses.filter((a) => a.startsWith("0x") && a.length === 42),
+    [addresses],
+  );
 
   useEffect(() => {
     if (raw !== undefined) {
@@ -370,9 +379,37 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
     }
   }, [raw]);
 
+  useEffect(() => {
+    if (!panelOpen) {
+      suggestedLinkedEvmRef.current = false;
+      return;
+    }
+    if (suggestedLinkedEvmRef.current || isLoading || raw === undefined) return;
+    setDraft((d) => {
+      if (d.linkedEvmAddress.trim()) {
+        suggestedLinkedEvmRef.current = true;
+        return d;
+      }
+      const pick =
+        (activeAddress?.startsWith("0x") && activeAddress.length === 42 ? activeAddress : null) ??
+        evmWalletChoices[0] ??
+        "";
+      suggestedLinkedEvmRef.current = true;
+      if (!pick) return d;
+      return { ...d, linkedEvmAddress: pick };
+    });
+  }, [panelOpen, raw, isLoading, activeAddress, evmWalletChoices]);
+
   const commit = async () => {
     try {
-      await save.mutateAsync({ appId, config: draft });
+      await save.mutateAsync({
+        appId,
+        config: {
+          network: draft.network,
+          linkedEvmAddress: draft.linkedEvmAddress.trim(),
+          cadenceAddress: draft.cadenceAddress.trim(),
+        },
+      });
       addNotification({
         title: "Integration Updated",
         description: "Flow settings saved locally.",
@@ -395,6 +432,12 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
         <Waves className="size-4 text-primary" />
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Flow</p>
       </div>
+      <p className="text-xs text-muted leading-relaxed">
+        <span className="text-foreground/90">Flow EVM</span> balances use your SHADOW{" "}
+        <span className="font-mono">0x</span> wallets in Portfolio.{" "}
+        <span className="text-foreground/90">Cadence</span> FLOW and Cadence tooling need your
+        separate Cadence account address (16 hex), configured below.
+      </p>
       <p className="text-xs text-muted leading-relaxed">
         Cadence transactions and sponsorship are prepared via the apps runtime. Recurring jobs are
         owned by SHADOW&apos;s scheduler, not native Flow recurrence.
@@ -423,16 +466,73 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
             </select>
           </div>
           <div className="space-y-2">
-            <label htmlFor="flow-hint" className="text-[10px] font-mono uppercase text-muted">
-              Account hint (optional)
+            <label htmlFor="flow-linked-evm" className="text-[10px] font-mono uppercase text-muted">
+              Flow EVM wallet in SHADOW
+            </label>
+            {evmWalletChoices.length > 0 ||
+            (draft.linkedEvmAddress.trim() &&
+              draft.linkedEvmAddress.startsWith("0x") &&
+              draft.linkedEvmAddress.length === 42) ? (
+              <select
+                id="flow-linked-evm"
+                value={
+                  draft.linkedEvmAddress &&
+                  (evmWalletChoices.includes(draft.linkedEvmAddress) ||
+                    (draft.linkedEvmAddress.startsWith("0x") &&
+                      draft.linkedEvmAddress.length === 42))
+                    ? draft.linkedEvmAddress
+                    : ""
+                }
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, linkedEvmAddress: e.target.value.slice(0, 42) }))
+                }
+                className="flex h-9 w-full rounded-sm border border-border bg-secondary px-3 text-sm font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <option value="">Select wallet…</option>
+                {draft.linkedEvmAddress.trim() &&
+                  draft.linkedEvmAddress.startsWith("0x") &&
+                  draft.linkedEvmAddress.length === 42 &&
+                  !evmWalletChoices.includes(draft.linkedEvmAddress) && (
+                    <option value={draft.linkedEvmAddress}>
+                      {draft.linkedEvmAddress.slice(0, 6)}…{draft.linkedEvmAddress.slice(-4)}{" "}
+                      (saved)
+                    </option>
+                  )}
+                {evmWalletChoices.map((addr) => (
+                  <option key={addr} value={addr}>
+                    {addr.slice(0, 6)}…{addr.slice(-4)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-muted font-mono">
+                Add a <span className="text-foreground/80">0x</span> wallet in SHADOW to link Flow
+                EVM activity.
+              </p>
+            )}
+            <p className="text-[10px] text-muted leading-snug">
+              This is the EVM address that holds Flow EVM / testnet tokens in Portfolio—not your
+              Cadence account.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="flow-cadence" className="text-[10px] font-mono uppercase text-muted">
+              Cadence account address
             </label>
             <Input
-              id="flow-hint"
-              value={draft.accountHint}
-              onChange={(e) => setDraft((d) => ({ ...d, accountHint: e.target.value.slice(0, 256) }))}
-              placeholder="0x… or Flow address"
+              id="flow-cadence"
+              value={draft.cadenceAddress}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, cadenceAddress: e.target.value.slice(0, 66) }))
+              }
+              placeholder="16 hex characters (optional 0x)"
               className="rounded-sm bg-secondary border-border font-mono text-xs"
             />
+            <p className="text-[10px] text-muted leading-snug">
+              Required for <span className="text-foreground/80">Flow</span> /{" "}
+              <span className="text-foreground/80">Flow Testnet (Cadence)</span> in Portfolio when
+              you only use an EVM wallet in SHADOW.
+            </p>
           </div>
           <Button
             type="button"

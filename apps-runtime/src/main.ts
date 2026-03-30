@@ -173,20 +173,23 @@ async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
     }
     case "flow.account_status": {
       const flow = await getFlowProvider();
-      const p = req.payload as { apiKey?: string };
-      const data = await flow.accountStatus(p.apiKey);
+      const p = req.payload as { network?: string };
+      const net = p.network === "mainnet" || p.network === "testnet" ? p.network : "testnet";
+      flow.setNetwork(net);
+      const data = await flow.accountStatus();
       return { ok: true, data };
     }
     case "flow.fetch_balances": {
       const flow = await getFlowProvider();
-      const p = req.payload as { address?: string; apiKey?: string };
+      const p = req.payload as { address?: string; network?: string };
       console.error(`[Flow] fetch_balances dispatch called with address: ${p.address}`);
       if (!p.address) {
-        console.error('[Flow] Error: address missing in payload');
+        console.error("[Flow] Error: address missing in payload");
         return { ok: false, errorCode: "missing_params", errorMessage: "address required", data: {} };
       }
       try {
-        const balances = await flow.fetchBalances(p.address, p.apiKey);
+        const net = p.network === "mainnet" || p.network === "testnet" ? p.network : undefined;
+        const balances = await flow.fetchBalances(p.address, net);
         console.error(`[Flow] fetch_balances returned ${balances.length} assets`);
         return { ok: true, data: { assets: balances } };
       } catch (e) {
@@ -197,7 +200,9 @@ async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
     }
     case "flow.prepare_sponsored": {
       const flow = await getFlowProvider();
-      const p = req.payload as { summary?: string; apiKey?: string };
+      const p = req.payload as { summary?: string; apiKey?: string; network?: string };
+      const net = p.network === "mainnet" || p.network === "testnet" ? p.network : "testnet";
+      flow.setNetwork(net);
       const data = await flow.prepareSponsored({ summary: p.summary }, p.apiKey);
       return { ok: true, data };
     }

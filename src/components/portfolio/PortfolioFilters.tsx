@@ -21,16 +21,19 @@ const CHAINS: {
   { label: "Ethereum", value: "ETH" },
   { label: "Base", value: "BASE" },
   { label: "Polygon", value: "POL" },
-  { label: "Flow", value: "FLOW", appGated: "flow" },
+  { label: "Flow (Cadence)", value: "FLOW", appGated: "flow" },
+  { label: "Flow EVM", value: "FLOW-EVM", appGated: "flow" },
   { label: "ETH Sepolia", value: "ETH-SEP", testnet: true },
   { label: "Base Sepolia", value: "BASE-SEP", testnet: true },
   { label: "Polygon Amoy", value: "POL-AMOY", testnet: true },
-  { label: "Flow Testnet", value: "FLOW-TEST", testnet: true, appGated: "flow" },
+  { label: "Flow Testnet (Cadence)", value: "FLOW-TEST", testnet: true, appGated: "flow" },
+  { label: "Flow EVM Testnet", value: "FLOW-EVM-TEST", testnet: true, appGated: "flow" },
 ];
 
 const TYPES = [
   { label: "All Assets", value: "All" },
   { label: "Tokens", value: "token" },
+  { label: "Native", value: "native" },
   { label: "Stablecoins", value: "stablecoin" },
 ];
 
