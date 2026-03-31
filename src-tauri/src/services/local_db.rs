@@ -290,6 +290,22 @@ CREATE TABLE IF NOT EXISTS app_scheduler_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_app_scheduler_jobs_next ON app_scheduler_jobs(next_run_at);
 
+-- Vincent consent records: stores the user's granted-consent JWT and PKP info
+CREATE TABLE IF NOT EXISTS vincent_consent (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  app_id TEXT NOT NULL DEFAULT 'lit-protocol',
+  pkp_address TEXT NOT NULL,
+  pkp_public_key TEXT NOT NULL DEFAULT '',
+  jwt TEXT NOT NULL,
+  granted_abilities_json TEXT NOT NULL DEFAULT '[]',
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vincent_consent_app ON vincent_consent(app_id);
+CREATE INDEX IF NOT EXISTS idx_vincent_consent_expires ON vincent_consent(expires_at);
+
 CREATE TABLE IF NOT EXISTS flow_scheduled_transactions (
   id TEXT PRIMARY KEY,
   strategy_id TEXT,

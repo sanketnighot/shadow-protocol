@@ -45,6 +45,15 @@ pub fn set_app_secret(app_id: &str, key: &str, value: &str) -> Result<(), keyrin
     Ok(())
 }
 
+pub fn get_app_secret(app_id: &str, key: &str) -> Result<Option<String>, keyring::Error> {
+    let entry = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key))?;
+    match entry.get_password() {
+        Ok(v) => Ok(Some(v)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 pub fn remove_app_secret(app_id: &str, key: &str) -> Result<(), keyring::Error> {
     if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key)) {
         let _ = entry.delete_password();
@@ -59,6 +68,7 @@ pub fn remove_app_secrets_for(app_id: &str) -> Result<(), keyring::Error> {
         "rpc_override",
         "dek",
         "filecoinApiKey",
+        "delegateeKey",
     ] {
         let _ = remove_app_secret(app_id, key);
     }

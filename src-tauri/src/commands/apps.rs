@@ -323,6 +323,174 @@ pub fn apps_lit_pkp_address() -> Result<serde_json::Value, String> {
     }))
 }
 
+// ---------------------------------------------------------------------------
+// Vincent commands
+// ---------------------------------------------------------------------------
+
+/// Get the Vincent consent URL for the user to open in their browser.
+#[tauri::command]
+pub async fn apps_vincent_consent_url(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let data = lit::vincent_consent_url(&app, None).await?;
+    Ok(data)
+}
+
+/// Verify and store a Vincent consent JWT pasted by the user.
+#[tauri::command]
+pub async fn apps_vincent_submit_jwt(
+    app: tauri::AppHandle,
+    input: VincentJwtInput,
+) -> Result<serde_json::Value, String> {
+    let jwt = input.jwt.trim();
+    if jwt.is_empty() || jwt.len() < 32 {
+        return Err("Invalid JWT — paste the full token from the Vincent consent page.".to_string());
+    }
+    let row = lit::vincent_verify_and_store_jwt(&app, jwt).await?;
+    crate::services::audit::record(
+        "vincent_consent_granted",
+        "app",
+        Some("lit-protocol"),
+        &serde_json::json!({ "pkpAddress": row.pkp_address }),
+    );
+    Ok(serde_json::json!({
+        "pkpAddress": row.pkp_address,
+        "pkpPublicKey": row.pkp_public_key,
+        "grantedAbilities": serde_json::from_str::<serde_json::Value>(&row.granted_abilities_json).unwrap_or(serde_json::json!([])),
+        "expiresAt": row.expires_at,
+    }))
+}
+
+/// Get current Vincent consent status (active/expired/none).
+#[tauri::command]
+pub fn apps_vincent_consent_status() -> Result<serde_json::Value, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    match lit::get_vincent_consent() {
+        Some(row) => {
+            let active = row.expires_at > now;
+            Ok(serde_json::json!({
+                "hasConsent": active,
+                "pkpAddress": row.pkp_address,
+                "pkpPublicKey": row.pkp_public_key,
+                "grantedAbilities": serde_json::from_str::<serde_json::Value>(&row.granted_abilities_json).unwrap_or(serde_json::json!([])),
+                "expiresAt": row.expires_at,
+                "expired": !active,
+            }))
+        }
+        None => Ok(serde_json::json!({
+            "hasConsent": false,
+            "pkpAddress": null,
+            "pkpPublicKey": null,
+            "grantedAbilities": [],
+            "expiresAt": null,
+            "expired": false,
+        })),
+    }
+}
+
+/// Revoke Vincent consent (delete from local storage).
+#[tauri::command]
+pub fn apps_vincent_revoke_consent() -> Result<(), String> {
+    require_unlocked_session_for_app_settings()?;
+    lit::vincent_revoke_consent()?;
+    crate::services::audit::record(
+        "vincent_consent_revoked",
+        "app",
+        Some("lit-protocol"),
+        &serde_json::json!({}),
+    );
+    Ok(())
+}
+
+/// Execute an approved Vincent ability (post-user-approval).
+/// The delegatee private key is loaded from keychain.
+#[tauri::command]
+pub async fn apps_vincent_execute_approved(
+    app: tauri::AppHandle,
+    input: VincentExecuteInput,
+) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
+    if !apps_state::is_tool_app_ready("lit-protocol").map_err(|e: DbError| e.to_string())? {
+        return Err("Lit Protocol integration must be installed and enabled.".to_string());
+    }
+
+    // Get the delegatee key from keychain
+    let delegatee_key = crate::services::settings::get_app_secret("lit-protocol", "delegateeKey")
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+
+    if delegatee_key.is_empty() {
+        return Err(
+            "Vincent delegatee key not configured. Set it in Lit Protocol settings.".to_string(),
+        );
+    }
+
+    let result = lit::vincent_execute_ability(
+        &app,
+        &input.operation,
+        input.params,
+        &delegatee_key,
+    )
+    .await?;
+
+    crate::services::audit::record(
+        "vincent_ability_executed",
+        "app",
+        Some("lit-protocol"),
+        &serde_json::json!({
+            "operation": input.operation,
+            "success": result.get("success").and_then(|v| v.as_bool()).unwrap_or(false),
+            "txHash": result.get("txHash"),
+        }),
+    );
+
+    Ok(result)
+}
+
+/// Store the delegatee private key in the OS keychain (called from settings UI).
+#[tauri::command]
+pub fn apps_vincent_set_delegatee_key(input: VincentDelegateeKeyInput) -> Result<(), String> {
+    require_unlocked_session_for_app_settings()?;
+    if input.key.len() < 32 || input.key.len() > 256 {
+        return Err("Invalid delegatee key length".to_string());
+    }
+    crate::services::settings::set_app_secret("lit-protocol", "delegateeKey", &input.key)
+        .map_err(|e| e.to_string())?;
+    crate::services::audit::record(
+        "vincent_delegatee_key_updated",
+        "app",
+        Some("lit-protocol"),
+        &serde_json::json!({}),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Input types for Vincent commands
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincentJwtInput {
+    pub jwt: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincentExecuteInput {
+    pub operation: String,
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincentDelegateeKeyInput {
+    pub key: String,
+}
+
 #[tauri::command]
 pub async fn apps_flow_account_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     flow::account_status(&app).await

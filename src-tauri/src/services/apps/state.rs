@@ -455,3 +455,85 @@ pub fn catalog_has_id(app_id: &str) -> Result<bool, DbError> {
         Ok(rows.next()?.is_some())
     })
 }
+
+// ---------------------------------------------------------------------------
+// Vincent consent persistence
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincentConsentRow {
+    pub id: i64,
+    pub app_id: String,
+    pub pkp_address: String,
+    pub pkp_public_key: String,
+    /// Raw JWT string — stored encrypted in production; plain for dev build.
+    pub jwt: String,
+    pub granted_abilities_json: String,
+    pub expires_at: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Upsert a new consent record (replaces previous for the same app_id).
+pub fn upsert_vincent_consent(
+    app_id: &str,
+    pkp_address: &str,
+    pkp_public_key: &str,
+    jwt: &str,
+    granted_abilities_json: &str,
+    expires_at: i64,
+) -> Result<(), DbError> {
+    let t = now();
+    local_db::with_connection(|conn| {
+        conn.execute(
+            r#"INSERT INTO vincent_consent (app_id, pkp_address, pkp_public_key, jwt, granted_abilities_json, expires_at, created_at, updated_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+               ON CONFLICT DO NOTHING"#,
+            params![app_id, pkp_address, pkp_public_key, jwt, granted_abilities_json, expires_at, t, t],
+        )?;
+        // Keep only the latest per app_id (delete older rows)
+        conn.execute(
+            "DELETE FROM vincent_consent WHERE app_id = ?1 AND id NOT IN (SELECT id FROM vincent_consent WHERE app_id = ?1 ORDER BY created_at DESC LIMIT 1)",
+            params![app_id],
+        )?;
+        Ok(())
+    })
+}
+
+/// Get the latest active (non-expired) Vincent consent for the given app.
+pub fn get_active_vincent_consent(app_id: &str) -> Result<Option<VincentConsentRow>, DbError> {
+    let now_ts = now();
+    local_db::with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            r#"SELECT id, app_id, pkp_address, pkp_public_key, jwt, granted_abilities_json, expires_at, created_at, updated_at
+               FROM vincent_consent
+               WHERE app_id = ?1 AND expires_at > ?2
+               ORDER BY created_at DESC LIMIT 1"#,
+        )?;
+        let mut rows = stmt.query(params![app_id, now_ts])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(VincentConsentRow {
+                id: row.get(0)?,
+                app_id: row.get(1)?,
+                pkp_address: row.get(2)?,
+                pkp_public_key: row.get(3)?,
+                jwt: row.get(4)?,
+                granted_abilities_json: row.get(5)?,
+                expires_at: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
+/// Delete all consent rows for an app (revoke).
+pub fn delete_vincent_consent(app_id: &str) -> Result<(), DbError> {
+    local_db::with_connection(|conn| {
+        conn.execute("DELETE FROM vincent_consent WHERE app_id = ?1", params![app_id])?;
+        Ok(())
+    })
+}

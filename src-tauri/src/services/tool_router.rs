@@ -485,16 +485,34 @@ pub async fn route_and_execute(
                 let chain = call.parameters.get("chain").and_then(|v| v.as_str()).unwrap_or("ethereum");
                 let protocol = call.parameters.get("protocol").and_then(|v| v.as_str()).unwrap_or("uniswap");
 
-                // Get PKP address
                 let pkp_address = lit::stored_pkp_address();
 
-                // Run precheck through Lit first
+                // Check Vincent consent status — if active, use Vincent policy enforcement
+                let consent = lit::get_vincent_consent();
+                let has_vincent_consent = consent.is_some();
+                let enforcement_layer = if has_vincent_consent { "vincent-on-chain-policies" } else { "lit-tee-nodes" };
+
+                // Load guardrails from app config for local precheck
+                let guardrails_cfg: serde_json::Value = serde_json::from_str(
+                    &apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string())
+                ).unwrap_or_else(|_| serde_json::json!({}));
+
+                // Run precheck via Vincent policy or raw Lit Action fallback
                 let precheck_payload = serde_json::json!({
                     "kind": "swap",
                     "notionalUsd": amount,
                     "protocol": protocol,
+                    "perTradeLimitUsd": guardrails_cfg.get("perTradeLimitUsd").and_then(|v| v.as_f64()).unwrap_or(100.0),
+                    "dailySpendLimitUsd": guardrails_cfg.get("dailySpendLimitUsd").and_then(|v| v.as_f64()).unwrap_or(500.0),
+                    "approvalThresholdUsd": guardrails_cfg.get("approvalThresholdUsd").and_then(|v| v.as_f64()).unwrap_or(1000.0),
+                    "allowedProtocols": guardrails_cfg.get("allowedProtocols").cloned().unwrap_or(serde_json::json!(["uniswap", "aave"])),
                 });
-                let precheck_result = lit::precheck_action(app, precheck_payload).await;
+
+                let precheck_result = if has_vincent_consent {
+                    lit::vincent_precheck_policy(app, "swap", amount, Some(protocol), &precheck_payload).await
+                } else {
+                    lit::precheck_action(app, precheck_payload).await
+                };
 
                 let precheck_allowed = precheck_result
                     .as_ref()
@@ -513,25 +531,42 @@ pub async fn route_and_execute(
                 if !precheck_allowed {
                     ToolResult::Error {
                         message: format!(
-                            "Lit policy check denied: {}. Adjust guardrails in Lit Protocol settings.",
+                            "Policy check denied: {}. Adjust guardrails in Lit Protocol settings.",
                             precheck_reason
                         ),
                     }
                 } else {
+                    // Build the approval payload — after user approves, the frontend
+                    // calls apps_vincent_execute_approved (with Vincent consent) or
+                    // falls back to raw PKP signing via apps_lit_mint_pkp flow.
                     let payload = serde_json::json!({
                         "action": "lit_pkp_swap",
+                        "operation": "swap",
                         "fromToken": from,
                         "toToken": to,
                         "amountUsd": amount,
                         "chain": chain,
                         "protocol": protocol,
                         "pkpAddress": pkp_address,
-                        "litPrecheckResult": {
+                        "hasVincentConsent": has_vincent_consent,
+                        "vincentAbility": "UNISWAP_SWAP",
+                        "abilityParams": {
+                            "fromToken": from,
+                            "toToken": to,
+                            "amountUsd": amount,
+                            "chain": chain,
+                            "protocol": protocol,
+                        },
+                        "precheckResult": {
                             "allowed": true,
                             "reason": precheck_reason,
-                            "enforcedBy": "lit-tee-nodes",
+                            "enforcedBy": enforcement_layer,
                         },
-                        "note": "User approval required before PKP signs this transaction via Lit's MPC network.",
+                        "note": if has_vincent_consent {
+                            "User approval required. Execution will use Vincent delegated signing with on-chain policy enforcement."
+                        } else {
+                            "User approval required. PKP signs via Lit MPC. Enable Vincent for delegated execution."
+                        },
                     });
                     ToolResult::ApprovalRequired {
                         tool_name: def.name.to_string(),
