@@ -4,6 +4,7 @@ import { Activity, Clock, ListChecks, Play, Square, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import {
+  bindAutonomousListeners,
   getOrchestratorState,
   getTaskStats,
   startOrchestrator,
@@ -29,7 +30,7 @@ type OrchestratorDisplayState = {
   isRunning: boolean;
   lastCheck?: number;
   pendingTasks: number;
-  activeStrategies: number;
+  opportunitiesFound: number;
 };
 
 export function OrchestratorStatusCard() {
@@ -47,9 +48,9 @@ export function OrchestratorStatusCard() {
       ]);
       setState({
         isRunning: orchState.isRunning,
-        lastCheck: orchState.lastHealthCheck,
+        lastCheck: orchState.lastCheck,
         pendingTasks: taskStats.pending,
-        activeStrategies: orchState.activeStrategiesCount,
+        opportunitiesFound: orchState.opportunitiesFound,
       });
     } catch (err) {
       logError("Failed to fetch orchestrator state", err);
@@ -60,8 +61,28 @@ export function OrchestratorStatusCard() {
 
   useEffect(() => {
     void fetchState();
+
+    let cleanup = () => {};
+    bindAutonomousListeners({
+      onTasksUpdated: () => {
+        void fetchState();
+      },
+      onOrchestratorUpdated: () => {
+        void fetchState();
+      },
+    })
+      .then((unbind) => {
+        cleanup = unbind;
+      })
+      .catch((error) => {
+        logError("Failed to bind home orchestrator listeners", error);
+      });
+
     const interval = setInterval(fetchState, 10_000);
-    return () => clearInterval(interval);
+    return () => {
+      cleanup();
+      clearInterval(interval);
+    };
   }, [fetchState]);
 
   const handleToggle = async () => {
@@ -162,8 +183,8 @@ export function OrchestratorStatusCard() {
         />
         <StatCell
           icon={<Activity className="size-3.5" />}
-          label="Strategies"
-          value={isLoading ? "—" : String(state?.activeStrategies ?? 0)}
+          label="Opportunities"
+          value={isLoading ? "—" : String(state?.opportunitiesFound ?? 0)}
         />
       </div>
 

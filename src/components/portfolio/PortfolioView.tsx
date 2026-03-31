@@ -12,7 +12,6 @@ import { SwapModal } from "@/components/portfolio/SwapModal";
 import { TransactionList } from "@/components/portfolio/TransactionList";
 import { SuperWalletHero } from "@/components/portfolio/SuperWalletHero";
 import { WalletSelectorDropdown } from "@/components/portfolio/WalletSelectorDropdown";
-import { SmartOpportunities } from "@/components/portfolio/SmartOpportunities";
 import { CreateWalletModal } from "@/components/wallet/CreateWalletModal";
 import { ImportWalletModal } from "@/components/wallet/ImportWalletModal";
 import { WalletEmptyState } from "@/components/wallet/WalletEmptyState";
@@ -205,7 +204,7 @@ export function PortfolioView() {
               onTabChange={setActiveTab}
               tokensContent={
                 <div className="mt-4 space-y-4">
-                  <SmartOpportunities />
+                  {/* <SmartOpportunities /> */}
 
                   <div className="rounded-sm border border-border bg-white/2 p-3">
                     <PortfolioFilters
@@ -223,7 +222,10 @@ export function PortfolioView() {
                   {isLoading ? (
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <Skeleton key={i} className="h-[220px] w-full rounded-sm" />
+                        <Skeleton
+                          key={i}
+                          className="h-[220px] w-full rounded-sm"
+                        />
                       ))}
                     </div>
                   ) : balanceError ? (
@@ -269,7 +271,10 @@ export function PortfolioView() {
 
       <CreateWalletModal open={isCreateOpen} onOpenChange={setCreateOpen} />
       <ImportWalletModal open={isImportOpen} onOpenChange={setImportOpen} />
-      <ReceiveModal open={isReceiveOpen} onClose={() => setReceiveOpen(false)} />
+      <ReceiveModal
+        open={isReceiveOpen}
+        onClose={() => setReceiveOpen(false)}
+      />
 
       <SendModal
         open={portfolioAction?.action === "send"}

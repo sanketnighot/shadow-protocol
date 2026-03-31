@@ -1,7 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { Play, Square, Cpu, Clock, ListChecks, Activity, RefreshCw, AlertTriangle, Zap } from "lucide-react";
 
-import { getOrchestratorState, startOrchestrator, stopOrchestrator, getTaskStats } from "@/lib/autonomous";
+import {
+  bindAutonomousListeners,
+  getOrchestratorState,
+  getTaskStats,
+  startOrchestrator,
+  stopOrchestrator,
+} from "@/lib/autonomous";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { useToast } from "@/hooks/useToast";
@@ -47,12 +53,12 @@ export function OrchestratorControl() {
       ]);
       setState({
         isRunning: orchState.isRunning,
-        lastCheck: orchState.lastHealthCheck,
-        nextCheck: orchState.lastHealthCheck ? orchState.lastHealthCheck! + 300 : undefined,
-        tasksGenerated: orchState.pendingTasksCount,
-        opportunitiesFound: 0,
-        healthChecksRun: 0,
-        errors: [],
+        lastCheck: orchState.lastCheck,
+        nextCheck: orchState.nextCheck,
+        tasksGenerated: orchState.tasksGenerated,
+        opportunitiesFound: orchState.opportunitiesFound,
+        healthChecksRun: orchState.healthChecksRun,
+        errors: orchState.errors,
         pendingTasks: taskStats.pending,
       });
     } catch (err) {
@@ -64,8 +70,28 @@ export function OrchestratorControl() {
 
   useEffect(() => {
     void fetchState();
-    const interval = setInterval(fetchState, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
+
+    let cleanup = () => {};
+    bindAutonomousListeners({
+      onTasksUpdated: () => {
+        void fetchState();
+      },
+      onOrchestratorUpdated: () => {
+        void fetchState();
+      },
+    })
+      .then((unbind) => {
+        cleanup = unbind;
+      })
+      .catch((error) => {
+        logError("Failed to bind orchestrator listeners", error);
+      });
+
+    const interval = setInterval(fetchState, 10000);
+    return () => {
+      cleanup();
+      clearInterval(interval);
+    };
   }, [fetchState]);
 
   const handleToggle = async () => {

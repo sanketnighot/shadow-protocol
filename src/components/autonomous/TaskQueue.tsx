@@ -1,6 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { Check, X, Clock, AlertTriangle, Zap, TrendingUp, Shield } from "lucide-react";
-import { getPendingTasks, approveTask, rejectTask } from "@/lib/autonomous";
+import {
+  approveTask,
+  bindAutonomousListeners,
+  getPendingTasks,
+  rejectTask,
+} from "@/lib/autonomous";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,19 +36,58 @@ export function TaskQueue() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const { success, warning } = useToast();
 
-  const fetchTasks = useCallback(async () => { try { setTasks(await getPendingTasks()); } catch (err) { logError("Failed to fetch tasks", err); } finally { setIsLoading(false); } }, []);
+  const fetchTasks = useCallback(async () => {
+    try {
+      setTasks(await getPendingTasks());
+    } catch (err) {
+      logError("Failed to fetch tasks", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { void fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    void fetchTasks();
+
+    let cleanup = () => {};
+    bindAutonomousListeners({
+      onTasksUpdated: () => {
+        void fetchTasks();
+      },
+    })
+      .then((unbind) => {
+        cleanup = unbind;
+      })
+      .catch((error) => {
+        logError("Failed to bind autonomous task listeners", error);
+      });
+
+    const interval = setInterval(() => {
+      void fetchTasks();
+    }, 15_000);
+
+    return () => {
+      cleanup();
+      clearInterval(interval);
+    };
+  }, [fetchTasks]);
 
   const handleApprove = async (taskId: string) => {
     setProcessingId(taskId);
-    try { await approveTask(taskId); setTasks((prev) => prev.filter((t) => t.id !== taskId)); success("Task approved", "The action is now queued for execution."); }
+    try {
+      const result = await approveTask(taskId);
+      await fetchTasks();
+      success(
+        "Task approved",
+        result.message ?? "The action is now queued for execution.",
+      );
+    }
     catch (err) { warning("Approval failed", String(err)); } finally { setProcessingId(null); }
   };
 
   const handleReject = async (taskId: string) => {
     setProcessingId(taskId);
-    try { await rejectTask(taskId); setTasks((prev) => prev.filter((t) => t.id !== taskId)); success("Task rejected", "The suggestion has been dismissed."); }
+    try { await rejectTask(taskId); await fetchTasks(); success("Task rejected", "The suggestion has been dismissed."); }
     catch (err) { warning("Rejection failed", String(err)); } finally { setProcessingId(null); }
   };
 

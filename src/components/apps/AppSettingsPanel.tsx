@@ -179,9 +179,13 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
     setVincentLoading(true);
     try {
       const { url } = await getVincentConsentUrl();
-      await (window as unknown as { __TAURI__?: unknown }).__TAURI__
-        ? import("@tauri-apps/plugin-opener").then(({ openUrl }) => openUrl(url))
-        : window.open(url, "_blank");
+      const isTauri = Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+      if (isTauri) {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(url);
+      } else {
+        window.open(url, "_blank");
+      }
       setShowJwtInput(true);
     } catch {
       setShowJwtInput(true); // Fallback: just show input
@@ -633,6 +637,13 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
 
 type FlowTab = "config" | "schedule";
 
+function isCadenceAddressInput(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return true;
+  const body = trimmed.startsWith("0x") ? trimmed.slice(2) : trimmed;
+  return body.length === 16 && /^[a-fA-F0-9]+$/.test(body);
+}
+
 function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }) {
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const save = useSetAppConfigMutation();
@@ -677,6 +688,16 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
   }, [panelOpen, raw, isLoading, activeAddress, evmWalletChoices]);
 
   const commit = async () => {
+    const cadence = draft.cadenceAddress.trim();
+    if (!isCadenceAddressInput(cadence)) {
+      addNotification({
+        title: "Invalid Cadence Address",
+        description: "Use 16 hex characters with optional 0x prefix.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
+      return;
+    }
     try {
       await save.mutateAsync({
         appId,
@@ -717,7 +738,7 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
           )}
         >
           <Settings2 className="size-3" />
-          Config
+          Setup
         </button>
         <button
           type="button"
@@ -730,13 +751,56 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
           )}
         >
           <CalendarClock className="size-3" />
-          Scheduled Txns
+          Scheduler
         </button>
       </div>
 
-      {activeTab === "schedule" && <FlowSchedulePanel />}
+      {activeTab === "schedule" && (
+        <FlowSchedulePanel
+          cadenceAddress={draft.cadenceAddress.trim()}
+          linkedEvmAddress={draft.linkedEvmAddress.trim()}
+          network={draft.network}
+        />
+      )}
 
       {activeTab === "config" && <div className="space-y-6">
+      <div className="rounded-sm border border-border bg-secondary/30 p-4">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="size-4 text-primary" />
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">
+            Setup checklist
+          </p>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-muted md:grid-cols-3">
+          <div className="rounded-sm border border-border bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground">
+              1. Pick network
+            </p>
+            <p className="mt-1">
+              Choose testnet while experimenting, or mainnet when your Flow
+              account resources are already deployed.
+            </p>
+          </div>
+          <div className="rounded-sm border border-border bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground">
+              2. Link wallets
+            </p>
+            <p className="mt-1">
+              Link a SHADOW 0x wallet for Flow EVM visibility and add a Cadence
+              address for Cadence balances and scheduling.
+            </p>
+          </div>
+          <div className="rounded-sm border border-border bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground">
+              3. Open scheduler
+            </p>
+            <p className="mt-1">
+              Save these settings, then use the Scheduler tab to create, sync,
+              and cancel Flow schedules manually.
+            </p>
+          </div>
+        </div>
+      </div>
       <div className="flex items-center gap-2 mb-2">
         <Waves className="size-4 text-primary" />
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Flow</p>
@@ -1330,7 +1394,12 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
 export function AppSettingsPanel({ app, open, onOpenChange }: AppSettingsPanelProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-background border-border text-foreground p-0 overflow-hidden rounded-sm">
+      <DialogContent
+        className={cn(
+          "bg-background border-border text-foreground p-0 overflow-hidden rounded-sm",
+          app?.id === "flow" ? "max-w-4xl" : "max-w-md",
+        )}
+      >
         <DialogHeader className="p-6 pb-4 border-b border-border bg-secondary">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-sm border border-primary/20 bg-primary/12 text-primary">
