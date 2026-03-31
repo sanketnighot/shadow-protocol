@@ -6,6 +6,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/elliptic": "^6.4.18",
     "@types/node": "^22.10.0",
     "typescript": "~5.8.3"
   },
@@ -14,7 +15,12 @@
     "@lit-protocol/auth-helpers": "^8.2.1",
     "@lit-protocol/constants": "^9.0.1",
     "@lit-protocol/lit-node-client": "^7.4.0",
+    "@noble/hashes": "^2.0.1",
+    "@onflow/config": "^1.11.1",
     "@onflow/fcl": "^1.21.10",
+    "@onflow/sdk": "^1.13.7",
+    "@onflow/types": "^1.5.0",
+    "elliptic": "^6.6.1",
     "ethers": "^6.16.0",
     "viem": "^2.47.6"
   }

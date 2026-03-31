@@ -6,7 +6,7 @@
 import * as readline from "node:readline";
 
 // Lazy-loaded providers to avoid loading heavy SDKs unnecessarily
-let _defaultFilecoinProvider: import("./providers/filecoin.js").FilecoinProvider | null = null;
+let _defaultFilecoinProvider: import("./providers/filecoin.js").FilecoinStorageProvider | null = null;
 let _defaultLitProvider: import("./providers/lit.js").LitProvider | null = null;
 let _defaultFlowProvider: import("./providers/flow.js").FlowProvider | null = null;
 
@@ -182,29 +182,233 @@ async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
     case "flow.fetch_balances": {
       const flow = await getFlowProvider();
       const p = req.payload as { address?: string; network?: string };
-      console.error(`[Flow] fetch_balances dispatch called with address: ${p.address}`);
       if (!p.address) {
-        console.error("[Flow] Error: address missing in payload");
         return { ok: false, errorCode: "missing_params", errorMessage: "address required", data: {} };
       }
       try {
         const net = p.network === "mainnet" || p.network === "testnet" ? p.network : undefined;
         const balances = await flow.fetchBalances(p.address, net);
-        console.error(`[Flow] fetch_balances returned ${balances.length} assets`);
         return { ok: true, data: { assets: balances } };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
-        console.error(`[Flow] fetch_balances error: ${msg}`);
         return { ok: false, errorCode: "flow_error", errorMessage: msg, data: {} };
       }
     }
     case "flow.prepare_sponsored": {
       const flow = await getFlowProvider();
-      const p = req.payload as { summary?: string; apiKey?: string; network?: string };
+      const p = req.payload as {
+        summary?: string;
+        apiKey?: string;
+        privateKeyHex?: string;
+        cadenceAddress?: string;
+        network?: string;
+      };
       const net = p.network === "mainnet" || p.network === "testnet" ? p.network : "testnet";
       flow.setNetwork(net);
-      const data = await flow.prepareSponsored({ summary: p.summary }, p.apiKey);
+      const pk =
+        typeof p.privateKeyHex === "string" && p.privateKeyHex.length > 0
+          ? p.privateKeyHex
+          : p.apiKey;
+      const data = await flow.prepareSponsored(
+        { summary: p.summary },
+        pk,
+        typeof p.cadenceAddress === "string" ? p.cadenceAddress : undefined,
+      );
       return { ok: true, data };
+    }
+    case "flow.estimate_fee": {
+      const flow = await getFlowProvider();
+      const p = req.payload as {
+        network?: string;
+        executionEffort?: number;
+        priorityRaw?: number;
+        dataSizeMB?: string;
+      };
+      const net = p.network === "mainnet" ? "mainnet" : "testnet";
+      flow.setNetwork(net);
+      try {
+        const data = await flow.estimateScheduleFee({
+          network: net,
+          executionEffort: typeof p.executionEffort === "number" ? p.executionEffort : 100,
+          priorityRaw: typeof p.priorityRaw === "number" ? p.priorityRaw : 1,
+          dataSizeMB: typeof p.dataSizeMB === "string" ? p.dataSizeMB : "0.0001",
+        });
+        return { ok: true, data };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "estimate_failed";
+        return { ok: false, errorCode: "flow_estimate_failed", errorMessage: msg, data: {} };
+      }
+    }
+    case "flow.schedule_transaction": {
+      const flow = await getFlowProvider();
+      const p = req.payload as {
+        network?: string;
+        privateKeyHex?: string;
+        cadenceAddress?: string;
+        intentJson?: string;
+        keyId?: number;
+      };
+      const net = p.network === "mainnet" ? "mainnet" : "testnet";
+      flow.setNetwork(net);
+      const pk = typeof p.privateKeyHex === "string" ? p.privateKeyHex : "";
+      const addr = typeof p.cadenceAddress === "string" ? p.cadenceAddress : "";
+      const intent = typeof p.intentJson === "string" ? p.intentJson : "{}";
+      if (!pk || !addr) {
+        return {
+          ok: false,
+          errorCode: "missing_params",
+          errorMessage: "privateKeyHex and cadenceAddress required",
+          data: {},
+        };
+      }
+      try {
+        const data = await flow.submitScheduleIntent({
+          network: net,
+          privateKeyHex: pk,
+          cadenceAddress: addr,
+          intentJson: intent,
+          keyId: typeof p.keyId === "number" ? p.keyId : undefined,
+        });
+        return { ok: true, data };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "schedule_failed";
+        return { ok: false, errorCode: "flow_schedule_failed", errorMessage: msg, data: {} };
+      }
+    }
+    case "flow.cancel_scheduled": {
+      const flow = await getFlowProvider();
+      const p = req.payload as {
+        network?: string;
+        privateKeyHex?: string;
+        cadenceAddress?: string;
+        targetTxId?: string;
+        keyId?: number;
+      };
+      const net = p.network === "mainnet" ? "mainnet" : "testnet";
+      flow.setNetwork(net);
+      const pk = typeof p.privateKeyHex === "string" ? p.privateKeyHex : "";
+      const addr = typeof p.cadenceAddress === "string" ? p.cadenceAddress : "";
+      const target = typeof p.targetTxId === "string" ? p.targetTxId.trim() : "";
+      if (!pk || !addr || !target) {
+        return {
+          ok: false,
+          errorCode: "missing_params",
+          errorMessage: "privateKeyHex, cadenceAddress, targetTxId required",
+          data: {},
+        };
+      }
+      try {
+        const data = await flow.submitCancelIntent({
+          network: net,
+          privateKeyHex: pk,
+          cadenceAddress: addr,
+          targetTxId: target,
+          keyId: typeof p.keyId === "number" ? p.keyId : undefined,
+        });
+        return { ok: true, data };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "cancel_failed";
+        return { ok: false, errorCode: "flow_cancel_failed", errorMessage: msg, data: {} };
+      }
+    }
+    case "flow.setup_cron": {
+      const flow = await getFlowProvider();
+      const p = req.payload as {
+        network?: string;
+        privateKeyHex?: string;
+        cadenceAddress?: string;
+        cronExpression?: string;
+        keyId?: number;
+      };
+      const net = p.network === "mainnet" ? "mainnet" : "testnet";
+      flow.setNetwork(net);
+      const pk = typeof p.privateKeyHex === "string" ? p.privateKeyHex : "";
+      const addr = typeof p.cadenceAddress === "string" ? p.cadenceAddress : "";
+      const cron = typeof p.cronExpression === "string" ? p.cronExpression : "";
+      if (!pk || !addr || !cron) {
+        return {
+          ok: false,
+          errorCode: "missing_params",
+          errorMessage: "privateKeyHex, cadenceAddress, cronExpression required",
+          data: {},
+        };
+      }
+      try {
+        const data = await flow.submitCronIntent({
+          network: net,
+          privateKeyHex: pk,
+          cadenceAddress: addr,
+          cronExpression: cron,
+          keyId: typeof p.keyId === "number" ? p.keyId : undefined,
+        });
+        return { ok: true, data };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "cron_failed";
+        return { ok: false, errorCode: "flow_cron_failed", errorMessage: msg, data: {} };
+      }
+    }
+    case "flow.get_tx_status": {
+      const flow = await getFlowProvider();
+      const p = req.payload as { txId?: string };
+      const txId = typeof p.txId === "string" ? p.txId.trim() : "";
+      if (!txId) {
+        return { ok: false, errorCode: "missing_params", errorMessage: "txId required", data: {} };
+      }
+      try {
+        const data = await flow.getTxStatus(txId);
+        return { ok: true, data };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "status_failed";
+        return { ok: false, errorCode: "flow_status_failed", errorMessage: msg, data: {} };
+      }
+    }
+    case "flow.actions_preview": {
+      const m = await import("./providers/flow-actions.js");
+      const p = req.payload as {
+        kind?: string;
+        fromSymbol?: string;
+        toSymbol?: string;
+        swapperProtocol?: string;
+        legCount?: number;
+        flasherProtocol?: string;
+      };
+      const kind = typeof p.kind === "string" ? p.kind : "dca";
+      if (kind === "rebalance") {
+        const data = m.buildRebalanceCompositionPreview({
+          swapperProtocol: typeof p.swapperProtocol === "string" ? p.swapperProtocol : "incrementfi",
+          legCount: typeof p.legCount === "number" ? p.legCount : 1,
+        });
+        return { ok: true, data: data as unknown as Record<string, unknown> };
+      }
+      if (kind === "flash") {
+        const data = m.buildFlashLoanPreview({
+          flasherProtocol: typeof p.flasherProtocol === "string" ? p.flasherProtocol : "incrementfi",
+          swapperProtocol: typeof p.swapperProtocol === "string" ? p.swapperProtocol : "incrementfi",
+        });
+        return { ok: true, data: data as unknown as Record<string, unknown> };
+      }
+      const data = m.buildDcaCompositionPreview({
+        fromSymbol: typeof p.fromSymbol === "string" ? p.fromSymbol : "USDC",
+        toSymbol: typeof p.toSymbol === "string" ? p.toSymbol : "FLOW",
+        swapperProtocol: typeof p.swapperProtocol === "string" ? p.swapperProtocol : "incrementfi",
+      });
+      return { ok: true, data: data as unknown as Record<string, unknown> };
+    }
+    case "flow.bridge_preview": {
+      const m = await import("./providers/flow-bridge.js");
+      const p = req.payload as {
+        direction?: string;
+        tokenRef?: string;
+        amountHint?: string;
+      };
+      const dir =
+        p.direction === "evm_to_cadence" ? "evm_to_cadence" : "cadence_to_evm";
+      const data = m.bridgePreview({
+        direction: dir,
+        tokenRef: typeof p.tokenRef === "string" ? p.tokenRef : "unknown",
+        amountHint: typeof p.amountHint === "string" ? p.amountHint : "0",
+      });
+      return { ok: true, data: { ...data, hints: m.listBridgeableHints() } };
     }
     case "filecoin.backup_upload": {
       const filecoin = await getFilecoinProvider();

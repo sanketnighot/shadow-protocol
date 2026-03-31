@@ -1,5 +1,12 @@
 import * as fcl from "@onflow/fcl";
 
+import { configureFclNetwork, schedulerImportAddress, type FlowNetworkId } from "./flow-network.js";
+import {
+  getTransactionStatus,
+  runCadenceScript,
+  submitCadenceWithSessionKey,
+} from "./flow-tx.js";
+
 export interface FlowAsset {
   address: string | null;
   symbol: string;
@@ -15,7 +22,7 @@ export interface FlowAccountInfo {
   contracts: Record<string, unknown>;
 }
 
-/** Cadence read vs write: reads use REST only; writes may require session material in Rust. */
+/** Cadence read vs write: reads use REST only; writes use session key in isolated sidecar process. */
 export interface FlowProvider {
   setNetwork(network: "testnet" | "mainnet"): void;
   accountStatus(): Promise<{
@@ -27,19 +34,67 @@ export interface FlowProvider {
   fetchBalances(address: string, network?: string): Promise<FlowAsset[]>;
   prepareSponsored(
     proposal: { summary?: string },
-    apiKey?: string,
+    sessionMaterial?: string,
+    cadenceAddress?: string,
   ): Promise<{
     status: string;
     summary: string;
     cadencePreview: string;
     sponsorNote: string;
+    txId?: string;
   }>;
+  estimateScheduleFee(params: {
+    network: FlowNetworkId;
+    executionEffort: number;
+    priorityRaw: number;
+    dataSizeMB: string;
+  }): Promise<{ feeFlow: string; note: string }>;
+  /** On-chain audit log of scheduling intent; full FlowTransactionScheduler.schedule requires a deployed TransactionHandler. */
+  submitScheduleIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    intentJson: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }>;
+  submitCronIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    cronExpression: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }>;
+  /** On-chain audit log tied to a prior submitted tx id (manager cancel still TBD). */
+  submitCancelIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    targetTxId: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }>;
+  getTxStatus(txId: string): Promise<Record<string, unknown>>;
 }
+
+const MINIMAL_PREPARE_CADENCE = `
+transaction {
+  prepare(signer: auth(Storage) &Account) {
+    log("shadow_flow_signing_ok")
+  }
+}
+`.trim();
+
+const INTENT_CADENCE = `
+transaction(intent: String) {
+  prepare(signer: auth(Storage) &Account) {
+    log(intent)
+  }
+}
+`.trim();
 
 export class FclFlowProvider implements FlowProvider {
   private testnetAccessNode = "https://rest-testnet.onflow.org";
   private mainnetAccessNode = "https://rest-mainnet.onflow.org";
-  private currentNetwork: "testnet" | "mainnet" = "testnet";
+  private currentNetwork: FlowNetworkId = "testnet";
 
   constructor() {
     fcl
@@ -86,9 +141,6 @@ export class FclFlowProvider implements FlowProvider {
     }
   }
 
-  /**
-   * Flow addresses are 8 bytes (16 hex chars) with optional 0x prefix (Cadence account).
-   */
   private isFlowAddress(address: string): boolean {
     const clean = address.startsWith("0x") ? address.slice(2) : address;
     return clean.length === 16 && /^[0-9a-fA-F]+$/.test(clean);
@@ -169,21 +221,170 @@ export class FclFlowProvider implements FlowProvider {
     return formatted.toFixed(6);
   }
 
-  async prepareSponsored(proposal: { summary?: string }, apiKey?: string) {
-    if (!apiKey || apiKey.length < 8) {
-      throw new Error("Unlock your SHADOW wallet session to prepare sponsored Flow transactions.");
+  async prepareSponsored(
+    proposal: { summary?: string },
+    sessionMaterial?: string,
+    cadenceAddress?: string,
+  ) {
+    const pk = sessionMaterial?.trim() ?? "";
+    if (!pk || pk.length < 32) {
+      throw new Error("Unlock your SHADOW wallet session to prepare or sign Flow transactions.");
+    }
+
+    const previewCadence = MINIMAL_PREPARE_CADENCE;
+    if (cadenceAddress && this.isFlowAddress(cadenceAddress)) {
+      try {
+        const { txId } = await submitCadenceWithSessionKey({
+          network: this.currentNetwork,
+          cadence: MINIMAL_PREPARE_CADENCE,
+          args: () => [],
+          privateKeyHex: pk,
+          cadenceAddress,
+          limit: 120,
+        });
+        return {
+          status: "signed_submitted",
+          summary: proposal.summary ?? "Flow signing verification",
+          cadencePreview: previewCadence,
+          sponsorNote:
+            "Submitted a minimal Cadence transaction to verify proposer/payer/authorizer signing. Full FlowTransactionScheduler flows require a deployed TransactionHandler on your account.",
+          txId,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "sign_failed";
+        throw new Error(`Flow signing or submit failed: ${msg}`);
+      }
     }
 
     return {
       status: "preview_only",
       summary: proposal.summary ?? "Flow transaction shell",
-      cadencePreview: `transaction() {
-  prepare(signer: AuthAccount) {}
-  execute { log("Preview only — submit/sign path not yet wired to Cadence proposer/payer/authorizer roles") }
-}`,
+      cadencePreview: previewCadence,
       sponsorNote:
-        "SHADOW prepares a preview only. Production Cadence execution requires role-separated signing and audited sponsorship — not yet enabled in this build.",
+        "Set cadenceAddress in Flow app settings to submit a minimal signing check. Full scheduled transactions need FlowTransactionScheduler + TransactionHandler resources.",
     };
+  }
+
+  async estimateScheduleFee(params: {
+    network: FlowNetworkId;
+    executionEffort: number;
+    priorityRaw: number;
+    dataSizeMB: string;
+  }): Promise<{ feeFlow: string; note: string }> {
+    configureFclNetwork(params.network);
+    const addr = schedulerImportAddress(params.network);
+    const cadence = `
+import FlowTransactionScheduler from ${addr}
+
+access(all) fun main(
+  executionEffort: UInt64,
+  priorityRaw: UInt8,
+  dataSizeMB: UFix64,
+): UFix64 {
+  let priority = FlowTransactionScheduler.Priority(rawValue: priorityRaw)
+    ?? FlowTransactionScheduler.Priority.Medium
+  return FlowTransactionScheduler.calculateFee(
+    executionEffort: executionEffort,
+    priority: priority,
+    dataSizeMB: dataSizeMB
+  )
+}
+`.trim();
+
+    try {
+      const fee = await runCadenceScript<string | number>({
+        network: params.network,
+        cadence,
+        args: (arg, t) => [
+          arg(String(params.executionEffort), t.UInt64),
+          arg(String(params.priorityRaw), t.UInt8),
+          arg(params.dataSizeMB, t.UFix64),
+        ],
+      });
+      return {
+        feeFlow: String(fee),
+        note: "Fee from FlowTransactionScheduler.calculateFee (UFix64). Pay from Flow vault when scheduling.",
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "estimate_failed";
+      throw new Error(`Flow schedule fee query failed: ${msg}`);
+    }
+  }
+
+  async submitScheduleIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    intentJson: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }> {
+    if (!this.isFlowAddress(params.cadenceAddress)) {
+      throw new Error("Invalid Cadence Flow address.");
+    }
+    const intent = params.intentJson.length > 512 ? params.intentJson.slice(0, 512) : params.intentJson;
+    const { txId } = await submitCadenceWithSessionKey({
+      network: params.network,
+      cadence: INTENT_CADENCE,
+      args: (arg, t) => [arg(`SHADOW_SCHEDULE:${intent}`, t.String)],
+      privateKeyHex: params.privateKeyHex,
+      cadenceAddress: params.cadenceAddress,
+      keyId: params.keyId,
+      limit: 200,
+    });
+    return {
+      txId,
+      note: "Logged scheduling intent on-chain. Wire FlowTransactionScheduler.schedule with your TransactionHandler for autonomous execution.",
+    };
+  }
+
+  async submitCronIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    cronExpression: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }> {
+    const payload = JSON.stringify({
+      kind: "flow_cron",
+      cron: params.cronExpression,
+    });
+    return this.submitScheduleIntent({
+      network: params.network,
+      privateKeyHex: params.privateKeyHex,
+      cadenceAddress: params.cadenceAddress,
+      intentJson: payload,
+      keyId: params.keyId,
+    });
+  }
+
+  async submitCancelIntent(params: {
+    network: FlowNetworkId;
+    privateKeyHex: string;
+    cadenceAddress: string;
+    targetTxId: string;
+    keyId?: number;
+  }): Promise<{ txId: string; note: string }> {
+    const tid = params.targetTxId.trim();
+    if (!tid) {
+      throw new Error("targetTxId required");
+    }
+    const { txId } = await submitCadenceWithSessionKey({
+      network: params.network,
+      cadence: INTENT_CADENCE,
+      args: (arg, t) => [arg(`SHADOW_CANCEL:${tid}`, t.String)],
+      privateKeyHex: params.privateKeyHex,
+      cadenceAddress: params.cadenceAddress,
+      keyId: params.keyId,
+      limit: 200,
+    });
+    return {
+      txId,
+      note: "Logged cancel intent on-chain. Full FlowTransactionScheduler manager cancel still requires deployed resources.",
+    };
+  }
+
+  async getTxStatus(txId: string): Promise<Record<string, unknown>> {
+    return getTransactionStatus(txId.trim());
   }
 }
 
