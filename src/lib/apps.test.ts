@@ -47,6 +47,15 @@ describe("parseLitConfig", () => {
     expect(parseLitConfig({ dailySpendLimitUsd: 99999 }).dailySpendLimitUsd).toBe(5000);
     expect(parseLitConfig({ dailySpendLimitUsd: -5 }).dailySpendLimitUsd).toBe(0);
   });
+
+  it("preserves Vincent consent configuration", () => {
+    const c = parseLitConfig({
+      vincentAppId: "shadow-vincent-app",
+      pkpEthAddress: "0x1111111111111111111111111111111111111111",
+    });
+    expect(c.vincentAppId).toBe("shadow-vincent-app");
+    expect(c.pkpEthAddress).toBe("0x1111111111111111111111111111111111111111");
+  });
 });
 
 describe("parseFlowConfig", () => {

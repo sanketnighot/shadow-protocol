@@ -62,10 +62,33 @@ export type VincentConsentGrant = {
 
 export type VincentConsentUrlResult = {
   url: string;
+  /** Present when SHADOW uses localhost redirect; add this exact URL to Vincent app redirect allow-list. */
+  redirectUri?: string;
 };
 
-export async function getVincentConsentUrl(): Promise<VincentConsentUrlResult> {
-  return invoke<VincentConsentUrlResult>("apps_vincent_consent_url", {});
+export async function getVincentConsentUrl(input?: {
+  appId?: string;
+  redirectUri?: string;
+}): Promise<VincentConsentUrlResult> {
+  return invoke<VincentConsentUrlResult>("apps_vincent_consent_url", {
+    input: {
+      appId: input?.appId ?? null,
+      redirectUri: input?.redirectUri ?? null,
+    },
+  });
+}
+
+export type VincentLoopbackPoll = {
+  jwt: string | null;
+  error: string | null;
+};
+
+export async function pollVincentLoopback(): Promise<VincentLoopbackPoll> {
+  return invoke<VincentLoopbackPoll>("apps_vincent_loopback_poll", {});
+}
+
+export async function cancelVincentLoopback(): Promise<void> {
+  await invoke("apps_vincent_loopback_cancel", {});
 }
 
 export async function submitVincentJwt(jwt: string): Promise<VincentConsentGrant> {
@@ -254,7 +277,7 @@ export function validateFlowScheduleDraft(
       break;
     case "custom":
       if (draft.customJson.trim().length === 0) {
-        errors.push("Add a JSON payload for the custom schedule.");
+        errors.push("Choose a custom action or add JSON for the custom schedule.");
       } else {
         try {
           const parsed = JSON.parse(draft.customJson) as unknown;
@@ -349,6 +372,7 @@ export type LitIntegrationConfig = {
   perTradeLimitUsd: number;
   approvalThresholdUsd: number;
   allowedProtocols: string[];
+  vincentAppId?: string;
   pkpEthAddress?: string;
   pkpPublicKey?: string;
   pkpTokenId?: string;
@@ -420,6 +444,7 @@ export function parseLitConfig(raw: unknown): LitIntegrationConfig {
     perTradeLimitUsd: perTrade,
     approvalThresholdUsd: approval,
     allowedProtocols: protocols,
+    vincentAppId: typeof o.vincentAppId === "string" ? o.vincentAppId.trim().slice(0, 256) : undefined,
     pkpEthAddress: typeof o.pkpEthAddress === "string" ? o.pkpEthAddress : undefined,
     pkpPublicKey: typeof o.pkpPublicKey === "string" ? o.pkpPublicKey : undefined,
     pkpTokenId: typeof o.pkpTokenId === "string" ? o.pkpTokenId : undefined,

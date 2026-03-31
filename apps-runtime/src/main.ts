@@ -532,7 +532,11 @@ async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
 
     case "vincent.consent_url": {
       const vincent = await getVincentProvider();
-      const p = req.payload as { redirectUri?: string };
+      const { setVincentConfig } = await import("./providers/vincent.js");
+      const p = req.payload as { appId?: string; redirectUri?: string };
+      setVincentConfig({
+        appId: typeof p.appId === "string" ? p.appId : undefined,
+      });
       const redirectUri = typeof p.redirectUri === "string" ? p.redirectUri : "shadow://vincent-consent";
       const url = vincent.getConsentUrl(redirectUri);
       return { ok: true, data: { url } };

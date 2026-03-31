@@ -43,8 +43,44 @@ export const VINCENT_ABILITY_CIDS: Record<string, string> = {
   EVM_TX_SIGNER:   process.env['VINCENT_CID_EVM_TX_SIGNER']    ?? '',
 };
 
-/** Vincent hosted consent page URL */
-const VINCENT_CONSENT_BASE = 'https://heyvincent.ai/consent';
+/** Vincent user connect URL — JWT returned on `redirectUri` after auth (dashboard user flow). */
+const VINCENT_DASHBOARD_USER_CONNECT = 'https://dashboard.heyvincent.ai/user/appId';
+
+function isEvmAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
+/**
+ * HeyVincent login uses Stytch; the `authenticate` response `session_jwt` is NOT
+ * a Vincent consent token. Users often paste it from DevTools by mistake.
+ */
+function isStytchOrWebLoginSessionPayload(payload: Record<string, unknown>): boolean {
+  const iss = payload['iss'];
+  if (typeof iss === 'string' && iss.includes('stytch')) {
+    return true;
+  }
+  if (payload['https://stytch.com/session'] != null) {
+    return true;
+  }
+  const sub = payload['sub'];
+  if (typeof sub === 'string' && /^user-(live|test)-/i.test(sub)) {
+    return true;
+  }
+  return false;
+}
+
+/** Sidecar runs in Node — never reference global `window` (ReferenceError). */
+function resolveJwtExpectedAudience(explicit?: string): string {
+  if (typeof explicit === 'string' && explicit.trim() !== '') {
+    return explicit.trim();
+  }
+  const w = (globalThis as unknown as { window?: { location?: { origin?: string } } }).window;
+  const origin = w?.location?.origin;
+  if (typeof origin === 'string' && origin.trim() !== '') {
+    return origin.trim();
+  }
+  return 'shadow://app';
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,57 +130,106 @@ export class VincentProvider {
    * For desktop Tauri: open with tauri-plugin-opener; user pastes JWT back.
    */
   getConsentUrl(redirectUri: string = 'shadow://vincent-consent'): string {
-    const params = new URLSearchParams({
-      appId: VINCENT_APP_ID,
-      redirectUri,
-    });
-    return `${VINCENT_CONSENT_BASE}?${params.toString()}`;
+    if (!VINCENT_APP_ID.trim()) {
+      throw new Error('Vincent App ID is not configured.');
+    }
+    const id = VINCENT_APP_ID.trim();
+    const enc = encodeURIComponent(redirectUri);
+    return `${VINCENT_DASHBOARD_USER_CONNECT}/${id}/connect?redirectUri=${enc}`;
   }
 
   /**
    * Decode and verify a Vincent consent JWT pasted by the user.
    * Does NOT require a live network call — the JWT is self-contained.
    */
-  async verifyJwt(
-    jwtString: string,
-    expectedAudience: string = window?.location?.origin ?? 'shadow://app',
-  ): Promise<VincentConsentInfo> {
-    const { isExpired } = vincentJwt;
-
-    // Cast to branded type expected by the SDK
-    if (isExpired(jwtString as unknown as Parameters<typeof isExpired>[0])) {
-      throw new Error('Vincent consent JWT has expired. Please re-authorize.');
-    }
-
-    // Basic decode (no full signature verify for desktop — the JWT comes
-    // from heyvincent.ai which controls issuance)
+  async verifyJwt(jwtString: string, expectedAudience?: string): Promise<VincentConsentInfo> {
+    const audienceExpected = resolveJwtExpectedAudience(expectedAudience);
     const parts = jwtString.split('.');
     if (parts.length !== 3) {
       throw new Error('Invalid JWT format');
     }
 
-    const payload = JSON.parse(
-      Buffer.from(parts[1]!, 'base64url').toString('utf8'),
-    ) as Record<string, unknown>;
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(
+        Buffer.from(parts[1]!, 'base64url').toString('utf8'),
+      ) as Record<string, unknown>;
+    } catch {
+      throw new Error('Invalid JWT payload');
+    }
 
-    const pkpAddress = (payload['pkpAddress'] as string | undefined)
-      ?? (payload['sub'] as string | undefined)
-      ?? '';
-    const pkpPublicKey = (payload['pkpPublicKey'] as string | undefined) ?? '';
+    if (isStytchOrWebLoginSessionPayload(payload)) {
+      throw new Error(
+        'That JWT is a HeyVincent login session token (Stytch), not a Vincent consent token. ' +
+          'Do not paste session_jwt from the authenticate network response.',
+      );
+    }
+
+    // Check expiry directly from the payload (SDK isExpired() may throw on new JWT shapes).
+    const nowSecs = Math.floor(Date.now() / 1000);
+    const expiresAt = typeof payload['exp'] === 'number' ? payload['exp'] : 0;
+    if (expiresAt > 0 && nowSecs > expiresAt) {
+      throw new Error('Vincent consent JWT has expired. Please re-authorize.');
+    }
+
+    // Vincent API v1 puts PKP info inside `pkpInfo.ethAddress`.
+    // Older/alternative shapes use top-level `pkpAddress`, `sub`, or `iss`.
+    const pkpInfoRaw = payload['pkpInfo'];
+    const pkpInfo =
+      pkpInfoRaw && typeof pkpInfoRaw === 'object' ? (pkpInfoRaw as Record<string, unknown>) : null;
+
+    let pkpAddress = '';
+    const candidates = [
+      pkpInfo?.['ethAddress'],
+      payload['pkpAddress'],
+      payload['sub'],
+      payload['iss'],
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' && isEvmAddress(c)) {
+        pkpAddress = c.trim();
+        break;
+      }
+    }
+
+    const pkpPublicKey =
+      (pkpInfo && typeof pkpInfo['publicKey'] === 'string' ? pkpInfo['publicKey'] : '') ||
+      (typeof payload['pkpPublicKey'] === 'string' ? payload['pkpPublicKey'] : '') ||
+      (typeof payload['publicKey'] === 'string' ? payload['publicKey'] : '');
+
+    // Granted abilities may be absent in Vincent API v1 (server-side policies).
     const grantedAbilities = Array.isArray(payload['grantedAbilities'])
       ? (payload['grantedAbilities'] as string[])
       : [];
-    const appId = (payload['appId'] as string | undefined) ?? (payload['iss'] as string | undefined) ?? '';
-    const expiresAt = typeof payload['exp'] === 'number' ? payload['exp'] : 0;
-    const audience = payload['aud'];
 
-    // Validate audience if provided
-    if (expectedAudience && audience && audience !== expectedAudience && !String(audience).includes(expectedAudience)) {
-      process.stderr.write(`[Vincent] JWT audience mismatch: got ${String(audience)}, expected ${expectedAudience}\n`);
+    // App ID: explicit field, nested app.id, or issuer.
+    const appNested = payload['app'];
+    const appNestedId =
+      appNested && typeof appNested === 'object'
+        ? String((appNested as Record<string, unknown>)['id'] ?? '')
+        : '';
+    const appId =
+      (typeof payload['appId'] === 'string' ? payload['appId'] : '') ||
+      appNestedId ||
+      '';
+
+    const audience = payload['aud'];
+    if (
+      audienceExpected &&
+      audience != null &&
+      audience !== audienceExpected &&
+      !String(audience).includes(audienceExpected)
+    ) {
+      process.stderr.write(
+        `[Vincent] JWT audience: got ${String(audience)}, expected ${audienceExpected}\n`,
+      );
     }
 
     if (!pkpAddress) {
-      throw new Error('JWT missing pkpAddress claim');
+      throw new Error(
+        'Vincent consent JWT has no PKP wallet address. ' +
+          'Make sure you used the connect flow at dashboard.heyvincent.ai — not a login or API token.',
+      );
     }
 
     return { pkpAddress, pkpPublicKey, grantedAbilities, appId, expiresAt, jwt: jwtString };
@@ -271,8 +356,5 @@ function extractTxHash(result: unknown): string | null {
   }
   return null;
 }
-
-// Tauri sidecar runs in Node.js/Bun — no window object; provide fallback
-declare const window: { location?: { origin?: string } } | undefined;
 
 export const defaultVincentProvider = new VincentProvider();
