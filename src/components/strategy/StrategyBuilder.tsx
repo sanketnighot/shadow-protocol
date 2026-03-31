@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { FlowSchedulePanel } from "@/components/strategy/FlowSchedulePanel";
 import { GuardrailsForm } from "@/components/strategy/GuardrailsForm";
 import { StrategyCanvas } from "@/components/strategy/StrategyCanvas";
 import { StrategyInspector } from "@/components/strategy/StrategyInspector";
@@ -249,6 +250,9 @@ export function StrategyBuilder() {
                 <TabsTrigger value="preview" className="rounded-sm px-3 text-xs">
                   Preview
                 </TabsTrigger>
+                <TabsTrigger value="flow" className="rounded-sm px-3 text-xs">
+                  Flow
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="step" className="mt-0 min-h-48">
                 <StrategyInspector
@@ -276,6 +280,12 @@ export function StrategyBuilder() {
                   isCompiling={isCompiling}
                   onSelectIssue={handleSelectIssue}
                 />
+              </TabsContent>
+              <TabsContent value="flow" className="mt-0 min-h-48">
+                <p className="mb-3 font-mono text-[10px] tracking-[0.2em] text-muted uppercase">
+                  Flow schedule
+                </p>
+                <FlowSchedulePanel strategyBuilderEnabled={strategyBuilderEnabled} />
               </TabsContent>
             </Tabs>
           </div>

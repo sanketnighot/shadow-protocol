@@ -28,6 +28,8 @@ export type PortfolioAsset = {
   tokenContract: string;
   decimals: number;
   walletAddress?: string | null;
+  unifiedBalanceNote?: string | null;
+  flowCrossVmBridgeEligible?: boolean | null;
 };
 
 export type PortfolioSnapshotPoint = {

@@ -1,5 +1,8 @@
 export function explorerUrl(chain: string, txHash: string): string {
   const base = chainToExplorerBase(chain);
+  if (chain === "FIL-CAL") {
+    return `${base}/message/${txHash}`;
+  }
   return `${base}/tx/${txHash}`;
 }
 
@@ -22,6 +25,7 @@ function chainToExplorerBase(chain: string): string {
     "POL-AMOY": "https://amoy.polygonscan.com",
     "FLOW-TEST": "https://testnet.flowscan.org",
     "FLOW-EVM-TEST": "https://evm-testnet.flowscan.io",
+    "FIL-CAL": "https://calibration.filfox.info/en",
   };
   return map[chain] ?? "https://etherscan.io";
 }

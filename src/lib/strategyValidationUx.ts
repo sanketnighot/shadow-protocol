@@ -1,6 +1,6 @@
 import type { StrategyValidationIssue } from "@/types/strategy";
 
-export type StrategyRailTab = "step" | "safety" | "preview";
+export type StrategyRailTab = "step" | "safety" | "preview" | "flow";
 
 /**
  * Maps backend `fieldPath` to inspector rail tab and optional node id (`nodes.{id}`).

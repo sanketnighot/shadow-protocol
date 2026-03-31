@@ -44,6 +44,53 @@ export async function fetchFlowAccountStatusPreview(): Promise<unknown> {
   return invoke<unknown>("apps_flow_account_status", {});
 }
 
+/** Mirrors `FlowScheduledTransactionRow` (camelCase) from Rust. */
+export type FlowScheduledRowIpc = {
+  id: string;
+  strategyId?: string | null;
+  flowSchedulerNumericId?: number | null;
+  handlerType: string;
+  cronExpression?: string | null;
+  status: string;
+  priority: string;
+  feePaid: string;
+  submittedTxId: string;
+  scheduledAt: number;
+  executedAt?: number | null;
+  metadataJson: string;
+  createdAt: number;
+};
+
+export async function appsFlowListScheduled(
+  limit?: number,
+): Promise<FlowScheduledRowIpc[]> {
+  return invoke<FlowScheduledRowIpc[]>("apps_flow_list_scheduled", {
+    limit: limit ?? null,
+  });
+}
+
+export async function appsFlowEstimateScheduleFee(params: {
+  executionEffort?: number;
+  priorityRaw?: number;
+  dataSizeMB?: string;
+}): Promise<unknown> {
+  return invoke("apps_flow_estimate_schedule_fee", {
+    executionEffort: params.executionEffort ?? null,
+    priorityRaw: params.priorityRaw ?? null,
+    dataSizeMB: params.dataSizeMB ?? null,
+  });
+}
+
+export async function appsFlowSyncScheduled(): Promise<void> {
+  await invoke("apps_flow_sync_scheduled", {});
+}
+
+export async function appsFlowCancelScheduledRecord(
+  recordId: string,
+): Promise<unknown> {
+  return invoke("apps_flow_cancel_scheduled_record", { recordId });
+}
+
 export type LitIntegrationConfig = {
   dailySpendLimitUsd: number;
   perTradeLimitUsd: number;

@@ -19,6 +19,14 @@ export type TargetAllocationRow = {
   percentage: number;
 };
 
+/** Flow Cadence on-chain scheduling hints on DCA / rebalance (see Rust `FlowOnChainSpec`). */
+export type FlowOnChainSpec = {
+  enabled?: boolean;
+  cronExpression?: string | null;
+  oneShotTimestamp?: number | null;
+  handlerType?: string | null;
+};
+
 /** Draft node `data` — matches `DraftNodeData` in Rust. */
 export type DraftNodeData =
   | {
@@ -53,6 +61,7 @@ export type DraftNodeData =
       toSymbol: string;
       amountUsd?: number | null;
       amountToken?: number | null;
+      flowOnChain?: FlowOnChainSpec | null;
     }
   | {
       type: "rebalance_to_target";
@@ -60,6 +69,7 @@ export type DraftNodeData =
       thresholdPct: number;
       maxExecutionUsd?: number | null;
       targetAllocations: TargetAllocationRow[];
+      flowOnChain?: FlowOnChainSpec | null;
     }
   | {
       type: "alert_only";
@@ -177,6 +187,35 @@ export type CompiledStrategyAction =
       title: string;
       messageTemplate: string;
       severity: string;
+    }
+  | {
+      kind: "flow_scheduled";
+      chain: string;
+      handler_type: string;
+      cron_expression?: string | null;
+      one_shot_timestamp?: number | null;
+      handler_params: Record<string, unknown>;
+    }
+  | {
+      kind: "flow_dca_buy";
+      fromVault: string;
+      toVault: string;
+      amount: number;
+      swapperProtocol: string;
+      maxSlippageBps: number;
+    }
+  | {
+      kind: "flow_rebalance";
+      targetAllocations: TargetAllocationSpec[];
+      swapperProtocol: string;
+      maxExecutionUsd?: number | null;
+    }
+  | {
+      kind: "flow_flash_loan_arbitrage";
+      flasherProtocol: string;
+      loanToken: string;
+      loanAmount: number;
+      swapRoute: Array<{ fromSymbol: string; toSymbol: string }>;
     };
 
 export type CompiledStrategyPlan = {

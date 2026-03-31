@@ -1,6 +1,11 @@
 import type { ChangeEvent, ReactNode } from "react";
 
-import type { DraftNodeData, StrategyDraftNode, StrategyValidationIssue } from "@/types/strategy";
+import type {
+  DraftNodeData,
+  FlowOnChainSpec,
+  StrategyDraftNode,
+  StrategyValidationIssue,
+} from "@/types/strategy";
 
 type StrategyInspectorProps = {
   node: StrategyDraftNode | null;
@@ -359,6 +364,91 @@ export function StrategyInspector({ node, onUpdate, validationIssues }: Strategy
                   className={inputClassName}
                 />,
               )}
+              {action.chain === "flow" ? (
+                <div className="space-y-3 rounded-sm border border-primary/20 bg-primary/5 p-3">
+                  <label className="flex items-center gap-2 text-xs text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(action.flowOnChain?.enabled)}
+                      onChange={(e) => {
+                        const next: FlowOnChainSpec = {
+                          ...(action.flowOnChain ?? {}),
+                          enabled: e.currentTarget.checked,
+                          handlerType:
+                            action.flowOnChain?.handlerType ?? "dca",
+                          cronExpression:
+                            action.flowOnChain?.cronExpression ?? "0 0 * * 1",
+                        };
+                        onUpdate({ ...action, flowOnChain: next });
+                      }}
+                      className="rounded-sm border-border"
+                    />
+                    <span>On-chain Flow schedule (Cadence intent log)</span>
+                  </label>
+                  {action.flowOnChain?.enabled ? (
+                    <>
+                      {renderField(
+                        "Handler type",
+                        <select
+                          value={action.flowOnChain?.handlerType ?? "dca"}
+                          onChange={(e) =>
+                            onUpdate({
+                              ...action,
+                              flowOnChain: {
+                                ...(action.flowOnChain ?? { enabled: true }),
+                                enabled: true,
+                                handlerType: e.currentTarget.value,
+                              },
+                            })
+                          }
+                          className={inputClassName}
+                        >
+                          <option value="dca">dca</option>
+                          <option value="rebalance">rebalance</option>
+                          <option value="alert">alert</option>
+                        </select>,
+                      )}
+                      {renderField(
+                        "Cron (optional)",
+                        <input
+                          value={action.flowOnChain?.cronExpression ?? ""}
+                          onChange={(e) =>
+                            onUpdate({
+                              ...action,
+                              flowOnChain: {
+                                ...(action.flowOnChain ?? { enabled: true }),
+                                enabled: true,
+                                cronExpression: e.currentTarget.value,
+                              },
+                            })
+                          }
+                          placeholder="0 0 * * 1"
+                          className={inputClassName}
+                        />,
+                      )}
+                      {renderField(
+                        "One-shot unix time (optional)",
+                        <input
+                          type="number"
+                          value={action.flowOnChain?.oneShotTimestamp ?? ""}
+                          onChange={(e) => {
+                            const raw = e.currentTarget.value;
+                            onUpdate({
+                              ...action,
+                              flowOnChain: {
+                                ...(action.flowOnChain ?? { enabled: true }),
+                                enabled: true,
+                                oneShotTimestamp: raw === "" ? null : Number(raw),
+                              },
+                            });
+                          }}
+                          className={inputClassName}
+                        />,
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           );
         })()}
@@ -412,6 +502,71 @@ export function StrategyInspector({ node, onUpdate, validationIssues }: Strategy
                   className={inputClassName}
                 />,
               )}
+              {action.chain === "flow" ? (
+                <div className="space-y-3 rounded-sm border border-primary/20 bg-primary/5 p-3">
+                  <label className="flex items-center gap-2 text-xs text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(action.flowOnChain?.enabled)}
+                      onChange={(e) => {
+                        const next: FlowOnChainSpec = {
+                          ...(action.flowOnChain ?? {}),
+                          enabled: e.currentTarget.checked,
+                          handlerType:
+                            action.flowOnChain?.handlerType ?? "rebalance",
+                          cronExpression:
+                            action.flowOnChain?.cronExpression ?? "0 * * * *",
+                        };
+                        onUpdate({ ...action, flowOnChain: next });
+                      }}
+                      className="rounded-sm border-border"
+                    />
+                    <span>On-chain Flow schedule (Cadence intent log)</span>
+                  </label>
+                  {action.flowOnChain?.enabled ? (
+                    <>
+                      {renderField(
+                        "Handler type",
+                        <select
+                          value={action.flowOnChain?.handlerType ?? "rebalance"}
+                          onChange={(e) =>
+                            onUpdate({
+                              ...action,
+                              flowOnChain: {
+                                ...(action.flowOnChain ?? { enabled: true }),
+                                enabled: true,
+                                handlerType: e.currentTarget.value,
+                              },
+                            })
+                          }
+                          className={inputClassName}
+                        >
+                          <option value="rebalance">rebalance</option>
+                          <option value="dca">dca</option>
+                          <option value="alert">alert</option>
+                        </select>,
+                      )}
+                      {renderField(
+                        "Cron (optional)",
+                        <input
+                          value={action.flowOnChain?.cronExpression ?? ""}
+                          onChange={(e) =>
+                            onUpdate({
+                              ...action,
+                              flowOnChain: {
+                                ...(action.flowOnChain ?? { enabled: true }),
+                                enabled: true,
+                                cronExpression: e.currentTarget.value,
+                              },
+                            })
+                          }
+                          className={inputClassName}
+                        />,
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           );
         })()}
