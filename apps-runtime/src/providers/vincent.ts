@@ -111,7 +111,8 @@ export class VincentProvider {
   ): Promise<VincentConsentInfo> {
     const { isExpired } = vincentJwt;
 
-    if (isExpired(jwtString)) {
+    // Cast to branded type expected by the SDK
+    if (isExpired(jwtString as unknown as Parameters<typeof isExpired>[0])) {
       throw new Error('Vincent consent JWT has expired. Please re-authorize.');
     }
 

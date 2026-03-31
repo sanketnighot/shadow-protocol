@@ -1,7 +1,15 @@
 // Autonomous agent types for frontend
 
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
-export type TaskStatus = "suggested" | "approved" | "rejected" | "executing" | "completed" | "failed" | "dismissed";
+export type TaskStatus =
+  | "suggested"
+  | "approved"
+  | "rejected"
+  | "executing"
+  | "completed"
+  | "failed"
+  | "dismissed"
+  | "snoozed";
 
 export interface TaskAction {
   actionType: string;
@@ -34,6 +42,12 @@ export interface Task {
   sourceTrigger: string;
   expiresAt?: number;
   createdAt: number;
+}
+
+export interface TaskApprovalResult {
+  task: Task;
+  message?: string;
+  executionStatus?: string;
 }
 
 export interface TaskStats {
@@ -128,9 +142,10 @@ export interface MatchedOpportunity {
 
 export interface OrchestratorState {
   isRunning: boolean;
-  lastHealthCheck?: number;
-  lastOpportunityScan?: number;
-  lastTaskGeneration?: number;
-  pendingTasksCount: number;
-  activeStrategiesCount: number;
+  lastCheck?: number;
+  nextCheck?: number;
+  tasksGenerated: number;
+  opportunitiesFound: number;
+  healthChecksRun: number;
+  errors: string[];
 }

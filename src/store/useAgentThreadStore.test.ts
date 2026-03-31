@@ -68,4 +68,38 @@ describe("useAgentThreadStore sendMessage", () => {
     expect(userContents).toContain("Second question");
     expect(userContents).toContain("Third question");
   });
+
+  it("passes rolling summary and structured facts to the backend kernel request", async () => {
+    const thread: Thread = {
+      id: "thread-2",
+      title: "Summarized",
+      messages: Array.from({ length: 14 }, (_, i) =>
+        msg(`m${i}`, i % 2 === 0 ? "user" : "agent", `message ${i}`),
+      ),
+      rollingSummary: "Earlier portfolio discussion.",
+      structuredFacts: "Portfolio total: $1,000",
+      isStreaming: false,
+      latestActivityLabel: "",
+      suggestion: { title: "", summary: "", actionLabel: "" },
+      pendingApproval: null,
+      pendingAgentAction: null,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    useAgentThreadStore.setState({
+      threads: [thread],
+      activeThreadId: thread.id,
+    });
+
+    useAgentThreadStore.getState().sendMessage(thread.id, "What changed?");
+
+    await vi.waitFor(() => expect(chatAgentMock).toHaveBeenCalled());
+
+    const call = chatAgentMock.mock.calls[0][0];
+    expect(call.rollingSummary).toBe("Earlier portfolio discussion.");
+    expect(call.structuredFacts).toBe("Portfolio total: $1,000");
+    expect(call.messages).toHaveLength(10);
+    expect(call.messages[0].content).toBe("message 5");
+    expect(call.messages.at(-1)?.content).toBe("What changed?");
+  });
 });

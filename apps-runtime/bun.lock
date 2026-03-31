@@ -9,6 +9,7 @@
         "@filoz/synapse-sdk": "^0.40.0",
         "@lit-protocol/auth-helpers": "^7.0.9",
         "@lit-protocol/constants": "^7.0.8",
+        "@lit-protocol/contracts-sdk": "^7.4.0",
         "@lit-protocol/lit-node-client": "^7.4.0",
         "@lit-protocol/vincent-sdk": "^0.0.7",
         "@noble/hashes": "^2.0.1",

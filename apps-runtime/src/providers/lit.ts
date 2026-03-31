@@ -10,14 +10,16 @@
  */
 
 import { LitNodeClient } from '@lit-protocol/lit-node-client';
+import { LitContracts } from '@lit-protocol/contracts-sdk';
 import { LitNetwork, LIT_RPC } from '@lit-protocol/constants';
 import { ethers } from 'ethers';
+import { ethers as ethersV5 } from 'ethers-v5';
 import {
-  LitAbility,
   LitActionResource,
-  createSiweMessageWithResources,
+  createSiweMessageWithRecaps,
   generateAuthSig,
 } from '@lit-protocol/auth-helpers';
+import { LitAbility } from '@lit-protocol/constants';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,35 +124,24 @@ export class LitProvider {
    * The user's private key signs an SIWE message — no WebAuthn needed.
    */
   async mintPkp(ethPrivateKey: string): Promise<MintPkpResult> {
-    const client = await this.createClient();
-    try {
-      const provider = new ethers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE);
-      const wallet = new ethers.Wallet(ethPrivateKey, provider);
+    const provider = new ethersV5.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE);
+    const wallet = new ethersV5.Wallet(ethPrivateKey, provider);
 
-      const mintResult = await (client as unknown as {
-        mintWithAuth(opts: unknown): Promise<{ pkp?: { publicKey?: string; ethAddress?: string; tokenId?: string }; tx?: string }>;
-      }).mintWithAuth({
-        authMethod: {
-          authMethodType: 1, // EthWallet
-          accessToken: JSON.stringify({
-            sig: await wallet.signMessage("Authorize SHADOW Agent PKP"),
-            derivedVia: "ethPersonalSign",
-            signedMessage: "Authorize SHADOW Agent PKP",
-            address: wallet.address,
-          }),
-        },
-        scopes: [1, 2], // SignAnything, PersonalSign
-      });
+    const contractClient = new LitContracts({
+      signer: wallet,
+      network: this.litNetwork,
+      debug: false,
+    });
+    await contractClient.connect();
 
-      return {
-        pkpPublicKey: mintResult.pkp?.publicKey ?? '',
-        pkpEthAddress: mintResult.pkp?.ethAddress ?? '',
-        tokenId: mintResult.pkp?.tokenId ?? '',
-        txHash: mintResult.tx ?? '',
-      };
-    } finally {
-      client.disconnect();
-    }
+    const mintResult = await contractClient.pkpNftContractUtils.write.mint();
+
+    return {
+      pkpPublicKey: mintResult.pkp?.publicKey ?? '',
+      pkpEthAddress: mintResult.pkp?.ethAddress ?? '',
+      tokenId: mintResult.pkp?.tokenId ?? '',
+      txHash: mintResult.tx?.hash ?? '',
+    };
   }
 
   /**
@@ -202,7 +193,7 @@ export class LitProvider {
           },
         ],
         authNeededCallback: async (params) => {
-          const toSign = await createSiweMessageWithResources({
+          const toSign = await createSiweMessageWithRecaps({
             uri: params.uri!,
             expiration: params.expiration!,
             resources: params.resourceAbilityRequests!,
@@ -300,7 +291,7 @@ export class LitProvider {
           },
         ],
         authNeededCallback: async (params) => {
-          const msg = await createSiweMessageWithResources({
+          const msg = await createSiweMessageWithRecaps({
             uri: params.uri!,
             expiration: params.expiration!,
             resources: params.resourceAbilityRequests!,

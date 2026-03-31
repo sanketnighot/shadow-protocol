@@ -9,12 +9,12 @@ import {
 } from "@/data/mock";
 import { chatAgent } from "@/lib/agent";
 import {
-  buildChatMessages,
   extractStructuredFacts,
   generateRollingSummary,
   mergeStructuredFacts,
   needsSummary,
   resolveContextBudget,
+  selectAgentMessages,
 } from "@/lib/chatContext";
 import { useOllamaStore } from "@/store/useOllamaStore";
 import { useWalletStore } from "@/store/useWalletStore";
@@ -297,15 +297,11 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
             }));
             thread = get().threads.find((t) => t.id === threadId) ?? thread;
           }
-          const built = buildChatMessages({
-            messages: thread.messages.filter((m) => m.id !== agentMessageId),
-            rollingSummary: thread.rollingSummary,
-            contextBudget,
-            latestN: 10,
-          });
-          const messagesForAgent = built
-            .filter((m) => m.role !== "system")
-            .map((m) => ({ role: m.role, content: m.content }));
+          const messagesForAgent = selectAgentMessages(
+            thread.messages.filter((m) => m.id !== agentMessageId),
+            thread.rollingSummary,
+            10,
+          ).map((m) => ({ role: m.role, content: m.content }));
           if (messagesForAgent.length === 0) return;
           const { activeAddress, addresses } = useWalletStore.getState();
           const walletAddress = activeAddress ?? null;
@@ -324,6 +320,7 @@ export const useAgentThreadStore = create<AgentThreadStore>()(
               walletAddresses:
                 walletAddresses.length > 0 ? walletAddresses : null,
               numCtx: contextBudget,
+              rollingSummary: thread.rollingSummary,
               structuredFacts: thread.structuredFacts,
               demoMode: true,
             });
