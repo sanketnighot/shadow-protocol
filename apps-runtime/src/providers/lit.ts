@@ -1,10 +1,12 @@
-// @ts-nocheck — Lit SDK typings drift across @lit-protocol/* versions; runtime paths are exercised via sidecar.
 /**
- * Lit Protocol adapter — real PKP minting, policy precheck via Lit Actions,
+ * Lit Protocol adapter — raw PKP minting, policy precheck via Lit Actions,
  * and distributed MPC signing through the Lit Network (datil-test).
  *
  * Auth method: EthWallet — the user's existing SHADOW wallet private key
  * signs an SIWE message to authenticate with Lit and mint/retrieve a PKP.
+ *
+ * NOTE: This provider uses raw Lit primitives. Higher-level operations
+ * (DeFi ability execution, consent management) live in vincent.ts.
  */
 
 import { LitNodeClient } from '@lit-protocol/lit-node-client';
@@ -51,7 +53,9 @@ export type ExecuteResult = {
 };
 
 // ---------------------------------------------------------------------------
-// Lit Action: policy enforcement code (runs on Lit TEE nodes)
+// Lit Action: local spend-policy enforcement (runs on Lit TEE nodes when key available,
+// falls back to local when not). Vincent on-chain policies supersede this when
+// the Vincent consent flow is active.
 // ---------------------------------------------------------------------------
 const SPEND_POLICY_LIT_ACTION = `
 (async () => {
@@ -62,25 +66,21 @@ const SPEND_POLICY_LIT_ACTION = `
   let allowed = true;
   let reason = "within_limits";
 
-  // Per-trade limit
   if (notional > guardrails.perTradeLimitUsd) {
     allowed = false;
     reason = "exceeds_per_trade_limit";
   }
 
-  // Daily spend limit
   if (notional > guardrails.dailySpendLimitUsd) {
     allowed = false;
     reason = "exceeds_daily_spend_limit";
   }
 
-  // Approval threshold
   if (allowed && notional > guardrails.approvalThresholdUsd) {
     allowed = false;
     reason = "requires_manual_approval";
   }
 
-  // Protocol whitelist
   if (allowed && action.protocol) {
     const whitelist = guardrails.allowedProtocols || [];
     if (whitelist.length > 0 && !whitelist.includes(action.protocol)) {
@@ -127,8 +127,9 @@ export class LitProvider {
       const provider = new ethers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE);
       const wallet = new ethers.Wallet(ethPrivateKey, provider);
 
-      // Mint PKP through the Lit relay
-      const mintResult = await client.mintWithAuth({
+      const mintResult = await (client as unknown as {
+        mintWithAuth(opts: unknown): Promise<{ pkp?: { publicKey?: string; ethAddress?: string; tokenId?: string }; tx?: string }>;
+      }).mintWithAuth({
         authMethod: {
           authMethodType: 1, // EthWallet
           accessToken: JSON.stringify({
@@ -138,12 +139,7 @@ export class LitProvider {
             address: wallet.address,
           }),
         },
-        scopes: [
-          // AuthMethodScope.SignAnything
-          1,
-          // AuthMethodScope.PersonalSign
-          2,
-        ],
+        scopes: [1, 2], // SignAnything, PersonalSign
       });
 
       return {
@@ -158,8 +154,7 @@ export class LitProvider {
   }
 
   /**
-   * Wallet status: return PKP info + guardrails validation.
-   * If pkpAddress is stored in config, returns it. Otherwise returns placeholder.
+   * Wallet status: return PKP info + guardrails.
    */
   async walletStatus(guardrails: LitGuardrails, pkpAddress?: string): Promise<Record<string, unknown>> {
     return {
@@ -179,15 +174,14 @@ export class LitProvider {
 
   /**
    * Run a Lit Action on TEE nodes to validate the proposed action against
-   * the user's configured guardrails. This is decentralized enforcement —
-   * multiple Lit nodes independently verify the policy.
+   * the user's configured guardrails. Falls back to local enforcement when
+   * Lit nodes are unreachable or no auth is available.
    */
   async precheck(
     action: { kind?: string; notionalUsd?: number; protocol?: string },
     guardrails: LitGuardrails,
     ethPrivateKey?: string,
   ): Promise<PrecheckResult> {
-    // If no private key, fall back to local enforcement (still useful)
     if (!ethPrivateKey) {
       return this.localPrecheck(action, guardrails);
     }
@@ -198,7 +192,6 @@ export class LitProvider {
       const provider = new ethers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE);
       const wallet = new ethers.Wallet(ethPrivateKey, provider);
 
-      // Generate session sigs for Lit Action execution
       const sessionSigs = await client.getSessionSigs({
         chain: 'ethereum',
         expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(),
@@ -217,13 +210,12 @@ export class LitProvider {
             nonce: await client!.getLatestBlockhash(),
           });
           return await generateAuthSig({
-            signer: wallet as unknown as ethers.providers.JsonRpcSigner,
+            signer: wallet as unknown as Parameters<typeof generateAuthSig>[0]['signer'],
             toSign,
           });
         },
       });
 
-      // Execute Lit Action on TEE nodes
       const result = await client.executeJs({
         sessionSigs,
         code: SPEND_POLICY_LIT_ACTION,
@@ -233,10 +225,8 @@ export class LitProvider {
         },
       });
 
-      const parsed = JSON.parse(result.response as string) as PrecheckResult;
-      return parsed;
+      return JSON.parse(result.response as string) as PrecheckResult;
     } catch (err) {
-      // If Lit nodes are unreachable, fall back to local enforcement
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`Lit precheck fallback (node error): ${msg}\n`);
       return this.localPrecheck(action, guardrails);
@@ -246,8 +236,7 @@ export class LitProvider {
   }
 
   /**
-   * Local precheck fallback — same logic as the Lit Action but runs locally.
-   * Used when Lit nodes can't be reached or no auth is available.
+   * Local precheck fallback — same logic as the Lit Action.
    */
   private localPrecheck(
     action: { kind?: string; notionalUsd?: number; protocol?: string },
@@ -289,8 +278,6 @@ export class LitProvider {
 
   /**
    * Execute a transaction via PKP signing on Lit's MPC network.
-   * The PKP's distributed key signs the transaction — no single node
-   * ever holds the full private key.
    */
   async executePkpSign(
     ethPrivateKey: string,
@@ -309,7 +296,7 @@ export class LitProvider {
         resourceAbilityRequests: [
           {
             resource: new LitActionResource('*'),
-            ability: LIT_ABILITY.LitActionExecution,
+            ability: LitAbility.LitActionExecution,
           },
         ],
         authNeededCallback: async (params) => {
@@ -321,13 +308,15 @@ export class LitProvider {
             nonce: await client!.getLatestBlockhash(),
           });
           return await generateAuthSig({
-            signer: wallet as unknown as ethers.providers.JsonRpcSigner,
+            signer: wallet as unknown as Parameters<typeof generateAuthSig>[0]['signer'],
             toSign: msg,
           });
         },
       });
 
-      const sigResult = await client.pkpSign({
+      const sigResult = await (client as unknown as {
+        pkpSign(opts: unknown): Promise<unknown>;
+      }).pkpSign({
         pubKey: pkpPublicKey,
         toSign: ethers.getBytes(toSign),
         sessionSigs,
@@ -353,7 +342,7 @@ export class LitProvider {
   }
 
   /**
-   * Quick connectivity check (non-blocking, returns fast).
+   * Quick connectivity check.
    */
   async connectivityCheck(): Promise<Record<string, unknown>> {
     try {

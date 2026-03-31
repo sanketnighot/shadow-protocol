@@ -9,6 +9,7 @@ import * as readline from "node:readline";
 let _defaultFilecoinProvider: import("./providers/filecoin.js").FilecoinStorageProvider | null = null;
 let _defaultLitProvider: import("./providers/lit.js").LitProvider | null = null;
 let _defaultFlowProvider: import("./providers/flow.js").FlowProvider | null = null;
+let _defaultVincentProvider: import("./providers/vincent.js").VincentProvider | null = null;
 
 async function getFilecoinProvider() {
   if (!_defaultFilecoinProvider) {
@@ -32,6 +33,14 @@ async function getFlowProvider() {
     _defaultFlowProvider = m.defaultFlowProvider;
   }
   return _defaultFlowProvider;
+}
+
+async function getVincentProvider() {
+  if (!_defaultVincentProvider) {
+    const m = await import("./providers/vincent.js");
+    _defaultVincentProvider = m.defaultVincentProvider;
+  }
+  return _defaultVincentProvider;
 }
 
 type FilecoinPolicyPayload = {
@@ -499,6 +508,134 @@ async function dispatch(req: RuntimeRequest): Promise<RuntimeResponse> {
       const txHash = await filecoin.terminateDataSet({ apiKey, dataSetId });
       return { ok: true, data: { txHash } };
     }
+
+    // -----------------------------------------------------------------------
+    // Vincent SDK operations
+    // -----------------------------------------------------------------------
+
+    case "vincent.configure": {
+      const vincent = await getVincentProvider();
+      const { setVincentConfig } = await import("./providers/vincent.js");
+      const p = req.payload as {
+        appId?: string;
+        delegateeKey?: string;
+        abilityCids?: Record<string, string>;
+      };
+      setVincentConfig({
+        appId: typeof p.appId === "string" ? p.appId : undefined,
+        delegateeKey: typeof p.delegateeKey === "string" ? p.delegateeKey : undefined,
+        abilityCids: p.abilityCids,
+      });
+      const _ = vincent; // ensure loaded
+      return { ok: true, data: { configured: true } };
+    }
+
+    case "vincent.consent_url": {
+      const vincent = await getVincentProvider();
+      const p = req.payload as { redirectUri?: string };
+      const redirectUri = typeof p.redirectUri === "string" ? p.redirectUri : "shadow://vincent-consent";
+      const url = vincent.getConsentUrl(redirectUri);
+      return { ok: true, data: { url } };
+    }
+
+    case "vincent.verify_jwt": {
+      const vincent = await getVincentProvider();
+      const p = req.payload as { jwt?: string; expectedAudience?: string };
+      const jwtString = typeof p.jwt === "string" ? p.jwt.trim() : "";
+      if (!jwtString) {
+        return { ok: false, errorCode: "missing_jwt", errorMessage: "jwt is required", data: {} };
+      }
+      try {
+        const info = await vincent.verifyJwt(
+          jwtString,
+          typeof p.expectedAudience === "string" ? p.expectedAudience : undefined,
+        );
+        return { ok: true, data: info as unknown as Record<string, unknown> };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "jwt_error";
+        return { ok: false, errorCode: "jwt_invalid", errorMessage: msg, data: {} };
+      }
+    }
+
+    case "vincent.wallet_status": {
+      const vincent = await getVincentProvider();
+      const p = req.payload as {
+        pkpAddress?: string;
+        grantedAbilities?: string[];
+        hasConsent?: boolean;
+        consentExpiresAt?: number;
+      };
+      const data = vincent.walletStatus({
+        pkpAddress: typeof p.pkpAddress === "string" ? p.pkpAddress : undefined,
+        grantedAbilities: Array.isArray(p.grantedAbilities) ? p.grantedAbilities as string[] : undefined,
+        hasConsent: typeof p.hasConsent === "boolean" ? p.hasConsent : false,
+        consentExpiresAt: typeof p.consentExpiresAt === "number" ? p.consentExpiresAt : undefined,
+      });
+      return { ok: true, data };
+    }
+
+    case "vincent.execute_ability": {
+      const vincent = await getVincentProvider();
+      const p = req.payload as {
+        abilityCid?: string;
+        operation?: string;
+        params?: Record<string, unknown>;
+        delegateeKey?: string;
+      };
+
+      // Resolve CID: either explicit or from operation name
+      let cid = typeof p.abilityCid === "string" ? p.abilityCid.trim() : "";
+      if (!cid && typeof p.operation === "string") {
+        cid = vincent.resolveAbilityCid(p.operation) ?? "";
+      }
+
+      const abilityParams = p.params ?? {};
+      const delegateeKey = typeof p.delegateeKey === "string" ? p.delegateeKey : undefined;
+
+      const result = await vincent.executeAbility(cid, abilityParams, delegateeKey);
+      return { ok: result.success, data: result as unknown as Record<string, unknown> };
+    }
+
+    case "vincent.precheck_policy": {
+      // Lightweight local policy check before submitting ability execution
+      const p = req.payload as {
+        notionalUsd?: number;
+        operation?: string;
+        protocol?: string;
+        perTradeLimitUsd?: number;
+        dailySpendLimitUsd?: number;
+        approvalThresholdUsd?: number;
+        allowedProtocols?: string[];
+      };
+      const notional = typeof p.notionalUsd === "number" ? p.notionalUsd : 0;
+      const perTrade = typeof p.perTradeLimitUsd === "number" ? p.perTradeLimitUsd : 100;
+      const daily = typeof p.dailySpendLimitUsd === "number" ? p.dailySpendLimitUsd : 500;
+      const approval = typeof p.approvalThresholdUsd === "number" ? p.approvalThresholdUsd : 1000;
+      const whitelist = Array.isArray(p.allowedProtocols) ? p.allowedProtocols as string[] : [];
+
+      let allowed = true;
+      let reason = "within_limits";
+
+      if (notional > perTrade) { allowed = false; reason = "exceeds_per_trade_limit"; }
+      else if (notional > daily) { allowed = false; reason = "exceeds_daily_spend_limit"; }
+      else if (notional > approval) { allowed = false; reason = "requires_manual_approval"; }
+      else if (p.protocol && whitelist.length > 0 && !whitelist.includes(p.protocol)) {
+        allowed = false;
+        reason = "protocol_not_whitelisted";
+      }
+
+      return {
+        ok: true,
+        data: {
+          allowed,
+          reason,
+          notionalUsd: notional,
+          enforcedBy: "local-policy",
+          note: "On-chain Vincent policies provide additional enforcement at execution time.",
+        },
+      };
+    }
+
     default:
       return {
         ok: false,
