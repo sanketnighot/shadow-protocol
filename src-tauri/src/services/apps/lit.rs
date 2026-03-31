@@ -20,6 +20,16 @@ pub fn stored_pkp_address() -> Option<String> {
         .map(|s| s.to_string())
 }
 
+fn stored_vincent_app_id() -> Option<String> {
+    let raw = state::get_app_config_json("lit-protocol").ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("vincentAppId")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 // ---------------------------------------------------------------------------
 // Vincent consent helpers
 // ---------------------------------------------------------------------------
@@ -29,12 +39,31 @@ pub fn get_vincent_consent() -> Option<VincentConsentRow> {
     state::get_active_vincent_consent("lit-protocol").ok().flatten()
 }
 
+/// Resolve Vincent App ID from override, saved Lit app config, or env.
+pub fn resolve_vincent_app_id(app_id_override: Option<&str>) -> Result<String, String> {
+    app_id_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(stored_vincent_app_id)
+        .or_else(|| std::env::var("SHADOW_VINCENT_APP_ID").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            "Vincent App ID is not configured. Add it in Lit Protocol settings before authorizing."
+                .to_string()
+        })
+}
+
 /// Get the consent URL the user should open in their browser.
 pub async fn vincent_consent_url(
     app: &AppHandle,
+    app_id_override: Option<&str>,
     redirect_uri: Option<&str>,
 ) -> Result<serde_json::Value, String> {
+    let app_id = resolve_vincent_app_id(app_id_override)?;
     let payload = serde_json::json!({
+        "appId": app_id,
         "redirectUri": redirect_uri.unwrap_or("shadow://vincent-consent"),
     });
     let res = invoke_sidecar(

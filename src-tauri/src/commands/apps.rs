@@ -2,6 +2,7 @@
 
 use keyring::Error as KeyringError;
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 
 use crate::services::apps::{
     flow, flow_scheduler, lit, filecoin, permissions, runtime, state as apps_state,
@@ -9,6 +10,7 @@ use crate::services::apps::{
 use crate::services::local_db;
 use crate::services::audit;
 use crate::services::local_db::DbError;
+use crate::services::vincent_loopback::VincentLoopbackState;
 
 fn require_unlocked_session_for_app_settings() -> Result<(), String> {
     if !crate::session::has_unlocked_session() {
@@ -328,10 +330,56 @@ pub fn apps_lit_pkp_address() -> Result<serde_json::Value, String> {
 // ---------------------------------------------------------------------------
 
 /// Get the Vincent consent URL for the user to open in their browser.
+/// Default: starts a localhost redirect listener and returns the dashboard URL with that redirect.
+/// If `redirectUri` is set in input, uses the sidecar URL builder instead (advanced / custom schemes).
 #[tauri::command]
-pub async fn apps_vincent_consent_url(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let data = lit::vincent_consent_url(&app, None).await?;
-    Ok(data)
+pub async fn apps_vincent_consent_url(
+    app: tauri::AppHandle,
+    input: Option<VincentConsentUrlInput>,
+) -> Result<serde_json::Value, String> {
+    let app_id_override = input
+        .as_ref()
+        .and_then(|value| value.app_id.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let redirect_uri = input
+        .as_ref()
+        .and_then(|value| value.redirect_uri.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if let Some(uri) = redirect_uri {
+        let data = lit::vincent_consent_url(&app, app_id_override, Some(uri)).await?;
+        return Ok(data);
+    }
+
+    let app_id = lit::resolve_vincent_app_id(app_id_override)?;
+    let state = app.state::<VincentLoopbackState>();
+    let url = state.start_capture(app_id)?;
+    let redirect_uri = crate::services::vincent_loopback::loopback_redirect_uri_for_config();
+    Ok(serde_json::json!({
+        "url": url,
+        "redirectUri": redirect_uri,
+    }))
+}
+
+/// Poll for JWT or error from the Vincent localhost redirect (after `apps_vincent_consent_url`).
+#[tauri::command]
+pub async fn apps_vincent_loopback_poll(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let state = app.state::<VincentLoopbackState>();
+    let (jwt, error) = state.take_loopback_result().await;
+    Ok(serde_json::json!({
+        "jwt": jwt,
+        "error": error,
+    }))
+}
+
+/// Stop the Vincent loopback listener (user cancelled or leaving settings).
+#[tauri::command]
+pub fn apps_vincent_loopback_cancel(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<VincentLoopbackState>();
+    state.cancel_capture();
+    Ok(())
 }
 
 /// Verify and store a Vincent consent JWT pasted by the user.
@@ -470,6 +518,13 @@ pub fn apps_vincent_set_delegatee_key(input: VincentDelegateeKeyInput) -> Result
 // ---------------------------------------------------------------------------
 // Input types for Vincent commands
 // ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VincentConsentUrlInput {
+    pub app_id: Option<String>,
+    pub redirect_uri: Option<String>,
+}
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

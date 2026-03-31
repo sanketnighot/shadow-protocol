@@ -259,7 +259,12 @@ fn snapshot_from_assets(assets: &[PortfolioAsset]) {
     );
 }
 
-pub async fn sync_wallet(app: AppHandle, address: String, wallet_index: usize, wallet_count: usize) {
+pub async fn sync_wallet(
+    app: AppHandle,
+    address: String,
+    wallet_index: usize,
+    wallet_count: usize,
+) {
     let api_key = match super::settings::get_alchemy_key_or_env() {
         Some(k) => k,
         None => {

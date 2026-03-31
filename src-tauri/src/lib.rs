@@ -50,6 +50,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let _ = services::apps::filecoin::restore_latest_snapshot(&restore_handle).await;
             });
+            app.manage(services::vincent_loopback::VincentLoopbackState::new());
             services::shadow_watcher::start(handle.clone());
             services::alpha_service::start(handle.clone());
             services::heartbeat::start(handle.clone());
@@ -64,6 +65,7 @@ pub fn run() {
 
             tauri::async_runtime::spawn(async move {
                 let addresses = commands::get_addresses(&handle);
+                let _ = services::settings::get_alchemy_key_or_env();
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_secs() as i64)
@@ -171,6 +173,8 @@ pub fn run() {
             commands::apps_lit_mint_pkp,
             commands::apps_lit_pkp_address,
             commands::apps_vincent_consent_url,
+            commands::apps_vincent_loopback_poll,
+            commands::apps_vincent_loopback_cancel,
             commands::apps_vincent_submit_jwt,
             commands::apps_vincent_consent_status,
             commands::apps_vincent_revoke_consent,

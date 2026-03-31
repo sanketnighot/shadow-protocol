@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_biometry::{BiometryExt, DataOptions, SetDataOptions};
+use tracing::warn;
 
 const KEYCHAIN_SERVICE: &str = "com.sanket.shadow";
 /// Legacy key used when addresses were stored in Keychain. Kept only for one-time migration.
@@ -134,17 +135,18 @@ fn store_private_key(address: &str, hex_pk: &str) -> Result<(), WalletError> {
 /// Stores the key in the biometry (Touch ID) protected keychain.
 /// On signed production builds, this stores in Touch ID secured Keychain.
 /// On dev/unsigned builds, this may silently fail — unlock falls back to Keychain password.
-fn store_in_biometry(app: &AppHandle, address: &str, hex_pk: &str) {
-    let _ = app.biometry().set_data(SetDataOptions {
+fn store_in_biometry(app: &AppHandle, address: &str, hex_pk: &str) -> Result<(), String> {
+    app.biometry().set_data(SetDataOptions {
         domain: BIOMETRY_DOMAIN.to_string(),
         name: format!("wallet:{}", address),
         data: hex_pk.to_string(),
-    });
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Public entry point for session module to migrate a keyring-only key into biometry.
-pub fn store_in_biometry_pub(app: &AppHandle, address: &str, hex_pk: &str) {
-    store_in_biometry(app, address, hex_pk);
+pub fn store_in_biometry_pub(app: &AppHandle, address: &str, hex_pk: &str) -> Result<(), String> {
+    store_in_biometry(app, address, hex_pk)
 }
 
 fn remove_from_biometry(app: &AppHandle, address: &str) {
@@ -188,7 +190,12 @@ pub fn wallet_create(app: AppHandle, input: CreateWalletInput) -> Result<CreateW
     let hex_pk = format!("0x{}", hex::encode(wallet.signer().to_bytes()));
 
     store_private_key(&address, &hex_pk)?;
-    store_in_biometry(&app, &address, &hex_pk);
+    if let Err(err) = store_in_biometry(&app, &address, &hex_pk) {
+        warn!(
+            address = %address,
+            "failed to persist wallet key in biometry store: {err}"
+        );
+    }
 
     let mut addrs = load_addresses(&app);
     if !addrs.contains(&address) {
@@ -217,7 +224,12 @@ pub fn wallet_import_mnemonic(app: AppHandle, input: ImportMnemonicInput) -> Res
     let hex_pk = format!("0x{}", hex::encode(wallet.signer().to_bytes()));
 
     store_private_key(&address, &hex_pk)?;
-    store_in_biometry(&app, &address, &hex_pk);
+    if let Err(err) = store_in_biometry(&app, &address, &hex_pk) {
+        warn!(
+            address = %address,
+            "failed to persist wallet key in biometry store: {err}"
+        );
+    }
 
     let mut addrs = load_addresses(&app);
     if !addrs.contains(&address) {
@@ -246,7 +258,12 @@ pub fn wallet_import_private_key(
     let hex_pk = format!("0x{}", hex::encode(wallet.signer().to_bytes()));
 
     store_private_key(&address, &hex_pk)?;
-    store_in_biometry(&app, &address, &hex_pk);
+    if let Err(err) = store_in_biometry(&app, &address, &hex_pk) {
+        warn!(
+            address = %address,
+            "failed to persist wallet key in biometry store: {err}"
+        );
+    }
 
     let mut addrs = load_addresses(&app);
     if !addrs.contains(&address) {

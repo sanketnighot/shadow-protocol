@@ -75,6 +75,7 @@ pub async fn wallet_sync_start(
     }
 
     let count = addrs.len();
+    let _ = crate::services::settings::get_alchemy_key_or_env();
     for (i, addr) in addrs.into_iter().enumerate() {
         let app_handle = app.clone();
         tokio::spawn(async move {

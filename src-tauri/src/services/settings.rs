@@ -1,9 +1,10 @@
 //! App settings management: secrets (keychain) and non-secrets (sqlite).
-//! API keys use an in-memory cache so the keychain is read at most once per
-//! app session, eliminating repeated macOS password prompts on startup.
+//! Secrets use a single-flight in-memory cache so concurrent first reads share
+//! one keychain fetch instead of triggering multiple macOS prompts.
 
 use keyring::Entry;
-use std::sync::{OnceLock, RwLock};
+use std::collections::HashMap;
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_biometry::BiometryExt;
 use tauri_plugin_biometry::{DataOptions};
@@ -12,26 +13,109 @@ const KEYCHAIN_SERVICE: &str = "com.sanket.shadow";
 const PERPLEXITY_KEY_NAME: &str = "api_key:perplexity";
 const ALCHEMY_KEY_NAME: &str = "api_key:alchemy";
 const OLLAMA_KEY_NAME: &str = "api_key:ollama";
-const BIOMETRY_DOMAIN: &str = "com.sanket.shadow.biometry";
+const BIOMETRY_DOMAIN: &str = "com.sanket.shadow";
 
 // ---------------------------------------------------------------------------
-// In-memory API key cache
+// In-memory secret caches
 // ---------------------------------------------------------------------------
-// Outer Option: None = not loaded from keychain yet.
-// Inner Option: Some(key) = key exists, None = no key stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SecretLoadState {
+    Uninitialized,
+    Loading,
+    Loaded(Option<String>),
+}
+
+struct SecretCacheSlot {
+    state: Mutex<SecretLoadState>,
+    ready: Condvar,
+}
+
+impl SecretCacheSlot {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new(SecretLoadState::Uninitialized),
+            ready: Condvar::new(),
+        }
+    }
+
+    fn load_with<E, F>(&self, loader: F) -> Result<Option<String>, E>
+    where
+        F: FnOnce() -> Result<Option<String>, E>,
+    {
+        let mut loader = Some(loader);
+
+        loop {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+
+            match &*state {
+                SecretLoadState::Loaded(value) => return Ok(value.clone()),
+                SecretLoadState::Loading => {
+                    state = self
+                        .ready
+                        .wait(state)
+                        .unwrap_or_else(|poison| poison.into_inner());
+                    drop(state);
+                }
+                SecretLoadState::Uninitialized => {
+                    *state = SecretLoadState::Loading;
+                    drop(state);
+
+                    let result = loader.take().expect("secret loader should only run once")();
+
+                    let mut state = self
+                        .state
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner());
+                    match &result {
+                        Ok(value) => *state = SecretLoadState::Loaded(value.clone()),
+                        Err(_) => *state = SecretLoadState::Uninitialized,
+                    }
+                    self.ready.notify_all();
+
+                    return result;
+                }
+            }
+        }
+    }
+
+    fn store_loaded(&self, value: Option<String>) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        *state = SecretLoadState::Loaded(value);
+        self.ready.notify_all();
+    }
+}
+
 struct ApiKeyCache {
-    alchemy: RwLock<Option<Option<String>>>,
-    perplexity: RwLock<Option<Option<String>>>,
-    ollama: RwLock<Option<Option<String>>>,
+    alchemy: SecretCacheSlot,
+    perplexity: SecretCacheSlot,
+    ollama: SecretCacheSlot,
 }
 
 static API_CACHE: OnceLock<ApiKeyCache> = OnceLock::new();
 
 fn cache() -> &'static ApiKeyCache {
     API_CACHE.get_or_init(|| ApiKeyCache {
-        alchemy: RwLock::new(None),
-        perplexity: RwLock::new(None),
-        ollama: RwLock::new(None),
+        alchemy: SecretCacheSlot::new(),
+        perplexity: SecretCacheSlot::new(),
+        ollama: SecretCacheSlot::new(),
+    })
+}
+
+struct AppSecretCache {
+    slots: Mutex<HashMap<String, Arc<SecretCacheSlot>>>,
+}
+
+static APP_SECRET_CACHE: OnceLock<AppSecretCache> = OnceLock::new();
+
+fn app_secret_cache() -> &'static AppSecretCache {
+    APP_SECRET_CACHE.get_or_init(|| AppSecretCache {
+        slots: Mutex::new(HashMap::new()),
     })
 }
 
@@ -39,14 +123,21 @@ fn app_secret_entry_name(app_id: &str, key: &str) -> String {
     format!("app_secret:{app_id}:{key}")
 }
 
-pub fn set_app_secret(app_id: &str, key: &str, value: &str) -> Result<(), keyring::Error> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key))?;
-    entry.set_password(value)?;
-    Ok(())
+fn app_secret_slot(app_id: &str, key: &str) -> Arc<SecretCacheSlot> {
+    let cache_key = app_secret_entry_name(app_id, key);
+    let mut slots = app_secret_cache()
+        .slots
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+
+    slots
+        .entry(cache_key)
+        .or_insert_with(|| Arc::new(SecretCacheSlot::new()))
+        .clone()
 }
 
-pub fn get_app_secret(app_id: &str, key: &str) -> Result<Option<String>, keyring::Error> {
-    let entry = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key))?;
+fn read_secret(entry_name: &str) -> Result<Option<String>, keyring::Error> {
+    let entry = Entry::new(KEYCHAIN_SERVICE, entry_name)?;
     match entry.get_password() {
         Ok(v) => Ok(Some(v)),
         Err(keyring::Error::NoEntry) => Ok(None),
@@ -54,10 +145,23 @@ pub fn get_app_secret(app_id: &str, key: &str) -> Result<Option<String>, keyring
     }
 }
 
+pub fn set_app_secret(app_id: &str, key: &str, value: &str) -> Result<(), keyring::Error> {
+    let entry_name = app_secret_entry_name(app_id, key);
+    let entry = Entry::new(KEYCHAIN_SERVICE, &entry_name)?;
+    entry.set_password(value)?;
+    app_secret_slot(app_id, key).store_loaded(Some(value.to_string()));
+    Ok(())
+}
+
+pub fn get_app_secret(app_id: &str, key: &str) -> Result<Option<String>, keyring::Error> {
+    app_secret_slot(app_id, key).load_with(|| read_secret(&app_secret_entry_name(app_id, key)))
+}
+
 pub fn remove_app_secret(app_id: &str, key: &str) -> Result<(), keyring::Error> {
     if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key)) {
         let _ = entry.delete_password();
     }
+    app_secret_slot(app_id, key).store_loaded(None);
     Ok(())
 }
 
@@ -82,38 +186,20 @@ pub fn remove_app_secrets_for(app_id: &str) -> Result<(), keyring::Error> {
 pub fn set_perplexity_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
     entry.set_password(key)?;
-    if let Ok(mut guard) = cache().perplexity.write() {
-        *guard = Some(Some(key.to_string()));
-    }
+    cache().perplexity.store_loaded(Some(key.to_string()));
     Ok(())
 }
 
 pub fn get_perplexity_key() -> Result<Option<String>, keyring::Error> {
-    if let Ok(guard) = cache().perplexity.read() {
-        if let Some(cached) = guard.as_ref() {
-            return Ok(cached.clone());
-        }
-    }
-    let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
-    let result = match entry.get_password() {
-        Ok(s) => Ok(Some(s)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e),
-    };
-    if let Ok(ref val) = result {
-        if let Ok(mut guard) = cache().perplexity.write() {
-            *guard = Some(val.clone());
-        }
-    }
-    result
+    cache()
+        .perplexity
+        .load_with(|| read_secret(PERPLEXITY_KEY_NAME))
 }
 
 pub fn remove_perplexity_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, PERPLEXITY_KEY_NAME)?;
     let _ = entry.delete_password();
-    if let Ok(mut guard) = cache().perplexity.write() {
-        *guard = Some(None);
-    }
+    cache().perplexity.store_loaded(None);
     Ok(())
 }
 
@@ -124,38 +210,18 @@ pub fn remove_perplexity_key() -> Result<(), keyring::Error> {
 pub fn set_alchemy_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
     entry.set_password(key)?;
-    if let Ok(mut guard) = cache().alchemy.write() {
-        *guard = Some(Some(key.to_string()));
-    }
+    cache().alchemy.store_loaded(Some(key.to_string()));
     Ok(())
 }
 
 pub fn get_alchemy_key() -> Result<Option<String>, keyring::Error> {
-    if let Ok(guard) = cache().alchemy.read() {
-        if let Some(cached) = guard.as_ref() {
-            return Ok(cached.clone());
-        }
-    }
-    let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
-    let result = match entry.get_password() {
-        Ok(s) => Ok(Some(s)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e),
-    };
-    if let Ok(ref val) = result {
-        if let Ok(mut guard) = cache().alchemy.write() {
-            *guard = Some(val.clone());
-        }
-    }
-    result
+    cache().alchemy.load_with(|| read_secret(ALCHEMY_KEY_NAME))
 }
 
 pub fn remove_alchemy_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, ALCHEMY_KEY_NAME)?;
     let _ = entry.delete_password();
-    if let Ok(mut guard) = cache().alchemy.write() {
-        *guard = Some(None);
-    }
+    cache().alchemy.store_loaded(None);
     Ok(())
 }
 
@@ -166,38 +232,18 @@ pub fn remove_alchemy_key() -> Result<(), keyring::Error> {
 pub fn set_ollama_key(key: &str) -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
     entry.set_password(key)?;
-    if let Ok(mut guard) = cache().ollama.write() {
-        *guard = Some(Some(key.to_string()));
-    }
+    cache().ollama.store_loaded(Some(key.to_string()));
     Ok(())
 }
 
 pub fn get_ollama_key() -> Result<Option<String>, keyring::Error> {
-    if let Ok(guard) = cache().ollama.read() {
-        if let Some(cached) = guard.as_ref() {
-            return Ok(cached.clone());
-        }
-    }
-    let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
-    let result = match entry.get_password() {
-        Ok(s) => Ok(Some(s)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e),
-    };
-    if let Ok(ref val) = result {
-        if let Ok(mut guard) = cache().ollama.write() {
-            *guard = Some(val.clone());
-        }
-    }
-    result
+    cache().ollama.load_with(|| read_secret(OLLAMA_KEY_NAME))
 }
 
 pub fn remove_ollama_key() -> Result<(), keyring::Error> {
     let entry = Entry::new(KEYCHAIN_SERVICE, OLLAMA_KEY_NAME)?;
     let _ = entry.delete_password();
-    if let Ok(mut guard) = cache().ollama.write() {
-        *guard = Some(None);
-    }
+    cache().ollama.store_loaded(None);
     Ok(())
 }
 
@@ -246,4 +292,78 @@ pub async fn delete_all_app_data(app: &AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{app_secret_slot, SecretCacheSlot};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Barrier,
+    };
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn singleflight_loader_runs_once_for_parallel_reads() {
+        let slot = Arc::new(SecretCacheSlot::new());
+        let loader_calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(5));
+        let mut handles = Vec::new();
+
+        for _ in 0..4 {
+            let slot = slot.clone();
+            let loader_calls = loader_calls.clone();
+            let start = start.clone();
+            handles.push(thread::spawn(move || {
+                start.wait();
+                slot.load_with(|| {
+                    loader_calls.fetch_add(1, Ordering::SeqCst);
+                    thread::sleep(Duration::from_millis(50));
+                    Ok::<Option<String>, &'static str>(Some("secret".to_string()))
+                })
+            }));
+        }
+
+        start.wait();
+
+        for handle in handles {
+            let value = handle.join().expect("thread should join").expect("load should succeed");
+            assert_eq!(value.as_deref(), Some("secret"));
+        }
+
+        assert_eq!(loader_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn failed_load_is_not_cached() {
+        let slot = SecretCacheSlot::new();
+        let loader_calls = AtomicUsize::new(0);
+
+        let first = slot.load_with(|| {
+            loader_calls.fetch_add(1, Ordering::SeqCst);
+            Err::<Option<String>, &'static str>("boom")
+        });
+        assert!(first.is_err());
+
+        let second = slot
+            .load_with(|| {
+                loader_calls.fetch_add(1, Ordering::SeqCst);
+                Ok::<Option<String>, &'static str>(Some("secret".to_string()))
+            })
+            .expect("second load should succeed");
+
+        assert_eq!(second.as_deref(), Some("secret"));
+        assert_eq!(loader_calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn app_secret_slots_are_reused_per_secret_name() {
+        let first = app_secret_slot("lit-protocol", "delegateeKey");
+        let second = app_secret_slot("lit-protocol", "delegateeKey");
+        let third = app_secret_slot("lit-protocol", "api_token");
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(!Arc::ptr_eq(&first, &third));
+    }
 }
