@@ -104,6 +104,8 @@ pub enum DraftNodeData {
         amount_usd: Option<f64>,
         #[serde(default, rename = "amountToken")]
         amount_token: Option<f64>,
+        #[serde(default, rename = "flowOnChain")]
+        flow_on_chain: Option<FlowOnChainSpec>,
     },
     #[serde(rename = "rebalance_to_target")]
     RebalanceToTarget {
@@ -114,6 +116,8 @@ pub enum DraftNodeData {
         max_execution_usd: Option<f64>,
         #[serde(rename = "targetAllocations")]
         target_allocations: Vec<TargetAllocationRow>,
+        #[serde(default, rename = "flowOnChain")]
+        flow_on_chain: Option<FlowOnChainSpec>,
     },
     #[serde(rename = "alert_only")]
     AlertOnly {
@@ -124,11 +128,33 @@ pub enum DraftNodeData {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowOnChainSpec {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cron_expression: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub one_shot_timestamp: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler_type: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetAllocationRow {
     pub symbol: String,
     pub percentage: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SwapLeg {
+    #[serde(rename = "fromSymbol")]
+    pub from_symbol: String,
+    #[serde(rename = "toSymbol")]
+    pub to_symbol: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -336,6 +362,45 @@ pub enum StrategyAction {
         #[serde(rename = "messageTemplate")]
         message_template: String,
         severity: String,
+    },
+    /// Flow Cadence on-chain scheduling intent (see FlowTransactionScheduler).
+    FlowScheduled {
+        chain: String,
+        handler_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cron_expression: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        one_shot_timestamp: Option<i64>,
+        handler_params: serde_json::Value,
+    },
+    FlowDcaBuy {
+        #[serde(rename = "fromVault")]
+        from_vault: String,
+        #[serde(rename = "toVault")]
+        to_vault: String,
+        amount: f64,
+        #[serde(rename = "swapperProtocol")]
+        swapper_protocol: String,
+        #[serde(rename = "maxSlippageBps")]
+        max_slippage_bps: u32,
+    },
+    FlowRebalance {
+        #[serde(rename = "targetAllocations")]
+        target_allocations: Vec<TargetAllocationSpec>,
+        #[serde(rename = "swapperProtocol")]
+        swapper_protocol: String,
+        #[serde(default, rename = "maxExecutionUsd")]
+        max_execution_usd: Option<f64>,
+    },
+    FlowFlashLoanArbitrage {
+        #[serde(rename = "flasherProtocol")]
+        flasher_protocol: String,
+        #[serde(rename = "loanToken")]
+        loan_token: String,
+        #[serde(rename = "loanAmount")]
+        loan_amount: f64,
+        #[serde(rename = "swapRoute")]
+        swap_route: Vec<SwapLeg>,
     },
 }
 

@@ -2,6 +2,9 @@
 
 pub mod filecoin;
 pub mod flow;
+pub mod flow_actions;
+pub mod flow_bridge;
+pub mod flow_scheduler;
 pub mod integration_prompt;
 pub mod payload;
 pub mod lit;

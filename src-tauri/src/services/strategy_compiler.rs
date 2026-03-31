@@ -7,6 +7,14 @@ use crate::services::strategy_types::{
     StrategyDraftNode, StrategyGuardrails, StrategyNodeType, StrategyTemplate, StrategyTrigger,
     TargetAllocationSpec, TargetAllocationRow,
 };
+
+fn is_flow_cadence_chain(chain: &str) -> bool {
+    let c = chain.trim().to_ascii_lowercase();
+    if c.contains("flow-evm") || c.contains("flow_evm") {
+        return false;
+    }
+    c == "flow" || c.starts_with("flow-")
+}
 use crate::services::strategy_validator::validate_draft;
 
 fn row_to_spec(row: &TargetAllocationRow) -> TargetAllocationSpec {
@@ -86,24 +94,75 @@ fn map_action(data: &DraftNodeData) -> Result<StrategyAction, String> {
             to_symbol,
             amount_usd,
             amount_token,
-        } => Ok(StrategyAction::DcaBuy {
-            chain: chain.trim().to_string(),
-            from_symbol: from_symbol.trim().to_string(),
-            to_symbol: to_symbol.trim().to_string(),
-            amount_usd: *amount_usd,
-            amount_token: *amount_token,
-        }),
+            flow_on_chain,
+        } => {
+            if let Some(ref foc) = flow_on_chain {
+                if foc.enabled && is_flow_cadence_chain(chain) {
+                    let handler_type = foc
+                        .handler_type
+                        .as_ref()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| "dca".to_string());
+                    let params = serde_json::json!({
+                        "fromSymbol": from_symbol.trim(),
+                        "toSymbol": to_symbol.trim(),
+                        "amountUsd": amount_usd,
+                        "amountToken": amount_token,
+                    });
+                    return Ok(StrategyAction::FlowScheduled {
+                        chain: chain.trim().to_string(),
+                        handler_type,
+                        cron_expression: foc.cron_expression.clone(),
+                        one_shot_timestamp: foc.one_shot_timestamp,
+                        handler_params: params,
+                    });
+                }
+            }
+            Ok(StrategyAction::DcaBuy {
+                chain: chain.trim().to_string(),
+                from_symbol: from_symbol.trim().to_string(),
+                to_symbol: to_symbol.trim().to_string(),
+                amount_usd: *amount_usd,
+                amount_token: *amount_token,
+            })
+        }
         DraftNodeData::RebalanceToTarget {
             chain,
             threshold_pct,
             max_execution_usd,
             target_allocations,
-        } => Ok(StrategyAction::RebalanceToTarget {
-            chain: chain.trim().to_string(),
-            threshold_pct: *threshold_pct,
-            target_allocations: target_allocations.iter().map(row_to_spec).collect(),
-            max_execution_usd: *max_execution_usd,
-        }),
+            flow_on_chain,
+        } => {
+            if let Some(ref foc) = flow_on_chain {
+                if foc.enabled && is_flow_cadence_chain(chain) {
+                    let handler_type = foc
+                        .handler_type
+                        .as_ref()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| "rebalance".to_string());
+                    let params = serde_json::json!({
+                        "thresholdPct": threshold_pct,
+                        "maxExecutionUsd": max_execution_usd,
+                        "targetAllocations": target_allocations.iter().map(row_to_spec).collect::<Vec<_>>(),
+                    });
+                    return Ok(StrategyAction::FlowScheduled {
+                        chain: chain.trim().to_string(),
+                        handler_type,
+                        cron_expression: foc.cron_expression.clone(),
+                        one_shot_timestamp: foc.one_shot_timestamp,
+                        handler_params: params,
+                    });
+                }
+            }
+            Ok(StrategyAction::RebalanceToTarget {
+                chain: chain.trim().to_string(),
+                threshold_pct: *threshold_pct,
+                target_allocations: target_allocations.iter().map(row_to_spec).collect(),
+                max_execution_usd: *max_execution_usd,
+            })
+        }
         DraftNodeData::AlertOnly {
             title,
             message_template,
@@ -328,6 +387,7 @@ mod tests {
                         to_symbol: "ETH".to_string(),
                         amount_usd: Some(10.0),
                         amount_token: None,
+                        flow_on_chain: None,
                     },
                 },
             ],

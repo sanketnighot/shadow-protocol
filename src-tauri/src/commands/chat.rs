@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
 use crate::services::apps::state as apps_state;
-use crate::services::apps::{filecoin, flow};
+use crate::services::apps::{filecoin, flow, flow_actions, flow_bridge, flow_scheduler};
 use tauri::AppHandle;
 use crate::services::audit;
 use crate::services::local_db::{
@@ -542,6 +542,273 @@ pub async fn approve_agent_action(
                     execution_id: Some(execution_id),
                     message: e,
                     tx_hash: None,
+                }
+            }
+        }
+    } else if tool_name == "flow_schedule_transaction" {
+        let intent = input
+            .payload
+            .get("intent")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let sid = input
+            .payload
+            .get("strategyId")
+            .and_then(|v| v.as_str());
+        let exec_res = if let Some(cron) = intent
+            .get("cronExpression")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            flow_scheduler::submit_cron_intent(&app, cron, sid).await
+        } else {
+            flow_scheduler::submit_schedule_intent(&app, intent, sid).await
+        };
+        match exec_res {
+            Ok(data) => {
+                let tx = data
+                    .get("txId")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                execution.status = "succeeded".to_string();
+                execution.result_json =
+                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                execution.tx_hash = tx;
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: "Flow schedule intent submitted.".to_string(),
+                    tx_hash: execution.tx_hash.clone(),
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("flow_schedule_failed".to_string());
+                execution.error_message = Some(e.clone());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: e,
+                    tx_hash: None,
+                }
+            }
+        }
+    } else if tool_name == "flow_setup_recurring" {
+        let cron = input
+            .payload
+            .get("cronExpression")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let sid = input
+            .payload
+            .get("strategyId")
+            .and_then(|v| v.as_str());
+        if cron.is_empty() {
+            execution.status = "failed".to_string();
+            execution.error_code = Some("invalid_params".to_string());
+            execution.error_message = Some("cronExpression required".to_string());
+            execution.completed_at = Some(now_secs());
+            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+            ApproveAgentActionResult {
+                success: false,
+                execution_id: Some(execution_id),
+                message: "cronExpression required".to_string(),
+                tx_hash: None,
+            }
+        } else {
+            match flow_scheduler::submit_cron_intent(&app, &cron, sid).await {
+                Ok(data) => {
+                    let tx = data
+                        .get("txId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    execution.status = "succeeded".to_string();
+                    execution.result_json =
+                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                    execution.tx_hash = tx;
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: true,
+                        execution_id: Some(execution_id),
+                        message: "Flow recurring intent submitted.".to_string(),
+                        tx_hash: execution.tx_hash.clone(),
+                    }
+                }
+                Err(e) => {
+                    execution.status = "failed".to_string();
+                    execution.error_code = Some("flow_cron_failed".to_string());
+                    execution.error_message = Some(e.clone());
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: false,
+                        execution_id: Some(execution_id),
+                        message: e,
+                        tx_hash: None,
+                    }
+                }
+            }
+        }
+    } else if tool_name == "flow_cancel_scheduled" {
+        let record_id = input
+            .payload
+            .get("recordId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if record_id.is_empty() {
+            execution.status = "failed".to_string();
+            execution.error_code = Some("invalid_params".to_string());
+            execution.error_message = Some("recordId required".to_string());
+            execution.completed_at = Some(now_secs());
+            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+            ApproveAgentActionResult {
+                success: false,
+                execution_id: Some(execution_id),
+                message: "recordId required".to_string(),
+                tx_hash: None,
+            }
+        } else {
+            match flow_scheduler::cancel_scheduled_by_record_id(&app, &record_id).await {
+                Ok(data) => {
+                    let tx = data
+                        .get("txId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    execution.status = "succeeded".to_string();
+                    execution.result_json =
+                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                    execution.tx_hash = tx;
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: true,
+                        execution_id: Some(execution_id),
+                        message: "Flow cancel intent submitted.".to_string(),
+                        tx_hash: execution.tx_hash.clone(),
+                    }
+                }
+                Err(e) => {
+                    execution.status = "failed".to_string();
+                    execution.error_code = Some("flow_cancel_failed".to_string());
+                    execution.error_message = Some(e.clone());
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: false,
+                        execution_id: Some(execution_id),
+                        message: e,
+                        tx_hash: None,
+                    }
+                }
+            }
+        }
+    } else if tool_name == "flow_compose_defi_action" {
+        let kind = input
+            .payload
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("dca");
+        let params = input
+            .payload
+            .get("parameters")
+            .cloned()
+            .unwrap_or_else(|| input.payload.clone());
+        match flow_actions::preview_composition(&app, kind, &params).await {
+            Ok(data) => {
+                execution.status = "succeeded".to_string();
+                execution.result_json =
+                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: "Flow Actions preview generated (beta).".to_string(),
+                    tx_hash: None,
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("flow_actions_preview_failed".to_string());
+                execution.error_message = Some(e.clone());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: e,
+                    tx_hash: None,
+                }
+            }
+        }
+    } else if tool_name == "flow_bridge_tokens" {
+        let direction = input
+            .payload
+            .get("direction")
+            .and_then(|v| v.as_str())
+            .unwrap_or("cadence_to_evm");
+        let token_ref = input
+            .payload
+            .get("tokenRef")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let amount_hint = input
+            .payload
+            .get("amountHint")
+            .and_then(|v| v.as_str())
+            .unwrap_or("0")
+            .to_string();
+        if token_ref.is_empty() {
+            execution.status = "failed".to_string();
+            execution.error_code = Some("invalid_params".to_string());
+            execution.error_message = Some("tokenRef required".to_string());
+            execution.completed_at = Some(now_secs());
+            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+            ApproveAgentActionResult {
+                success: false,
+                execution_id: Some(execution_id),
+                message: "tokenRef required".to_string(),
+                tx_hash: None,
+            }
+        } else {
+            match flow_bridge::preview_bridge(&app, direction, &token_ref, &amount_hint).await {
+                Ok(data) => {
+                    execution.status = "succeeded".to_string();
+                    execution.result_json =
+                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: true,
+                        execution_id: Some(execution_id),
+                        message: "Flow bridge preview generated.".to_string(),
+                        tx_hash: None,
+                    }
+                }
+                Err(e) => {
+                    execution.status = "failed".to_string();
+                    execution.error_code = Some("flow_bridge_preview_failed".to_string());
+                    execution.error_message = Some(e.clone());
+                    execution.completed_at = Some(now_secs());
+                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                    ApproveAgentActionResult {
+                        success: false,
+                        execution_id: Some(execution_id),
+                        message: e,
+                        tx_hash: None,
+                    }
                 }
             }
         }

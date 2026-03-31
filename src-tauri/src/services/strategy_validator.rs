@@ -390,6 +390,7 @@ mod tests {
                         to_symbol: "ETH".to_string(),
                         amount_usd: Some(10.0),
                         amount_token: None,
+                        flow_on_chain: None,
                     },
                 },
             ],

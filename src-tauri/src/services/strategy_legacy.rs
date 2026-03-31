@@ -141,6 +141,7 @@ fn legacy_to_draft(
                 .or_else(|| action_val.get("amount_usd"))
                 .and_then(|v| v.as_f64()),
             amount_token: None,
+            flow_on_chain: None,
         },
         StrategyTemplate::RebalanceToTarget => {
             let targets = parse_allocations(&action_val);
@@ -164,6 +165,7 @@ fn legacy_to_draft(
                 } else {
                     targets
                 },
+                flow_on_chain: None,
             }
         }
         StrategyTemplate::AlertOnly => DraftNodeData::AlertOnly {

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::apps::{self, flow, lit};
+use super::apps::{self, flow, flow_scheduler, lit};
 use super::apps::state as apps_state;
 use super::local_db::{self, DbError};
 use super::sonar_client;
@@ -564,6 +564,164 @@ pub async fn route_and_execute(
                 ToolResult::ApprovalRequired {
                     tool_name: def.name.to_string(),
                     payload,
+                }
+            }
+            "flow_schedule_transaction" => {
+                let intent = call.parameters.get("intent").cloned().unwrap_or(serde_json::json!({}));
+                if intent.as_object().map(|m| m.is_empty()).unwrap_or(true) {
+                    ToolResult::Error {
+                        message: "intent (object) is required.".to_string(),
+                    }
+                } else {
+                    let strategy_id = call
+                        .parameters
+                        .get("strategyId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload: serde_json::json!({
+                            "intent": intent,
+                            "strategyId": strategy_id,
+                        }),
+                    }
+                }
+            }
+            "flow_setup_recurring" => {
+                let cron = call
+                    .parameters
+                    .get("cronExpression")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if cron.is_empty() {
+                    ToolResult::Error {
+                        message: "cronExpression is required.".to_string(),
+                    }
+                } else {
+                    let strategy_id = call
+                        .parameters
+                        .get("strategyId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload: serde_json::json!({
+                            "cronExpression": cron,
+                            "strategyId": strategy_id,
+                        }),
+                    }
+                }
+            }
+            "flow_list_scheduled" => {
+                let limit = call
+                    .parameters
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(25)
+                    .clamp(1, 200) as u32;
+                match local_db::list_flow_scheduled_transactions(limit) {
+                    Ok(rows) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()),
+                    },
+                    Err(e) => ToolResult::Error {
+                        message: format!("{e}"),
+                    },
+                }
+            }
+            "flow_cancel_scheduled" => {
+                let record_id = call
+                    .parameters
+                    .get("recordId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if record_id.is_empty() {
+                    ToolResult::Error {
+                        message: "recordId is required.".to_string(),
+                    }
+                } else {
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload: serde_json::json!({ "recordId": record_id }),
+                    }
+                }
+            }
+            "flow_estimate_schedule_fee" => {
+                let effort = call
+                    .parameters
+                    .get("executionEffort")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100);
+                let priority_raw = call
+                    .parameters
+                    .get("priorityRaw")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1)
+                    .min(255) as u8;
+                let data_mb = call
+                    .parameters
+                    .get("dataSizeMB")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0.0001")
+                    .to_string();
+                match flow_scheduler::estimate_schedule_fee(app, effort, priority_raw, &data_mb).await {
+                    Ok(v) => ToolResult::ToolOutput {
+                        tool_name: def.name.to_string(),
+                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
+                    },
+                    Err(e) => ToolResult::Error { message: e },
+                }
+            }
+            "flow_compose_defi_action" => {
+                let kind = call
+                    .parameters
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("dca");
+                ToolResult::ApprovalRequired {
+                    tool_name: def.name.to_string(),
+                    payload: serde_json::json!({
+                        "kind": kind,
+                        "parameters": call.parameters.clone(),
+                    }),
+                }
+            }
+            "flow_bridge_tokens" => {
+                let direction = call
+                    .parameters
+                    .get("direction")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("cadence_to_evm");
+                let token_ref = call
+                    .parameters
+                    .get("tokenRef")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if token_ref.is_empty() {
+                    ToolResult::Error {
+                        message: "tokenRef is required.".to_string(),
+                    }
+                } else {
+                    let amount_hint = call
+                        .parameters
+                        .get("amountHint")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0")
+                        .to_string();
+                    ToolResult::ApprovalRequired {
+                        tool_name: def.name.to_string(),
+                        payload: serde_json::json!({
+                            "direction": direction,
+                            "tokenRef": token_ref,
+                            "amountHint": amount_hint,
+                        }),
+                    }
                 }
             }
             "filecoin_protocol_list_backups" => {

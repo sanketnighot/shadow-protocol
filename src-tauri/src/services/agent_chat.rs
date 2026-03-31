@@ -180,6 +180,11 @@ fn approval_kind(tool_name: &str) -> String {
         "execute_token_swap" => "swap",
         "create_automation_strategy" => "strategy_create",
         "flow_protocol_prepare_sponsored_transaction" => "flow_tx",
+        "flow_schedule_transaction" | "flow_setup_recurring" | "flow_cancel_scheduled" => {
+            "flow_schedule"
+        }
+        "flow_compose_defi_action" => "flow_actions",
+        "flow_bridge_tokens" => "flow_bridge",
         "filecoin_protocol_request_backup" => "filecoin_backup",
         "filecoin_protocol_request_restore" => "filecoin_restore",
         _ => "tool_action",

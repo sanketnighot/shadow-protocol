@@ -31,6 +31,8 @@ fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
                 token_contract: r.token_contract,
                 decimals: r.decimals,
                 wallet_address: Some(r.wallet_address),
+                unified_balance_note: None,
+                flow_cross_vm_bridge_eligible: None,
             }
         })
         .collect()
@@ -44,12 +46,17 @@ pub async fn portfolio_fetch_balances(
 ) -> Result<Vec<PortfolioAsset>, PortfolioError> {
     tracing::info!("portfolio_fetch_balances called for address: {}, chain: {:?}", address, chain);
 
-    // Check local DB first
+    let mut combined: Vec<PortfolioAsset> = Vec::new();
     if let Ok(rows) = local_db::get_tokens_for_wallets(std::slice::from_ref(&address)) {
         if !rows.is_empty() {
             tracing::info!("Found {} tokens in local DB for {}", rows.len(), address);
-            return Ok(token_rows_to_assets(rows));
+            combined.extend(token_rows_to_assets(rows));
         }
+    }
+
+    if !combined.is_empty() {
+        portfolio_service::append_configured_cadence_assets_if_absent(&app, &mut combined).await?;
+        return Ok(combined);
     }
 
     // Determine if this is a Flow address
@@ -93,6 +100,7 @@ pub async fn portfolio_fetch_balances_multi(
         let fresh = portfolio_service::fetch_balances_mixed(&app, &need_live).await?;
         combined.extend(fresh);
     }
+    portfolio_service::append_configured_cadence_assets_if_absent(&app, &mut combined).await?;
     Ok(combined)
 }
 

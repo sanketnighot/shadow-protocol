@@ -1,4 +1,4 @@
-//! Execute token transfers via signed transactions. Uses session-cached or keychain-stored keys and Alchemy RPC.
+//! Execute token transfers via signed transactions. Uses session-cached keys; RPC is Alchemy or public Filecoin Calibration (Glif).
 
 use ethers::abi::{encode, Token};
 use ethers::core::types::{Address, TransactionRequest, U256};
@@ -75,10 +75,20 @@ pub struct TransferBackgroundResult {
     pub status: String,
 }
 
+fn resolve_transfer_rpc_url(chain: &str) -> Result<String, TransferError> {
+    let trimmed = chain.trim();
+    if trimmed == "FIL-CAL" {
+        return chain::chain_to_rpc_url(trimmed, "")
+            .ok_or_else(|| TransferError::UnsupportedChain(trimmed.to_string()));
+    }
+    let api_key =
+        crate::services::settings::get_alchemy_key_or_env().ok_or(TransferError::MissingApiKey)?;
+    chain::chain_to_rpc_url(trimmed, &api_key)
+        .ok_or_else(|| TransferError::UnsupportedChain(trimmed.to_string()))
+}
+
 #[tauri::command]
 pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, TransferError> {
-    let api_key = crate::services::settings::get_alchemy_key_or_env().ok_or(TransferError::MissingApiKey)?;
-
     let from = input.from_address.trim();
     let to = input.to_address.trim();
     if from.is_empty() || to.is_empty() || !from.starts_with("0x") || !to.starts_with("0x") {
@@ -88,10 +98,7 @@ pub async fn portfolio_transfer(input: TransferInput) -> Result<TransferResult, 
         return Err(TransferError::InvalidAddress);
     }
 
-    let network = chain::chain_to_network(&input.chain)
-        .ok_or_else(|| TransferError::UnsupportedChain(input.chain.clone()))?;
-
-    let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+    let rpc_url = resolve_transfer_rpc_url(&input.chain)?;
 
     let hex_pk = session::get_cached_key(from)
         .ok_or(TransferError::WalletLocked)?
@@ -164,8 +171,6 @@ pub async fn portfolio_transfer_background(
     app: AppHandle,
     input: TransferInput,
 ) -> Result<TransferBackgroundResult, TransferError> {
-    let api_key = crate::services::settings::get_alchemy_key_or_env().ok_or(TransferError::MissingApiKey)?;
-
     let from = input.from_address.trim();
     let to = input.to_address.trim();
     if from.is_empty() || to.is_empty() || !from.starts_with("0x") || !to.starts_with("0x") {
@@ -175,10 +180,7 @@ pub async fn portfolio_transfer_background(
         return Err(TransferError::InvalidAddress);
     }
 
-    let network = chain::chain_to_network(&input.chain)
-        .ok_or_else(|| TransferError::UnsupportedChain(input.chain.clone()))?;
-
-    let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+    let rpc_url = resolve_transfer_rpc_url(&input.chain)?;
 
     let hex_pk = session::get_cached_key(from)
         .ok_or(TransferError::WalletLocked)?
@@ -239,7 +241,7 @@ pub async fn portfolio_transfer_background(
 
     let tx_hash = format!("{:?}", pending.tx_hash());
     let tx_hash_emit = tx_hash.clone();
-    let rpc_url = format!("https://{}.g.alchemy.com/v2/{}", network, api_key);
+    let rpc_url_poll = rpc_url.clone();
 
     let handle = app.clone();
     tokio::spawn(async move {
@@ -248,7 +250,7 @@ pub async fn portfolio_transfer_background(
             .parse()
             .unwrap_or_else(|_| ethers::core::types::H256::zero());
         let mut receipt = None;
-        if let Ok(provider) = Provider::<Http>::try_from(&rpc_url) {
+        if let Ok(provider) = Provider::<Http>::try_from(rpc_url_poll.as_str()) {
             for _ in 0..60 {
                 if let Ok(Some(r)) = provider.get_transaction_receipt(hash).await {
                     receipt = Some(r);

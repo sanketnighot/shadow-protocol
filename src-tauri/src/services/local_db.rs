@@ -290,6 +290,25 @@ CREATE TABLE IF NOT EXISTS app_scheduler_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_app_scheduler_jobs_next ON app_scheduler_jobs(next_run_at);
 
+CREATE TABLE IF NOT EXISTS flow_scheduled_transactions (
+  id TEXT PRIMARY KEY,
+  strategy_id TEXT,
+  flow_scheduler_numeric_id INTEGER,
+  handler_type TEXT NOT NULL DEFAULT '',
+  cron_expression TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  priority TEXT NOT NULL DEFAULT 'medium',
+  fee_paid TEXT NOT NULL DEFAULT '',
+  submitted_tx_id TEXT NOT NULL DEFAULT '',
+  scheduled_at INTEGER NOT NULL,
+  executed_at INTEGER,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_flow_sched_strategy ON flow_scheduled_transactions(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_flow_sched_status ON flow_scheduled_transactions(status);
+
 -- ============================================================
 -- AUTONOMOUS AGENT SYSTEM TABLES
 -- ============================================================
@@ -630,6 +649,7 @@ pub fn clear_all_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM apps_catalog", [])?;
         conn.execute("DELETE FROM app_backups", [])?;
         conn.execute("DELETE FROM app_scheduler_jobs", [])?;
+        conn.execute("DELETE FROM flow_scheduled_transactions", [])?;
         // Autonomous agent system tables
         conn.execute("DELETE FROM tasks", [])?;
         conn.execute("DELETE FROM behavior_events", [])?;
@@ -2729,6 +2749,131 @@ pub fn clear_autonomous_data() -> Result<(), DbError> {
         conn.execute("DELETE FROM guardrail_violations", [])?;
         conn.execute("DELETE FROM opportunity_matches", [])?;
         conn.execute("DELETE FROM reasoning_chains", [])?;
+        Ok(())
+    })
+}
+
+// --- Flow scheduled transaction tracking ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowScheduledTransactionRow {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strategy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flow_scheduler_numeric_id: Option<i64>,
+    pub handler_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cron_expression: Option<String>,
+    pub status: String,
+    pub priority: String,
+    pub fee_paid: String,
+    pub submitted_tx_id: String,
+    pub scheduled_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executed_at: Option<i64>,
+    pub metadata_json: String,
+    pub created_at: i64,
+}
+
+pub fn insert_flow_scheduled_transaction(row: &FlowScheduledTransactionRow) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            r#"INSERT INTO flow_scheduled_transactions (
+                id, strategy_id, flow_scheduler_numeric_id, handler_type, cron_expression,
+                status, priority, fee_paid, submitted_tx_id, scheduled_at, executed_at, metadata_json, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
+            params![
+                row.id,
+                row.strategy_id,
+                row.flow_scheduler_numeric_id,
+                row.handler_type,
+                row.cron_expression,
+                row.status,
+                row.priority,
+                row.fee_paid,
+                row.submitted_tx_id,
+                row.scheduled_at,
+                row.executed_at,
+                row.metadata_json,
+                row.created_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_flow_scheduled_transaction(id: &str) -> Result<Option<FlowScheduledTransactionRow>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            r#"SELECT id, strategy_id, flow_scheduler_numeric_id, handler_type, cron_expression,
+                status, priority, fee_paid, submitted_tx_id, scheduled_at, executed_at, metadata_json, created_at
+                FROM flow_scheduled_transactions WHERE id = ?1"#,
+        )?;
+        let mut rows = stmt.query_map(params![id], |row| {
+            Ok(FlowScheduledTransactionRow {
+                id: row.get(0)?,
+                strategy_id: row.get(1)?,
+                flow_scheduler_numeric_id: row.get(2)?,
+                handler_type: row.get(3)?,
+                cron_expression: row.get(4)?,
+                status: row.get(5)?,
+                priority: row.get(6)?,
+                fee_paid: row.get(7)?,
+                submitted_tx_id: row.get(8)?,
+                scheduled_at: row.get(9)?,
+                executed_at: row.get(10)?,
+                metadata_json: row.get(11)?,
+                created_at: row.get(12)?,
+            })
+        })?;
+        rows.next().transpose()
+    })
+}
+
+pub fn list_flow_scheduled_transactions(limit: u32) -> Result<Vec<FlowScheduledTransactionRow>, DbError> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            r#"SELECT id, strategy_id, flow_scheduler_numeric_id, handler_type, cron_expression,
+                status, priority, fee_paid, submitted_tx_id, scheduled_at, executed_at, metadata_json, created_at
+                FROM flow_scheduled_transactions ORDER BY created_at DESC LIMIT ?1"#,
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(FlowScheduledTransactionRow {
+                id: row.get(0)?,
+                strategy_id: row.get(1)?,
+                flow_scheduler_numeric_id: row.get(2)?,
+                handler_type: row.get(3)?,
+                cron_expression: row.get(4)?,
+                status: row.get(5)?,
+                priority: row.get(6)?,
+                fee_paid: row.get(7)?,
+                submitted_tx_id: row.get(8)?,
+                scheduled_at: row.get(9)?,
+                executed_at: row.get(10)?,
+                metadata_json: row.get(11)?,
+                created_at: row.get(12)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    })
+}
+
+pub fn update_flow_scheduled_status(
+    id: &str,
+    status: &str,
+    executed_at: Option<i64>,
+) -> Result<(), DbError> {
+    with_connection(|conn| {
+        conn.execute(
+            "UPDATE flow_scheduled_transactions SET status = ?2, executed_at = COALESCE(?3, executed_at) WHERE id = ?1",
+            params![id, status, executed_at],
+        )?;
         Ok(())
     })
 }

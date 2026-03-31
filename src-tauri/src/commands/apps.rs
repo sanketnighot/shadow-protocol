@@ -3,7 +3,10 @@
 use keyring::Error as KeyringError;
 use serde::{Deserialize, Serialize};
 
-use crate::services::apps::{flow, lit, filecoin, permissions, runtime, state as apps_state};
+use crate::services::apps::{
+    flow, flow_scheduler, lit, filecoin, permissions, runtime, state as apps_state,
+};
+use crate::services::local_db;
 use crate::services::audit;
 use crate::services::local_db::DbError;
 
@@ -323,6 +326,49 @@ pub fn apps_lit_pkp_address() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub async fn apps_flow_account_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     flow::account_status(&app).await
+}
+
+#[tauri::command]
+pub async fn apps_flow_list_scheduled(
+    limit: Option<u32>,
+) -> Result<Vec<local_db::FlowScheduledTransactionRow>, String> {
+    let lim = limit.unwrap_or(50).clamp(1, 200);
+    local_db::list_flow_scheduled_transactions(lim).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn apps_flow_estimate_schedule_fee(
+    app: tauri::AppHandle,
+    execution_effort: Option<u64>,
+    priority_raw: Option<u8>,
+    data_size_mb: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let effort = execution_effort.unwrap_or(100);
+    let pr = priority_raw.unwrap_or(1);
+    let mb = data_size_mb
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("0.0001")
+        .to_string();
+    flow_scheduler::estimate_schedule_fee(&app, effort, pr, &mb).await
+}
+
+#[tauri::command]
+pub async fn apps_flow_sync_scheduled(app: tauri::AppHandle) -> Result<(), String> {
+    flow_scheduler::sync_submitted_flow_rows(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn apps_flow_cancel_scheduled_record(
+    app: tauri::AppHandle,
+    record_id: String,
+) -> Result<serde_json::Value, String> {
+    let id = record_id.trim();
+    if id.is_empty() {
+        return Err("recordId required".to_string());
+    }
+    flow_scheduler::cancel_scheduled_by_record_id(&app, id).await
 }
 
 #[tauri::command]

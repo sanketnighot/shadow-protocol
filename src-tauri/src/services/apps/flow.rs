@@ -65,7 +65,24 @@ pub async fn account_status(app: &AppHandle) -> Result<serde_json::Value, String
         e.to_string()
     })?;
     if res.ok {
-        Ok(res.data)
+        let mut data = res.data;
+        if let Some(addr) = configured_cadence_address() {
+            let display = format!("0x{addr}");
+            if let Some(obj) = data.as_object_mut() {
+                let fill_address = obj
+                    .get("address")
+                    .map(|v| v.is_null() || v.as_str().map(|s| s.is_empty()).unwrap_or(false))
+                    .unwrap_or(true);
+                if fill_address {
+                    obj.insert("address".to_string(), serde_json::json!(display));
+                }
+                obj.insert(
+                    "configuredCadenceAddress".to_string(),
+                    serde_json::json!(display),
+                );
+            }
+        }
+        Ok(data)
     } else {
         let err = res
             .error_message
@@ -113,7 +130,7 @@ pub async fn prepare_sponsored_transaction(
     app: &AppHandle,
     proposal: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let api_key = crate::session::get_unlocked_key()
+    let pk = crate::session::get_unlocked_key()
         .map(|z| z.to_string())
         .unwrap_or_default();
 
@@ -121,7 +138,8 @@ pub async fn prepare_sponsored_transaction(
 
     let mut payload = proposal.clone();
     if let Some(obj) = payload.as_object_mut() {
-        obj.insert("apiKey".to_string(), serde_json::json!(api_key));
+        obj.insert("privateKeyHex".to_string(), serde_json::json!(pk.clone()));
+        obj.insert("apiKey".to_string(), serde_json::json!(pk));
         obj.insert("network".to_string(), serde_json::json!(network));
     }
 

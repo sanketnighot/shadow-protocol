@@ -92,6 +92,46 @@ fn summarize_action(action: &StrategyAction) -> String {
             format!("Rebalance on {} when drift >= {:.2}%", chain, threshold_pct)
         }
         StrategyAction::AlertOnly { title, .. } => format!("Alert: {}", title),
+        StrategyAction::FlowScheduled {
+            chain,
+            handler_type,
+            cron_expression,
+            ..
+        } => {
+            if let Some(c) = cron_expression {
+                format!("Flow on-chain schedule ({handler_type}) on {chain}, cron {c}")
+            } else {
+                format!("Flow on-chain schedule ({handler_type}) on {chain}")
+            }
+        }
+        StrategyAction::FlowDcaBuy {
+            from_vault,
+            to_vault,
+            amount,
+            swapper_protocol,
+            ..
+        } => {
+            format!(
+                "Flow Actions DCA {:.4} via {} ({} -> {})",
+                amount, swapper_protocol, from_vault, to_vault
+            )
+        }
+        StrategyAction::FlowRebalance {
+            swapper_protocol, ..
+        } => {
+            format!("Flow Actions rebalance via {}", swapper_protocol)
+        }
+        StrategyAction::FlowFlashLoanArbitrage {
+            flasher_protocol,
+            loan_token,
+            loan_amount,
+            ..
+        } => {
+            format!(
+                "Flow flash loan {:.4} {} via {}",
+                loan_amount, loan_token, flasher_protocol
+            )
+        }
     }
 }
 

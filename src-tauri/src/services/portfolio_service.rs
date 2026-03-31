@@ -155,6 +155,8 @@ async fn merge_flow_evm_native_via_alchemy_rpc(
             token_contract: String::new(),
             decimals: FLOW_EVM_NATIVE_DECIMALS,
             wallet_address: Some(address.to_string()),
+            unified_balance_note: None,
+            flow_cross_vm_bridge_eligible: None,
         });
     }
 }
@@ -235,6 +237,11 @@ pub struct PortfolioAsset {
     pub decimals: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<String>,
+    /// When the same symbol appears on Cadence and Flow EVM, surface bridge context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unified_balance_note: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow_cross_vm_bridge_eligible: Option<bool>,
 }
 
 pub(crate) fn raw_balance_to_amount(raw: &str, decimals: u8) -> f64 {
@@ -340,6 +347,8 @@ pub fn assets_from_flow_sidecar_response(flow_data: serde_json::Value, address: 
             token_contract: String::new(),
             decimals,
             wallet_address: Some(address.to_string()),
+            unified_balance_note: None,
+            flow_cross_vm_bridge_eligible: None,
         });
     }
 
@@ -358,6 +367,85 @@ async fn hydrate_cadence_flow_usd(assets: &mut [PortfolioAsset]) {
             a.value_usd = format!("${usd:.2}");
         }
     }
+}
+
+fn flow_ecosystem_chain(chain: &str) -> bool {
+    matches!(
+        chain,
+        "FLOW" | "FLOW-TEST" | "FLOW-EVM" | "FLOW-EVM-TEST"
+    )
+}
+
+fn annotate_flow_cross_vm(assets: &mut [PortfolioAsset]) {
+    use std::collections::HashMap;
+
+    let mut by_symbol: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, a) in assets.iter().enumerate() {
+        if flow_ecosystem_chain(&a.chain) {
+            by_symbol
+                .entry(a.symbol.to_uppercase())
+                .or_default()
+                .push(i);
+        }
+    }
+
+    for idxs in by_symbol.values() {
+        if idxs.len() < 2 {
+            continue;
+        }
+        let mut cadence = false;
+        let mut evm = false;
+        for &i in idxs {
+            match assets[i].chain.as_str() {
+                "FLOW" | "FLOW-TEST" => cadence = true,
+                "FLOW-EVM" | "FLOW-EVM-TEST" => evm = true,
+                _ => {}
+            }
+        }
+        if !(cadence && evm) {
+            continue;
+        }
+        let note = Some(
+            "Cross-VM bridge eligible: same symbol on Cadence Flow and Flow EVM — unified view is approximate."
+                .to_string(),
+        );
+        for &i in idxs {
+            assets[i].unified_balance_note = note.clone();
+            assets[i].flow_cross_vm_bridge_eligible = Some(true);
+        }
+    }
+}
+
+/// When portfolio rows come only from SQLite (EVM wallets), we never call [`fetch_balances_mixed`],
+/// so the user's configured Cadence account would be missing. Append it here if absent.
+pub async fn append_configured_cadence_assets_if_absent(
+    app: &AppHandle,
+    assets: &mut Vec<PortfolioAsset>,
+) -> Result<(), PortfolioError> {
+    if !super::apps::state::is_tool_app_ready("flow").unwrap_or(false) {
+        return Ok(());
+    }
+    let Some(cad_key) = super::apps::flow::configured_cadence_address() else {
+        return Ok(());
+    };
+    let has_cadence_row = assets.iter().any(|a| {
+        cadence_account_key(a.wallet_address.as_deref().unwrap_or(""))
+            .map(|k| k == cad_key)
+            .unwrap_or(false)
+    });
+    if has_cadence_row {
+        return Ok(());
+    }
+    let flow_json = super::apps::flow::fetch_balances(app, &cad_key)
+        .await
+        .map_err(|e| PortfolioError::FetchFailed(format!("Flow fetch failed: {e}")))?;
+    let parsed = assets_from_flow_sidecar_response(flow_json, &cad_key);
+    if !parsed.is_empty() {
+        assets.extend(parsed);
+    }
+    hydrate_cadence_flow_usd(assets).await;
+    annotate_flow_cross_vm(assets);
+    Ok(())
 }
 
 pub async fn fetch_balances_mixed(
@@ -408,6 +496,7 @@ pub async fn fetch_balances_mixed(
     }
 
     hydrate_cadence_flow_usd(&mut all).await;
+    annotate_flow_cross_vm(&mut all);
 
     all.sort_by(|a, b| {
         let a_val: f64 = a.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);
@@ -541,6 +630,8 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
             token_contract,
             decimals,
             wallet_address: Some(address.to_string()),
+            unified_balance_note: None,
+            flow_cross_vm_bridge_eligible: None,
         });
     }
 

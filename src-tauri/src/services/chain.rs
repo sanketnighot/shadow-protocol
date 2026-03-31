@@ -3,8 +3,11 @@
 #[allow(dead_code)]
 pub const SUPPORTED_CHAINS: &[&str] = &[
     "ETH", "BASE", "POL", "FLOW", "FLOW-EVM", "ETH-SEP", "BASE-SEP", "POL-AMOY", "FLOW-TEST",
-    "FLOW-EVM-TEST",
+    "FLOW-EVM-TEST", "FIL-CAL",
 ];
+
+/// Public Filecoin Calibration (FEVM) JSON-RPC — no Alchemy key.
+pub const FILECOIN_CALIBRATION_RPC_URL: &str = "https://api.calibration.node.glif.io/rpc/v1";
 
 pub fn chain_to_network(chain: &str) -> Option<&'static str> {
     match chain {
@@ -22,6 +25,16 @@ pub fn chain_to_network(chain: &str) -> Option<&'static str> {
     }
 }
 
+/// RPC URL for EVM JSON-RPC (Alchemy-backed chains or direct public RPC).
+pub fn chain_to_rpc_url(chain: &str, api_key: &str) -> Option<String> {
+    match chain {
+        "FIL-CAL" => Some(FILECOIN_CALIBRATION_RPC_URL.to_string()),
+        _ => chain_to_network(chain).map(|network| {
+            format!("https://{}.g.alchemy.com/v2/{}", network, api_key)
+        }),
+    }
+}
+
 pub fn chain_code_to_display(chain: &str) -> &'static str {
     match chain {
         "ETH" => "Ethereum",
@@ -34,6 +47,7 @@ pub fn chain_code_to_display(chain: &str) -> &'static str {
         "POL-AMOY" => "Polygon Amoy",
         "FLOW-TEST" => "Flow Testnet (Cadence)",
         "FLOW-EVM-TEST" => "Flow EVM Testnet",
+        "FIL-CAL" => "Filecoin Calibration",
         _ => "Unknown",
     }
 }
@@ -68,6 +82,7 @@ pub fn chain_to_explorer_base(chain: &str) -> &'static str {
         "POL-AMOY" => "https://amoy.polygonscan.com",
         "FLOW-TEST" => chain_to_cadence_explorer_base("FLOW-TEST"),
         "FLOW-EVM-TEST" => chain_to_flow_evm_explorer_base("FLOW-EVM-TEST"),
+        "FIL-CAL" => "https://calibration.filfox.info/en",
         _ => "https://etherscan.io",
     }
 }
