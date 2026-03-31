@@ -7,8 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Activity,
+  CalendarClock,
   Copy,
   HardDrive,
+  Settings2,
   ShieldCheck,
   Waves,
   Zap,
@@ -40,6 +42,7 @@ import {
   useFilecoinRestoreByCidMutation,
   useSetAppConfigMutation,
 } from "@/hooks/useApps";
+import { FlowSchedulePanel } from "@/components/strategy/FlowSchedulePanel";
 import { cn } from "@/lib/utils";
 
 type AppSettingsPanelProps = {
@@ -363,12 +366,15 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
   );
 }
 
+type FlowTab = "config" | "schedule";
+
 function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }) {
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const save = useSetAppConfigMutation();
   const addNotification = useUiStore((s) => s.addNotification);
   const addresses = useWalletStore((s) => s.addresses);
   const activeAddress = useWalletStore((s) => s.activeAddress);
+  const [activeTab, setActiveTab] = useState<FlowTab>("config");
   const [draft, setDraft] = useState<FlowIntegrationConfig>(() => parseFlowConfig({}));
   const [flowPreview, setFlowPreview] = useState<string | null>(null);
   const suggestedLinkedEvmRef = useRef(false);
@@ -432,7 +438,40 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex gap-1 rounded-sm border border-border bg-secondary p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("config")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors",
+            activeTab === "config"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted hover:text-foreground",
+          )}
+        >
+          <Settings2 className="size-3" />
+          Config
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("schedule")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors",
+            activeTab === "schedule"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted hover:text-foreground",
+          )}
+        >
+          <CalendarClock className="size-3" />
+          Scheduled Txns
+        </button>
+      </div>
+
+      {activeTab === "schedule" && <FlowSchedulePanel />}
+
+      {activeTab === "config" && <div className="space-y-6">
       <div className="flex items-center gap-2 mb-2">
         <Waves className="size-4 text-primary" />
         <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Flow</p>
@@ -575,6 +614,7 @@ function FlowSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean 
       >
         Save Flow settings
       </Button>
+      </div>}
     </div>
   );
 }
@@ -767,14 +807,14 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
                 Max deposit cap (USDFC)
               </span>
               <span className="text-xs font-mono text-primary tabular-nums">
-                {draft.policy.costLimit} USDFC
+                {draft.policy.costLimit.toFixed(2)} USDFC
               </span>
             </div>
             <input
               type="range"
-              min={0.001}
-              max={0.05}
-              step={0.001}
+              min={0.01}
+              max={25}
+              step={0.01}
               value={draft.policy.costLimit}
               onChange={(e) =>
                 setDraft((d) => ({
@@ -784,6 +824,10 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
               }
               className="h-1.5 w-full appearance-none rounded-full bg-secondary accent-primary cursor-pointer"
             />
+            <p className="text-[10px] text-muted leading-snug">
+              Synapse often quotes ~1–3+ USDFC deposit for small snapshots; set this above the quote
+              or backup will be rejected (check the error message for the exact amount).
+            </p>
           </div>
 
           <div className="space-y-4 pt-2">

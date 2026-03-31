@@ -10,10 +10,10 @@ import {
 } from "@/lib/apps";
 
 type FlowSchedulePanelProps = {
-  strategyBuilderEnabled: boolean;
+  strategyBuilderEnabled?: boolean;
 };
 
-export function FlowSchedulePanel({ strategyBuilderEnabled }: FlowSchedulePanelProps) {
+export function FlowSchedulePanel({ strategyBuilderEnabled = true }: FlowSchedulePanelProps) {
   const [rows, setRows] = useState<FlowScheduledRowIpc[]>([]);
   const [feeText, setFeeText] = useState<string>("");
   const [busy, setBusy] = useState<string | null>(null);

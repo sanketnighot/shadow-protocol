@@ -254,7 +254,13 @@ export function parseFilecoinConfig(raw: unknown): FilecoinIntegrationConfig {
     policy: {
       ttl: typeof policy.ttl === "number" ? policy.ttl : 180,
       redundancy: typeof policy.redundancy === "number" ? policy.redundancy : 2,
-      costLimit: typeof policy.costLimit === "number" ? policy.costLimit : 0.01,
+      costLimit: (() => {
+        const raw =
+          typeof policy.costLimit === "number" && Number.isFinite(policy.costLimit)
+            ? policy.costLimit
+            : 3;
+        return Math.min(25, Math.max(0.01, raw));
+      })(),
       autoRenew: typeof policy.autoRenew === "boolean" ? policy.autoRenew : true,
     },
   };
