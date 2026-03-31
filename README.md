@@ -11,10 +11,10 @@
 [![Runtime Bun](https://img.shields.io/badge/Runtime-Bun-fbf0df?style=for-the-badge&logo=bun)](https://bun.sh/)
 [![Local AI Ollama](https://img.shields.io/badge/Local%20AI-Ollama-111111?style=for-the-badge&logo=ollama)](https://ollama.com/)
 
-**Secure wallet handling. Local-first AI workflows. Human-in-the-loop approvals.**  
+**Secure wallet handling. Local-first AI workflows. Human-in-the-loop approvals.**
 SHADOW is a desktop-native control center for monitoring portfolios, coordinating DeFi actions, drafting strategies, and exploring automation without moving sensitive logic into the browser.
 
-[Product Docs](docs/shadow-protocol.md) · [UI/UX Docs](docs/ui-ux.md) · [Agent Rules](AGENTS.md)
+[Product Docs](docs/shadow-protocol.md) · [UI/UX Docs](docs/ui-ux.md) · [Agent Rules](AGENTS.md) · [Check Demo](https://youtu.be/4fKRV4tZUzU)
 
 </div>
 

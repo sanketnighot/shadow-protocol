@@ -3,7 +3,15 @@
 <cite>
 **Referenced Files in This Document**
 - [flow.ts](file://apps-runtime/src/providers/flow.ts)
+- [flow-actions.ts](file://apps-runtime/src/providers/flow-actions.ts)
+- [flow-bridge.ts](file://apps-runtime/src/providers/flow-bridge.ts)
+- [flow-tx.ts](file://apps-runtime/src/providers/flow-tx.ts)
+- [flow-signing.ts](file://apps-runtime/src/providers/flow-signing.ts)
+- [flow-network.ts](file://apps-runtime/src/providers/flow-network.ts)
 - [flow.rs](file://src-tauri/src/services/apps/flow.rs)
+- [flow_actions.rs](file://src-tauri/src/services/apps/flow_actions.rs)
+- [flow_bridge.rs](file://src-tauri/src/services/apps/flow_bridge.rs)
+- [flow_scheduler.rs](file://src-tauri/src/services/apps/flow_scheduler.rs)
 - [apps.ts](file://src/lib/apps.ts)
 - [flow_domain.rs](file://src-tauri/src/services/flow_domain.rs)
 - [main.ts](file://apps-runtime/src/main.ts)
@@ -15,23 +23,35 @@
 - [README.md](file://README.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Added new Flow Actions component for composable DeFi previews
+- Integrated Flow Bridge functionality for cross-VM token transfers
+- Enhanced transaction management with improved signing and scheduling
+- Expanded API endpoints for new Flow integration capabilities
+- Updated transaction submission with session key support
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Flow Integration Architecture](#flow-integration-architecture)
 3. [Core Components](#core-components)
-4. [Configuration Management](#configuration-management)
-5. [API Endpoints and Operations](#api-endpoints-and-operations)
-6. [Address Validation and Normalization](#address-validation-and-normalization)
-7. [Transaction Preparation](#transaction-preparation)
-8. [Integration Setup](#integration-setup)
-9. [Troubleshooting Guide](#troubleshooting-guide)
-10. [Best Practices](#best-practices)
+4. [New Flow Actions System](#new-flow-actions-system)
+5. [Flow Bridge Functionality](#flow-bridge-functionality)
+6. [Enhanced Transaction Management](#enhanced-transaction-management)
+7. [Configuration Management](#configuration-management)
+8. [API Endpoints and Operations](#api-endpoints-and-operations)
+9. [Address Validation and Normalization](#address-validation-and-normalization)
+10. [Integration Setup](#integration-setup)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Best Practices](#best-practices)
 
 ## Introduction
 
 The Flow Integration in SHADOW Protocol provides seamless connectivity to the Flow blockchain ecosystem through a secure, privacy-focused architecture. This integration supports both Flow EVM wallets and native Flow Cadence accounts, enabling comprehensive portfolio management and automated trading capabilities.
 
 Flow is a modern blockchain designed specifically for digital assets and NFTs, featuring a unique dual-address system where users can operate with either Ethereum-style EVM addresses or native Flow Cadence addresses. The SHADOW integration handles both address types while maintaining strict security boundaries and privacy controls.
+
+**Updated** The integration now includes advanced Flow Actions composability, cross-VM bridging capabilities, and enhanced transaction management with session key support.
 
 ## Flow Integration Architecture
 
@@ -43,45 +63,62 @@ subgraph "Frontend Layer"
 UI[React UI Components]
 Hooks[TanStack Query Hooks]
 Config[Configuration Parser]
+Actions[Flow Actions Components]
+Bridge[Flow Bridge Components]
+TxManager[Transaction Manager]
 end
 subgraph "Tauri Bridge Layer"
 Commands[Tauri Commands]
 Services[Rust Services]
-Runtime[Apps Runtime]
+Scheduler[Flow Scheduler]
+ActionsSvc[Flow Actions Service]
+BridgeSvc[Flow Bridge Service]
 end
 subgraph "Sidecar Layer"
 Provider[Flow Provider]
 FCL[FCL SDK]
 Network[Flow Access Nodes]
+Actions[Flow Actions Engine]
+Bridge[Cross-VM Bridge]
+TxEngine[Transaction Engine]
 end
 subgraph "Blockchain Layer"
 Testnet[Testnet Access Node]
 Mainnet[Mainnet Access Node]
 Accounts[Flow Accounts]
+Contracts[Flow Contracts]
 end
 UI --> Hooks
 Hooks --> Commands
 Commands --> Services
-Services --> Runtime
-Runtime --> Provider
+Services --> Scheduler
+Services --> ActionsSvc
+Services --> BridgeSvc
+Scheduler --> TxEngine
+ActionsSvc --> Actions
+BridgeSvc --> Bridge
+TxEngine --> Provider
 Provider --> FCL
 FCL --> Testnet
 FCL --> Mainnet
 Testnet --> Accounts
 Mainnet --> Accounts
+Accounts --> Contracts
 ```
 
 **Diagram sources**
 - [AppSettingsPanel.tsx:361-575](file://src/components/apps/AppSettingsPanel.tsx#L361-L575)
-- [apps.rs:324-326](file://src-tauri/src/commands/apps.rs#L324-L326)
-- [runtime.rs:69-144](file://src-tauri/src/services/apps/runtime.rs#L69-L144)
+- [apps.rs:557-657](file://src-tauri/src/commands/apps.rs#L557-L657)
+- [flow_scheduler.rs:1-277](file://src-tauri/src/services/apps/flow_scheduler.rs#L1-L277)
+- [flow_actions.rs:1-39](file://src-tauri/src/services/apps/flow_actions.rs#L1-L39)
+- [flow_bridge.rs:1-40](file://src-tauri/src/services/apps/flow_bridge.rs#L1-L40)
 
-The architecture consists of four distinct layers:
+The architecture consists of four distinct layers with enhanced capabilities for Flow Actions, bridging, and transaction management:
 
-1. **Frontend Layer**: React components and hooks that manage user interactions
-2. **Tauri Bridge Layer**: Rust commands and services that handle secure communication
-3. **Sidecar Layer**: Isolated Bun processes running integration adapters
-4. **Blockchain Layer**: Flow network access nodes and account data
+1. **Frontend Layer**: React components and hooks that manage user interactions with new Flow Actions and bridge components
+2. **Tauri Bridge Layer**: Rust commands and services that handle secure communication with enhanced scheduling and preview capabilities
+3. **Sidecar Layer**: Isolated Bun processes running integration adapters with Flow Actions engine and cross-VM bridge functionality
+4. **Blockchain Layer**: Flow network access nodes and account data with support for advanced transaction types
 
 **Section sources**
 - [README.md:135-146](file://README.md#L135-L146)
@@ -101,6 +138,11 @@ class FlowProvider {
 +accountStatus() Promise~Object~
 +fetchBalances(address, network) Promise~FlowAsset[]~
 +prepareSponsored(proposal, apiKey) Promise~Object~
++estimateScheduleFee(params) Promise~Object~
++submitScheduleIntent(params) Promise~Object~
++submitCancelIntent(params) Promise~Object~
++submitCronIntent(params) Promise~Object~
++getTxStatus(txId) Promise~Object~
 }
 class FclFlowProvider {
 -testnetAccessNode string
@@ -111,9 +153,14 @@ class FclFlowProvider {
 +accountStatus() Promise~Object~
 +fetchBalances(address, network) Promise~FlowAsset[]~
 +prepareSponsored(proposal, apiKey) Promise~Object~
++estimateScheduleFee(params) Promise~Object~
++submitScheduleIntent(params) Promise~Object~
++submitCancelIntent(params) Promise~Object~
++submitCronIntent(params) Promise~Object~
++getTxStatus(txId) Promise~Object~
 -getAccessNode() string
 -isFlowAddress(address) boolean
--formatBalance(rawBalance, decimals) string
+=formatBalance(rawBalance, decimals) string
 }
 class FlowAsset {
 +address string
@@ -156,6 +203,222 @@ The network configuration automatically adapts based on user preferences and mai
 **Section sources**
 - [flow.ts:40-59](file://apps-runtime/src/providers/flow.ts#L40-L59)
 - [flow.rs:36-47](file://src-tauri/src/services/apps/flow.rs#L36-L47)
+
+## New Flow Actions System
+
+### Flow Actions Composition Engine
+
+The Flow Actions system provides composable DeFi operation previews with structured planning capabilities:
+
+```mermaid
+classDiagram
+class FlowActionsEngine {
+<<interface>>
++buildDcaCompositionPreview(params) FlowActionsCompositionPreview
++buildRebalanceCompositionPreview(params) FlowActionsCompositionPreview
++buildFlashLoanPreview(params) FlowActionsCompositionPreview
+}
+class FlowActionsCompositionPreview {
++mode string
++legs FlowActionsLeg[]
++atomic boolean
++disclaimer string
+}
+class FlowActionsLeg {
++primitive FlowActionPrimitive
++protocol string
++note string
+}
+class FlowActionPrimitive {
+<<enumeration>>
+SOURCE
+SINK
+SWAPPER
+PRICE_ORACLE
+FLASHER
+}
+FlowActionsEngine --> FlowActionsCompositionPreview
+FlowActionsCompositionPreview --> FlowActionsLeg
+FlowActionsLeg --> FlowActionPrimitive
+```
+
+**Diagram sources**
+- [flow-actions.ts:5-80](file://apps-runtime/src/providers/flow-actions.ts#L5-L80)
+
+The system supports three primary composition types:
+
+1. **DCA Compositions**: Dollar-cost averaging with source → swapper → sink legs
+2. **Rebalance Compositions**: Multi-leg portfolio rebalancing with price oracle
+3. **Flash Loan Compositions**: High-risk arbitrage with flasher → swapper → sink legs
+
+**Section sources**
+- [flow-actions.ts:1-80](file://apps-runtime/src/providers/flow-actions.ts#L1-L80)
+
+### Flow Actions Service Integration
+
+The Rust backend provides comprehensive Flow Actions service integration:
+
+```mermaid
+sequenceDiagram
+participant UI as "React UI"
+participant Hook as "useApps Hook"
+participant Command as "Tauri Command"
+participant Service as "Flow Actions Service"
+participant Sidecar as "Apps Runtime"
+UI->>Hook : previewFlowActionsComposition()
+Hook->>Command : apps_flow_actions_preview()
+Command->>Service : preview_composition()
+Service->>Sidecar : flow.actions_preview
+Sidecar->>Sidecar : Build composition preview
+Sidecar-->>Service : Structured preview data
+Service-->>Command : JSON response
+Command-->>Hook : Promise resolution
+Hook-->>UI : Render actionable preview
+```
+
+**Diagram sources**
+- [flow_actions.rs:7-39](file://src-tauri/src/services/apps/flow_actions.rs#L7-L39)
+- [main.ts:374-405](file://apps-runtime/src/main.ts#L374-L405)
+
+**Section sources**
+- [flow_actions.rs:1-39](file://src-tauri/src/services/apps/flow_actions.rs#L1-L39)
+- [main.ts:374-405](file://apps-runtime/src/main.ts#L374-L405)
+
+## Flow Bridge Functionality
+
+### Cross-VM Bridge System
+
+The Flow Bridge enables seamless token transfers between Cadence and Flow EVM virtual machines:
+
+```mermaid
+classDiagram
+class FlowBridgeSystem {
+<<interface>>
++bridgePreview(params) FlowBridgePreview
++listBridgeableHints() string[]
+}
+class FlowBridgePreview {
++direction BridgeDirection
++tokenRef string
++amountHint string
++note string
++docRef string
+}
+class BridgeDirection {
+<<enumeration>>
+CADENCE_TO_EVM
+EVM_TO_CADENCE
+}
+FlowBridgeSystem --> FlowBridgePreview
+FlowBridgePreview --> BridgeDirection
+```
+
+**Diagram sources**
+- [flow-bridge.ts:5-36](file://apps-runtime/src/providers/flow-bridge.ts#L5-L36)
+
+The bridge system provides comprehensive metadata for cross-VM transfers with important documentation references and validation hints.
+
+**Section sources**
+- [flow-bridge.ts:1-36](file://apps-runtime/src/providers/flow-bridge.ts#L1-L36)
+
+### Bridge Service Integration
+
+The Rust backend manages bridge preview generation and validation:
+
+```mermaid
+sequenceDiagram
+participant UI as "React UI"
+participant Hook as "useApps Hook"
+participant Command as "Tauri Command"
+participant Service as "Flow Bridge Service"
+participant Sidecar as "Apps Runtime"
+UI->>Hook : previewFlowBridge(direction, tokenRef, amountHint)
+Hook->>Command : apps_flow_bridge_preview()
+Command->>Service : preview_bridge()
+Service->>Sidecar : flow.bridge_preview
+Sidecar->>Sidecar : Generate bridge metadata
+Sidecar->>Sidecar : Add bridgeable hints
+Sidecar-->>Service : Bridge preview with hints
+Service-->>Command : JSON response
+Command-->>Hook : Promise resolution
+Hook-->>UI : Display bridge options
+```
+
+**Diagram sources**
+- [flow_bridge.rs:7-40](file://src-tauri/src/services/apps/flow_bridge.rs#L7-L40)
+- [main.ts:406-421](file://apps-runtime/src/main.ts#L406-L421)
+
+**Section sources**
+- [flow_bridge.rs:1-40](file://src-tauri/src/services/apps/flow_bridge.rs#L1-L40)
+- [main.ts:406-421](file://apps-runtime/src/main.ts#L406-L421)
+
+## Enhanced Transaction Management
+
+### Advanced Transaction Submission
+
+The enhanced transaction management system supports session keys and improved authorization:
+
+```mermaid
+classDiagram
+class TransactionManager {
++resolveDefaultKeyIndex(restUrl, cadenceAddress) Promise~number~
++submitCadenceWithSessionKey(opts) Promise~SubmitCadenceResult~
++getTransactionStatus(txId) Promise~Record~
++runCadenceScript(opts) Promise~T~
+}
+class SigningFunction {
++createSecp256k1SigningFunction(address, privateKeyHex, keyId) Function
+}
+class FlowNetworkConfig {
++configureFclNetwork(network) void
++accessNodeRestUrl(network) string
++schedulerImportAddress(network) string
+}
+TransactionManager --> SigningFunction
+TransactionManager --> FlowNetworkConfig
+```
+
+**Diagram sources**
+- [flow-tx.ts:29-122](file://apps-runtime/src/providers/flow-tx.ts#L29-L122)
+- [flow-signing.ts:32-58](file://apps-runtime/src/providers/flow-signing.ts#L32-L58)
+- [flow-network.ts:25-34](file://apps-runtime/src/providers/flow-network.ts#L25-L34)
+
+The system provides comprehensive transaction lifecycle management with session key support and automatic key resolution.
+
+**Section sources**
+- [flow-tx.ts:1-122](file://apps-runtime/src/providers/flow-tx.ts#L1-L122)
+- [flow-signing.ts:1-58](file://apps-runtime/src/providers/flow-signing.ts#L1-L58)
+- [flow-network.ts:1-34](file://apps-runtime/src/providers/flow-network.ts#L1-L34)
+
+### Flow Scheduler Integration
+
+The Flow Scheduler provides advanced transaction scheduling and management capabilities:
+
+```mermaid
+sequenceDiagram
+participant UI as "React UI"
+participant Hook as "useApps Hook"
+participant Command as "Tauri Command"
+participant Service as "Flow Scheduler Service"
+participant DB as "Local Database"
+UI->>Hook : createFlowSchedule(handler, cron, intent)
+Hook->>Command : apps_flow_create_schedule()
+Command->>Service : submit_schedule_intent()
+Service->>Service : Inject session key
+Service->>Service : Call sidecar flow.schedule_transaction
+Service->>DB : Insert scheduled transaction record
+Service-->>Command : Transaction ID and status
+Command-->>Hook : Promise resolution
+Hook-->>UI : Schedule confirmation
+```
+
+**Diagram sources**
+- [flow_scheduler.rs:68-131](file://src-tauri/src/services/apps/flow_scheduler.rs#L68-L131)
+- [apps.rs:606-657](file://src-tauri/src/commands/apps.rs#L606-L657)
+
+**Section sources**
+- [flow_scheduler.rs:1-277](file://src-tauri/src/services/apps/flow_scheduler.rs#L1-L277)
+- [apps.rs:557-657](file://src-tauri/src/commands/apps.rs#L557-L657)
 
 ## Configuration Management
 
@@ -226,54 +489,61 @@ Finalize --> End([Validated Configuration])
 
 ## API Endpoints and Operations
 
-### Sidecar Runtime Operations
+### Enhanced Sidecar Runtime Operations
 
-The Flow integration exposes several key operations through the sidecar runtime:
+The Flow integration exposes several key operations through the sidecar runtime with new capabilities:
 
 | Operation | Purpose | Parameters | Response |
 |-----------|---------|------------|----------|
 | `flow.account_status` | Check network connectivity | `{ network: string }` | `{ connected: boolean, network: string }` |
 | `flow.fetch_balances` | Retrieve account balances | `{ address: string, network: string }` | `{ assets: FlowAsset[] }` |
 | `flow.prepare_sponsored` | Prepare sponsored transactions | `{ summary: string, apiKey: string, network: string }` | `{ status: string, cadencePreview: string }` |
+| `flow.estimate_fee` | Estimate transaction fees | `{ network: string, executionEffort: number, priorityRaw: number, dataSizeMB: string }` | `{ fee: string, gasEstimate: number }` |
+| `flow.schedule_transaction` | Submit scheduled transactions | `{ network: string, privateKeyHex: string, cadenceAddress: string, intentJson: string }` | `{ txId: string, status: string }` |
+| `flow.cancel_scheduled` | Cancel scheduled transactions | `{ network: string, privateKeyHex: string, cadenceAddress: string, targetTxId: string }` | `{ txId: string, status: string }` |
+| `flow.setup_cron` | Setup recurring schedules | `{ network: string, privateKeyHex: string, cadenceAddress: string, cronExpression: string }` | `{ txId: string, status: string }` |
+| `flow.get_tx_status` | Check transaction status | `{ txId: string }` | `{ status: number, statusCode: number, events: object[] }` |
+| `flow.actions_preview` | Generate Flow Actions preview | `{ kind: string, parameters... }` | `{ mode: string, legs: FlowActionsLeg[], atomic: boolean }` |
+| `flow.bridge_preview` | Generate bridge metadata | `{ direction: string, tokenRef: string, amountHint: string }` | `{ direction: string, tokenRef: string, hints: string[] }` |
 
 Each operation is designed with security in mind, ensuring that sensitive operations are properly isolated and validated.
 
 **Section sources**
-- [main.ts:174-208](file://apps-runtime/src/main.ts#L174-L208)
-- [flow.rs:49-110](file://src-tauri/src/services/apps/flow.rs#L49-L110)
+- [main.ts:183-421](file://apps-runtime/src/main.ts#L183-L421)
+- [flow.rs:49-164](file://src-tauri/src/services/apps/flow.rs#L49-L164)
 
 ### Tauri Command Integration
 
-The Rust backend provides Tauri commands that bridge the frontend to the sidecar runtime:
+The Rust backend provides Tauri commands that bridge the frontend to the sidecar runtime with enhanced Flow capabilities:
 
 ```mermaid
 sequenceDiagram
 participant UI as "React UI"
 participant Hook as "useApps Hook"
 participant Command as "Tauri Command"
-participant Service as "Flow Service"
-participant Runtime as "Apps Runtime"
-participant Provider as "Flow Provider"
-UI->>Hook : fetchFlowAccountStatusPreview()
-Hook->>Command : apps_flow_account_status()
-Command->>Service : flow : : account_status()
-Service->>Runtime : invoke_sidecar()
-Runtime->>Provider : flow.account_status
-Provider-->>Runtime : Account status data
-Runtime-->>Service : Parsed response
+participant Service as "Flow Services"
+participant Scheduler as "Flow Scheduler"
+participant Actions as "Flow Actions"
+participant Bridge as "Flow Bridge"
+UI->>Hook : createFlowSchedule(handler, cron, intent)
+Hook->>Command : apps_flow_create_schedule()
+Command->>Service : flow_scheduler.submit_schedule_intent()
+Service->>Scheduler : Enhanced transaction submission
+Scheduler->>Scheduler : Inject session key
+Scheduler->>Scheduler : Validate parameters
+Scheduler-->>Service : Transaction response
 Service-->>Command : JSON response
 Command-->>Hook : Promise resolution
-Hook-->>UI : Account status data
+Hook-->>UI : Schedule confirmation
 ```
 
 **Diagram sources**
-- [useApps.ts:102-122](file://src/hooks/useApps.ts#L102-L122)
-- [apps.rs:324-326](file://src-tauri/src/commands/apps.rs#L324-L326)
-- [flow.rs:49-77](file://src-tauri/src/services/apps/flow.rs#L49-L77)
+- [apps.rs:606-657](file://src-tauri/src/commands/apps.rs#L606-L657)
+- [flow_scheduler.rs:68-131](file://src-tauri/src/services/apps/flow_scheduler.rs#L68-L131)
 
 **Section sources**
-- [apps.rs:324-326](file://src-tauri/src/commands/apps.rs#L324-L326)
-- [useApps.ts:1-142](file://src/hooks/useApps.ts#L1-L142)
+- [apps.rs:557-657](file://src-tauri/src/commands/apps.rs#L557-L657)
+- [useApps.ts:1-189](file://src/hooks/useApps.ts#L1-L189)
 
 ## Address Validation and Normalization
 
@@ -322,47 +592,6 @@ The system normalizes addresses for consistent handling across different compone
 - [flow_domain.rs:25-45](file://src-tauri/src/services/flow_domain.rs#L25-L45)
 - [apps.ts:127-135](file://src/lib/apps.ts#L127-L135)
 
-## Transaction Preparation
-
-### Sponsored Transaction Workflow
-
-The Flow integration supports sponsored transactions through a secure preparation process:
-
-```mermaid
-sequenceDiagram
-participant User as "User"
-participant UI as "Flow Settings Panel"
-participant Hook as "useApps Hook"
-participant Command as "Tauri Command"
-participant Service as "Flow Service"
-participant Runtime as "Apps Runtime"
-participant Provider as "Flow Provider"
-User->>UI : Configure Flow Settings
-UI->>Hook : prepareSponsoredTransaction()
-Hook->>Command : flow.prepare_sponsored
-Command->>Service : prepare_sponsored_transaction()
-Service->>Runtime : invoke_sidecar()
-Runtime->>Provider : flow.prepare_sponsored
-Provider->>Provider : Validate API Key
-Provider->>Provider : Generate Cadence Preview
-Provider-->>Runtime : Sponsored Transaction Data
-Runtime-->>Service : JSON Response
-Service-->>Command : Prepared Transaction
-Command-->>Hook : Promise Resolution
-Hook-->>UI : Transaction Ready
-UI-->>User : Display Transaction Details
-```
-
-**Diagram sources**
-- [flow.ts:172-187](file://apps-runtime/src/providers/flow.ts#L172-L187)
-- [flow.rs:112-145](file://src-tauri/src/services/apps/flow.rs#L112-L145)
-
-The transaction preparation process includes comprehensive validation and preview generation to ensure user safety and transparency.
-
-**Section sources**
-- [flow.ts:172-187](file://apps-runtime/src/providers/flow.ts#L172-L187)
-- [flow.rs:112-145](file://src-tauri/src/services/apps/flow.rs#L112-L145)
-
 ## Integration Setup
 
 ### Frontend Configuration Interface
@@ -406,13 +635,16 @@ The configuration interface includes intelligent suggestions and validation to g
 
 ### Backend Service Integration
 
-The Rust backend provides robust service layer integration:
+The Rust backend provides robust service layer integration with enhanced Flow capabilities:
 
 ```mermaid
 graph LR
 subgraph "Service Layer"
 ConfigService[Configuration Service]
 FlowService[Flow Service]
+ActionsService[Flow Actions Service]
+BridgeService[Flow Bridge Service]
+SchedulerService[Flow Scheduler Service]
 RuntimeService[Runtime Service]
 end
 subgraph "Command Layer"
@@ -422,21 +654,32 @@ end
 subgraph "State Management"
 AppConfig[App Config Storage]
 SessionState[Session State]
+LocalDB[Local Database]
 end
 ConfigService --> AppConfig
 FlowService --> RuntimeService
+ActionsService --> FlowService
+BridgeService --> FlowService
+SchedulerService --> FlowService
 FlowCommands --> FlowService
 AppCommands --> ConfigService
 RuntimeService --> SessionState
+FlowService --> LocalDB
 ```
 
 **Diagram sources**
-- [flow.rs:1-146](file://src-tauri/src/services/apps/flow.rs#L1-L146)
-- [apps.rs:1-380](file://src-tauri/src/commands/apps.rs#L1-L380)
+- [flow.rs:1-164](file://src-tauri/src/services/apps/flow.rs#L1-L164)
+- [flow_actions.rs:1-39](file://src-tauri/src/services/apps/flow_actions.rs#L1-L39)
+- [flow_bridge.rs:1-40](file://src-tauri/src/services/apps/flow_bridge.rs#L1-L40)
+- [flow_scheduler.rs:1-277](file://src-tauri/src/services/apps/flow_scheduler.rs#L1-L277)
+- [apps.rs:1-776](file://src-tauri/src/commands/apps.rs#L1-L776)
 
 **Section sources**
-- [flow.rs:1-146](file://src-tauri/src/services/apps/flow.rs#L1-L146)
-- [apps.rs:1-380](file://src-tauri/src/commands/apps.rs#L1-L380)
+- [flow.rs:1-164](file://src-tauri/src/services/apps/flow.rs#L1-L164)
+- [flow_actions.rs:1-39](file://src-tauri/src/services/apps/flow_actions.rs#L1-L39)
+- [flow_bridge.rs:1-40](file://src-tauri/src/services/apps/flow_bridge.rs#L1-L40)
+- [flow_scheduler.rs:1-277](file://src-tauri/src/services/apps/flow_scheduler.rs#L1-L277)
+- [apps.rs:1-776](file://src-tauri/src/commands/apps.rs#L1-L776)
 
 ## Troubleshooting Guide
 
@@ -448,6 +691,9 @@ RuntimeService --> SessionState
 | Invalid Address Format | Address validation fails | Ensure proper 16-character hex format for Cadence addresses |
 | Transaction Preparation Error | Sponsored transaction fails | Check API key validity and session unlock status |
 | Balance Retrieval Failure | Empty or partial balance data | Verify address format and network selection |
+| Flow Actions Preview Error | Composition preview fails | Validate action parameters and protocol addresses |
+| Bridge Preview Error | Cross-VM transfer metadata invalid | Check token references and bridge contract addresses |
+| Transaction Scheduling Error | Scheduled transactions fail to submit | Verify session key injection and network configuration |
 
 ### Debug Information Collection
 
@@ -476,6 +722,7 @@ The integration includes several performance optimization strategies:
 - **Connection Pooling**: Efficient reuse of network connections
 - **Caching**: Strategic caching of frequently accessed data
 - **Timeout Management**: Proper timeout handling for network requests
+- **Session Key Caching**: Efficient session key management for transaction signing
 
 **Section sources**
 - [main.ts:13-35](file://apps-runtime/src/main.ts#L13-L35)
@@ -489,6 +736,9 @@ The integration includes several performance optimization strategies:
 2. **Network Isolation**: Use appropriate network environments for different use cases
 3. **Session Management**: Ensure proper session handling for sensitive operations
 4. **Error Handling**: Implement comprehensive error handling and user feedback
+5. **Transaction Authorization**: Use session keys for enhanced security in transaction signing
+6. **Flow Actions Validation**: Always validate action compositions before execution
+7. **Bridge Contract Verification**: Verify cross-VM bridge contracts on testnet before mainnet deployment
 
 ### Performance Recommendations
 
@@ -496,6 +746,7 @@ The integration includes several performance optimization strategies:
 2. **Batch Operations**: Combine multiple operations when possible
 3. **Resource Cleanup**: Properly clean up resources after operations
 4. **Monitoring**: Implement monitoring for performance metrics
+5. **Cache Management**: Implement strategic caching for frequently accessed data
 
 ### User Experience Guidelines
 
@@ -503,5 +754,7 @@ The integration includes several performance optimization strategies:
 2. **Graceful Degradation**: Handle failures gracefully with user-friendly messages
 3. **Progress Indicators**: Show progress for long-running operations
 4. **Helpful Documentation**: Provide contextual help and guidance
+5. **Flow Actions Previews**: Always show actionable previews before executing complex operations
+6. **Bridge Metadata**: Provide comprehensive cross-VM transfer metadata and warnings
 
-The Flow integration represents a comprehensive solution for Flow blockchain connectivity within the SHADOW Protocol ecosystem, combining security, performance, and user experience excellence.
+The Flow integration represents a comprehensive solution for Flow blockchain connectivity within the SHADOW Protocol ecosystem, combining security, performance, and user experience excellence with advanced Flow Actions, bridging capabilities, and enhanced transaction management.
