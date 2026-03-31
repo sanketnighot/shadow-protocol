@@ -1,15 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentMessage } from "@/data/mock";
+const summarizeAgentConversationMock = vi.fn();
+
+vi.mock("@/lib/agent", () => ({
+  summarizeAgentConversation: (...args: unknown[]) =>
+    summarizeAgentConversationMock(...args),
+}));
 import {
   buildChatMessages,
   DEFAULT_SYSTEM_PROMPT,
   estimateTokens,
   extractStructuredFacts,
+  generateRollingSummary,
   mergeStructuredFacts,
   messagesToChat,
   needsSummary,
   resolveContextBudget,
+  selectAgentMessages,
 } from "@/lib/chatContext";
 import { DEFAULT_CONTEXT_TOKENS } from "@/lib/modelOptions";
 
@@ -18,6 +26,11 @@ function msg(id: string, role: "user" | "agent", content: string): AgentMessage 
 }
 
 describe("chatContext", () => {
+  beforeEach(() => {
+    summarizeAgentConversationMock.mockReset();
+    summarizeAgentConversationMock.mockResolvedValue("mock summary");
+  });
+
   describe("estimateTokens", () => {
     it("estimates ~4 chars per token", () => {
       expect(estimateTokens("")).toBe(0);
@@ -113,6 +126,35 @@ describe("chatContext", () => {
     });
   });
 
+  describe("selectAgentMessages", () => {
+    it("returns the latest messages when a rolling summary exists", () => {
+      const msgs = Array.from({ length: 14 }, (_, i) =>
+        msg(`m${i}`, i % 2 === 0 ? "user" : "agent", `msg ${i}`),
+      );
+
+      expect(selectAgentMessages(msgs, "Earlier context", 4)).toEqual([
+        { role: "user", content: "msg 10" },
+        { role: "assistant", content: "msg 11" },
+        { role: "user", content: "msg 12" },
+        { role: "assistant", content: "msg 13" },
+      ]);
+    });
+
+    it("returns the full thread when no rolling summary exists", () => {
+      const msgs = [
+        msg("u1", "user", "First question"),
+        msg("a1", "agent", "First answer"),
+        msg("u2", "user", "Second question"),
+      ];
+
+      expect(selectAgentMessages(msgs, null, 4)).toEqual([
+        { role: "user", content: "First question" },
+        { role: "assistant", content: "First answer" },
+        { role: "user", content: "Second question" },
+      ]);
+    });
+  });
+
   describe("extractStructuredFacts", () => {
     it("extracts portfolio facts from get_total_portfolio_value", () => {
       const content = JSON.stringify({
@@ -153,6 +195,20 @@ describe("chatContext", () => {
     it("returns existing when new facts are empty", () => {
       expect(mergeStructuredFacts("prior", "")).toBe("prior");
       expect(mergeStructuredFacts("prior", "   ")).toBe("prior");
+    });
+  });
+
+  describe("generateRollingSummary", () => {
+    it("delegates summary generation through the backend bridge", async () => {
+      const summary = await generateRollingSummary(
+        [
+          msg("u1", "user", "How should I rebalance?"),
+          msg("a1", "agent", "Start with your ETH concentration."),
+        ],
+        "llama3.2:3b",
+      );
+
+      expect(summary).toBe("mock summary");
     });
   });
 });

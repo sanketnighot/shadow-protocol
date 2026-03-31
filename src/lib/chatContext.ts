@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@/data/mock";
-import { chat, type OllamaChatMessage } from "@/lib/ollama";
+import { summarizeAgentConversation } from "@/lib/agent";
+import type { OllamaChatMessage } from "@/lib/ollama";
 import { getContextBudget } from "@/lib/modelOptions";
 
 /** System prompt for the chat agent. Single source of truth. */
@@ -89,6 +90,23 @@ export function buildChatMessages(params: BuildChatMessagesParams): OllamaChatMe
   return result;
 }
 
+/**
+ * Select the conversation window to send to the Rust-side AI kernel.
+ * When a rolling summary exists, only the recent messages are sent and Rust
+ * reconstructs the full context from summary + facts + recent turns.
+ */
+export function selectAgentMessages(
+  messages: AgentMessage[],
+  rollingSummary: string | null,
+  latestN = 10,
+): OllamaChatMessage[] {
+  const chatMessages = messagesToChat(messages);
+  if (!rollingSummary?.trim()) {
+    return chatMessages;
+  }
+  return chatMessages.slice(-latestN);
+}
+
 /** Get context budget for the selected model. */
 export function resolveContextBudget(modelId: string): number {
   return getContextBudget(modelId);
@@ -167,9 +185,6 @@ export function mergeStructuredFacts(existing: string | null, newFacts: string):
   return withNew.slice(-STRUCTURED_FACTS_MAX_CHARS);
 }
 
-const SUMMARY_SYSTEM_PROMPT =
-  "Summarize this conversation concisely. Preserve key facts, decisions, and context. Output only the summary, no preamble.";
-
 /**
  * Generate a rolling summary of the given older messages using the selected model.
  * Returns empty string on failure (caller should degrade to system + latest 10).
@@ -179,21 +194,11 @@ export async function generateRollingSummary(
   model: string,
 ): Promise<string> {
   if (olderMessages.length === 0) return "";
-  const transcript = olderMessages
-    .map((m) => {
-      const role = m.role === "user" ? "User" : "Assistant";
-      const text = getMessageText(m);
-      return `${role}: ${text}`;
-    })
-    .join("\n\n");
   try {
-    const summary = await chat({
+    const summary = await summarizeAgentConversation({
       model,
-      messages: [
-        { role: "system" as const, content: SUMMARY_SYSTEM_PROMPT },
-        { role: "user" as const, content: `Conversation to summarize:\n\n${transcript}` },
-      ],
-      stream: false,
+      messages: messagesToChat(olderMessages),
+      numCtx: Math.max(2048, Math.min(resolveContextBudget(model), 8192)),
     });
     return (summary ?? "").trim();
   } catch {

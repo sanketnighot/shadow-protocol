@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   Task,
+  TaskApprovalResult,
   TaskStats,
   GuardrailConfig,
   HealthAlert,
@@ -14,75 +16,81 @@ function hasTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+type TaskWire = {
+  id: string;
+  category: string;
+  priority: string;
+  status: string;
+  title: string;
+  summary: string;
+  reasoning: {
+    trigger: string;
+    analysis: string;
+    recommendation: string;
+    riskFactors: string[];
+  };
+  suggestedAction: {
+    actionType: string;
+    chain?: string;
+    tokenIn?: string;
+    tokenOut?: string;
+    amount?: number;
+    amountUsd?: number;
+    targetAddress?: string;
+    parameters?: Record<string, unknown>;
+  };
+  confidenceScore: number;
+  sourceTrigger: string;
+  createdAt: number;
+  expiresAt?: number;
+};
+
+function mapTask(task: TaskWire): Task {
+  return {
+    id: task.id,
+    category: task.category,
+    priority: task.priority as Task["priority"],
+    status: task.status as Task["status"],
+    title: task.title,
+    summary: task.summary,
+    reasoning: {
+      trigger: task.reasoning.trigger,
+      analysis: task.reasoning.analysis,
+      recommendation: task.reasoning.recommendation,
+      riskFactors: task.reasoning.riskFactors,
+    },
+    suggestedAction: {
+      actionType: task.suggestedAction.actionType,
+      chain: task.suggestedAction.chain,
+      tokenIn: task.suggestedAction.tokenIn,
+      tokenOut: task.suggestedAction.tokenOut,
+      amount: task.suggestedAction.amount,
+      amountUsd: task.suggestedAction.amountUsd,
+      targetAddress: task.suggestedAction.targetAddress,
+      parameters: task.suggestedAction.parameters ?? {},
+    },
+    confidenceScore: task.confidenceScore,
+    sourceTrigger: task.sourceTrigger,
+    createdAt: task.createdAt,
+    expiresAt: task.expiresAt,
+  };
+}
+
 // Task API
 export async function getPendingTasks(): Promise<Task[]> {
   if (!hasTauriRuntime()) return [];
   const result = await invoke<{
-    tasks: Array<{
-      id: string;
-      category: string;
-      priority: string;
-      status: string;
-      title: string;
-      summary: string;
-      reasoning: {
-        trigger: string;
-        analysis: string;
-        recommendation: string;
-        riskFactors: string[];
-      };
-      suggestedAction: {
-        actionType: string;
-        chain?: string;
-        tokenIn?: string;
-        tokenOut?: string;
-        amount?: number;
-        amountUsd?: number;
-        targetAddress?: string;
-        parameters?: Record<string, unknown>;
-      };
-      confidenceScore: number;
-      sourceTrigger: string;
-      createdAt: number;
-      expiresAt?: number;
-    }>;
+    tasks: TaskWire[];
     stats: TaskStats;
     error?: string;
   }>("get_pending_tasks");
-  
+
   if (result.error) {
     console.error("get_pending_tasks error:", result.error);
     return [];
   }
-  
-  return result.tasks.map(t => ({
-    id: t.id,
-    category: t.category,
-    priority: t.priority as Task["priority"],
-    status: t.status as Task["status"],
-    title: t.title,
-    summary: t.summary,
-    reasoning: {
-      trigger: t.reasoning.trigger,
-      analysis: t.reasoning.analysis,
-      recommendation: t.reasoning.recommendation,
-      riskFactors: t.reasoning.riskFactors,
-    },
-    suggestedAction: {
-      actionType: t.suggestedAction.actionType,
-      chain: t.suggestedAction.chain,
-      tokenIn: t.suggestedAction.tokenIn,
-      tokenOut: t.suggestedAction.tokenOut,
-      amount: t.suggestedAction.amount,
-      amountUsd: t.suggestedAction.amountUsd,
-      targetAddress: t.suggestedAction.targetAddress,
-      parameters: t.suggestedAction.parameters ?? {},
-    },
-    confidenceScore: t.confidenceScore,
-    sourceTrigger: t.sourceTrigger,
-    createdAt: t.createdAt,
-    expiresAt: t.expiresAt,
-  }));
+
+  return result.tasks.map(mapTask);
 }
 
 export async function getTask(_taskId: string): Promise<Task | null> {
@@ -91,70 +99,26 @@ export async function getTask(_taskId: string): Promise<Task | null> {
   return null;
 }
 
-export async function approveTask(taskId: string, reason?: string): Promise<Task | null> {
+export async function approveTask(
+  taskId: string,
+  reason?: string,
+): Promise<TaskApprovalResult> {
   const result = await invoke<{
     success: boolean;
-    task?: {
-      id: string;
-      category: string;
-      priority: string;
-      status: string;
-      title: string;
-      summary: string;
-      reasoning: {
-        trigger: string;
-        analysis: string;
-        recommendation: string;
-        riskFactors: string[];
-      };
-      suggestedAction: {
-        actionType: string;
-        chain?: string;
-        tokenIn?: string;
-        tokenOut?: string;
-        amount?: number;
-        amountUsd?: number;
-        targetAddress?: string;
-      };
-      confidenceScore: number;
-      sourceTrigger: string;
-      createdAt: number;
-      expiresAt?: number;
-    };
+    task?: TaskWire;
+    message?: string;
+    executionStatus?: string;
     error?: string;
   }>("approve_task", { input: { taskId, reason: reason ?? null } });
-  
+
   if (!result.success || !result.task) {
     throw new Error(result.error ?? "Failed to approve task");
   }
-  
+
   return {
-    id: result.task.id,
-    category: result.task.category,
-    priority: result.task.priority as Task["priority"],
-    status: result.task.status as Task["status"],
-    title: result.task.title,
-    summary: result.task.summary,
-    reasoning: {
-      trigger: result.task.reasoning.trigger,
-      analysis: result.task.reasoning.analysis,
-      recommendation: result.task.reasoning.recommendation,
-      riskFactors: result.task.reasoning.riskFactors,
-    },
-    suggestedAction: {
-      actionType: result.task.suggestedAction.actionType,
-      chain: result.task.suggestedAction.chain,
-      tokenIn: result.task.suggestedAction.tokenIn,
-      tokenOut: result.task.suggestedAction.tokenOut,
-      amount: result.task.suggestedAction.amount,
-      amountUsd: result.task.suggestedAction.amountUsd,
-      targetAddress: result.task.suggestedAction.targetAddress,
-      parameters: {},
-    },
-    confidenceScore: result.task.confidenceScore,
-    sourceTrigger: result.task.sourceTrigger,
-    createdAt: result.task.createdAt,
-    expiresAt: result.task.expiresAt,
+    task: mapTask(result.task),
+    message: result.message,
+    executionStatus: result.executionStatus,
   };
 }
 
@@ -307,15 +271,24 @@ export async function getLatestHealth(): Promise<PortfolioHealth | null> {
         affectedAssets: string[];
         recommendedAction?: string;
       }>;
+      driftAnalysis: Array<{
+        symbol: string;
+        targetPct: number;
+        currentPct: number;
+        driftPct: number;
+        driftDirection: "overweight" | "underweight";
+        suggestedAction?: string;
+      }>;
       recommendations: string[];
+      createdAt: number;
     };
     error?: string;
   }>("get_portfolio_health");
-  
+
   if (result.error || !result.health) {
     return null;
   }
-  
+
   return {
     id: "",
     overallScore: result.health.overallScore,
@@ -324,9 +297,18 @@ export async function getLatestHealth(): Promise<PortfolioHealth | null> {
     performanceScore: result.health.performanceScore,
     riskScore: result.health.riskScore,
     alertsJson: JSON.stringify(result.health.alerts),
-    driftJson: "[]",
+    driftJson: JSON.stringify(
+      result.health.driftAnalysis.map((item) => ({
+        symbol: item.symbol,
+        targetPct: item.targetPct,
+        actualPct: item.currentPct,
+        driftPct: item.driftPct,
+        driftDirection: item.driftDirection,
+        suggestedAction: item.suggestedAction,
+      })),
+    ),
     recommendationsJson: JSON.stringify(result.health.recommendations),
-    createdAt: Date.now(),
+    createdAt: result.health.createdAt,
   };
 }
 
@@ -426,8 +408,10 @@ export async function getOrchestratorState(): Promise<OrchestratorState> {
   if (!hasTauriRuntime()) {
     return {
       isRunning: false,
-      pendingTasksCount: 0,
-      activeStrategiesCount: 0,
+      tasksGenerated: 0,
+      opportunitiesFound: 0,
+      healthChecksRun: 0,
+      errors: [],
     };
   }
   const result = await invoke<{
@@ -442,13 +426,15 @@ export async function getOrchestratorState(): Promise<OrchestratorState> {
     };
     error?: string;
   }>("get_orchestrator_state");
-  
+
   return {
     isRunning: result.state.isRunning,
-    lastHealthCheck: result.state.lastCheck,
-    lastOpportunityScan: result.state.lastCheck,
-    pendingTasksCount: result.state.tasksGenerated,
-    activeStrategiesCount: 0,
+    lastCheck: result.state.lastCheck,
+    nextCheck: result.state.nextCheck,
+    tasksGenerated: result.state.tasksGenerated,
+    opportunitiesFound: result.state.opportunitiesFound,
+    healthChecksRun: result.state.healthChecksRun,
+    errors: result.state.errors,
   };
 }
 
@@ -475,3 +461,52 @@ export async function stopOrchestrator(): Promise<void> {
     throw new Error(result.error ?? "Failed to stop orchestrator");
   }
 }
+
+type AutonomousListenerHandlers = {
+  onTasksUpdated?: () => void;
+  onTaskCreated?: () => void;
+  onOrchestratorUpdated?: () => void;
+};
+
+export async function bindAutonomousListeners(
+  handlers: AutonomousListenerHandlers,
+): Promise<() => void> {
+  if (!hasTauriRuntime()) {
+    return () => {};
+  }
+
+  const unlisteners: UnlistenFn[] = [];
+
+  if (handlers.onTasksUpdated) {
+    unlisteners.push(
+      await listen("autonomous_tasks_updated", () => {
+        handlers.onTasksUpdated?.();
+      }),
+    );
+  }
+
+  if (handlers.onTaskCreated || handlers.onTasksUpdated) {
+    unlisteners.push(
+      await listen("autonomous_task_created", () => {
+        handlers.onTaskCreated?.();
+        handlers.onTasksUpdated?.();
+      }),
+    );
+  }
+
+  if (handlers.onOrchestratorUpdated) {
+    unlisteners.push(
+      await listen("autonomous_orchestrator_updated", () => {
+        handlers.onOrchestratorUpdated?.();
+      }),
+    );
+  }
+
+  return () => {
+    for (const unlisten of unlisteners) {
+      unlisten();
+    }
+  };
+}
+
+export { hasTauriRuntime };

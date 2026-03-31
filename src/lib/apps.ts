@@ -144,6 +144,206 @@ export async function appsFlowCancelScheduledRecord(
   return invoke("apps_flow_cancel_scheduled_record", { recordId });
 }
 
+export type FlowScheduleMode = "cron" | "one_time";
+
+export type FlowScheduleHandlerType = "dca" | "rebalance" | "alert" | "custom";
+
+export type FlowScheduleDraft = {
+  scheduleMode: FlowScheduleMode;
+  handlerType: FlowScheduleHandlerType;
+  summary: string;
+  cronExpression: string;
+  oneShotTimestamp?: number | null;
+  fromSymbol: string;
+  toSymbol: string;
+  amount: string;
+  targetAllocationsText: string;
+  customJson: string;
+};
+
+export type FlowManualScheduleIntent = {
+  kind: "shadow_manual_schedule";
+  version: 1;
+  handlerType: FlowScheduleHandlerType;
+  summary: string;
+  schedule:
+    | { type: "cron"; cronExpression: string }
+    | { type: "one_time"; oneShotTimestamp: number };
+  params: Record<string, unknown>;
+};
+
+export type FlowScheduleValidationResult = {
+  ok: boolean;
+  errors: string[];
+};
+
+export type FlowScheduledIntentMetadata = {
+  kind?: string;
+  version?: number;
+  handlerType?: string;
+  summary?: string;
+  schedule?: {
+    type?: string;
+    cronExpression?: string;
+    oneShotTimestamp?: number;
+  };
+  params?: Record<string, unknown>;
+};
+
+export function getDefaultFlowScheduleDraft(): FlowScheduleDraft {
+  return {
+    scheduleMode: "cron",
+    handlerType: "dca",
+    summary: "",
+    cronExpression: "0 0 * * 1",
+    oneShotTimestamp: null,
+    fromSymbol: "FLOW",
+    toSymbol: "",
+    amount: "",
+    targetAllocationsText: "",
+    customJson: "",
+  };
+}
+
+function isFinitePositiveNumberText(value: string): boolean {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+export function validateFlowScheduleDraft(
+  draft: FlowScheduleDraft,
+): FlowScheduleValidationResult {
+  const errors: string[] = [];
+  const summary = draft.summary.trim();
+  const cronExpression = draft.cronExpression.trim();
+
+  if (summary.length < 3) {
+    errors.push("Add a short summary so this schedule is easy to recognize.");
+  }
+  if (summary.length > 140) {
+    errors.push("Summary must be 140 characters or less.");
+  }
+
+  if (draft.scheduleMode === "cron") {
+    if (cronExpression.length < 5) {
+      errors.push("Enter a cron expression for recurring schedules.");
+    }
+  } else if (
+    !Number.isInteger(draft.oneShotTimestamp) ||
+    (draft.oneShotTimestamp ?? 0) <= 0
+  ) {
+    errors.push("Choose a valid one-time execution timestamp.");
+  }
+
+  switch (draft.handlerType) {
+    case "dca":
+      if (draft.fromSymbol.trim().length === 0) {
+        errors.push("Select the asset you want to spend.");
+      }
+      if (draft.toSymbol.trim().length === 0) {
+        errors.push("Select the asset you want to buy.");
+      }
+      if (!isFinitePositiveNumberText(draft.amount.trim())) {
+        errors.push("Enter a positive amount for the DCA order.");
+      }
+      break;
+    case "rebalance":
+      if (draft.targetAllocationsText.trim().length < 3) {
+        errors.push("Add target allocations for the rebalance schedule.");
+      }
+      break;
+    case "custom":
+      if (draft.customJson.trim().length === 0) {
+        errors.push("Add a JSON payload for the custom schedule.");
+      } else {
+        try {
+          const parsed = JSON.parse(draft.customJson) as unknown;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            errors.push("Custom schedule JSON must be an object.");
+          }
+        } catch {
+          errors.push("Custom schedule JSON is invalid.");
+        }
+      }
+      break;
+    case "alert":
+      break;
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+export function buildFlowScheduleIntent(
+  draft: FlowScheduleDraft,
+): FlowManualScheduleIntent {
+  const validation = validateFlowScheduleDraft(draft);
+  if (!validation.ok) {
+    throw new Error(validation.errors[0] ?? "Invalid Flow schedule.");
+  }
+
+  const schedule =
+    draft.scheduleMode === "cron"
+      ? {
+          type: "cron" as const,
+          cronExpression: draft.cronExpression.trim(),
+        }
+      : {
+          type: "one_time" as const,
+          oneShotTimestamp: draft.oneShotTimestamp as number,
+        };
+
+  const params: Record<string, unknown> = {};
+  if (draft.handlerType === "dca") {
+    params.fromSymbol = draft.fromSymbol.trim().toUpperCase();
+    params.toSymbol = draft.toSymbol.trim().toUpperCase();
+    params.amount = draft.amount.trim();
+  } else if (draft.handlerType === "rebalance") {
+    params.targetAllocationsText = draft.targetAllocationsText.trim();
+  } else if (draft.handlerType === "custom") {
+    params.custom = JSON.parse(draft.customJson) as Record<string, unknown>;
+  }
+
+  return {
+    kind: "shadow_manual_schedule",
+    version: 1,
+    handlerType: draft.handlerType,
+    summary: draft.summary.trim(),
+    schedule,
+    params,
+  };
+}
+
+export function parseFlowScheduledMetadata(
+  raw: string | null | undefined,
+): FlowScheduledIntentMetadata {
+  if (!raw || raw.trim() === "") {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as FlowScheduledIntentMetadata;
+  } catch {
+    return {};
+  }
+}
+
+export async function appsFlowCreateSchedule(input: {
+  handlerType: FlowScheduleHandlerType;
+  cronExpression?: string | null;
+  intentJson: FlowManualScheduleIntent;
+}): Promise<{ txId?: string; note?: string }> {
+  return invoke<{ txId?: string; note?: string }>("apps_flow_create_schedule", {
+    input: {
+      handlerType: input.handlerType,
+      cronExpression: input.cronExpression ?? null,
+      intentJson: input.intentJson,
+    },
+  });
+}
+
 export type LitIntegrationConfig = {
   dailySpendLimitUsd: number;
   perTradeLimitUsd: number;

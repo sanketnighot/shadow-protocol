@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildFlowScheduleIntent,
+  getDefaultFlowScheduleDraft,
   marketplaceEntryToShadowApp,
   parseFlowConfig,
   parseFilecoinBackupMetadata,
   parseFilecoinConfig,
+  parseFlowScheduledMetadata,
   parseLitConfig,
+  validateFlowScheduleDraft,
 } from "@/lib/apps";
 import type { AppMarketplaceEntryIpc } from "@/types/apps";
 
@@ -72,6 +76,71 @@ describe("parseFlowConfig", () => {
     });
     expect(c.cadenceAddress).toBe("aaaaaaaaaaaaaaaa");
     expect(c.linkedEvmAddress).toBe("0x1111111111111111111111111111111111111111");
+  });
+});
+
+describe("flow schedule helpers", () => {
+  it("rejects missing cron summary and dca amount", () => {
+    const draft = getDefaultFlowScheduleDraft();
+    const result = validateFlowScheduleDraft(draft);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "Add a short summary so this schedule is easy to recognize.",
+    );
+    expect(result.errors).toContain(
+      "Enter a positive amount for the DCA order.",
+    );
+  });
+
+  it("builds a cron dca intent", () => {
+    const draft = {
+      ...getDefaultFlowScheduleDraft(),
+      summary: "Weekly FLOW accumulation",
+      toSymbol: "FUSD",
+      amount: "25",
+    };
+    const intent = buildFlowScheduleIntent(draft);
+    expect(intent.handlerType).toBe("dca");
+    expect(intent.schedule).toEqual({
+      type: "cron",
+      cronExpression: "0 0 * * 1",
+    });
+    expect(intent.params).toEqual({
+      fromSymbol: "FLOW",
+      toSymbol: "FUSD",
+      amount: "25",
+    });
+  });
+
+  it("builds a one-time custom intent", () => {
+    const draft = {
+      ...getDefaultFlowScheduleDraft(),
+      scheduleMode: "one_time" as const,
+      handlerType: "custom" as const,
+      summary: "One-time custom workflow",
+      oneShotTimestamp: 1_800_000_000,
+      customJson: JSON.stringify({ operation: "claim_rewards" }),
+    };
+    const intent = buildFlowScheduleIntent(draft);
+    expect(intent.schedule).toEqual({
+      type: "one_time",
+      oneShotTimestamp: 1_800_000_000,
+    });
+    expect(intent.params).toEqual({
+      custom: { operation: "claim_rewards" },
+    });
+  });
+
+  it("parses stored flow scheduled metadata", () => {
+    const meta = parseFlowScheduledMetadata(
+      JSON.stringify({
+        kind: "shadow_manual_schedule",
+        summary: "Weekly rebalance",
+        schedule: { type: "cron", cronExpression: "0 12 * * 1" },
+      }),
+    );
+    expect(meta.summary).toBe("Weekly rebalance");
+    expect(meta.schedule?.cronExpression).toBe("0 12 * * 1");
   });
 });
 

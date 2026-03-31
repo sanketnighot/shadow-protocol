@@ -4,6 +4,7 @@ import type {
   ApproveAgentActionInput,
   ApproveAgentActionResult,
   ChatAgentInput,
+  ChatMessage,
   ChatAgentResponse,
   ExecutionLogRecord,
   PendingApprovalRecord,
@@ -20,10 +21,29 @@ export async function chatAgent(
     walletAddress: input.walletAddress ?? null,
     walletAddresses: input.walletAddresses ?? null,
     numCtx: input.numCtx ?? null,
+    rollingSummary: input.rollingSummary ?? null,
     structuredFacts: input.structuredFacts ?? null,
     demoMode: input.demoMode ?? true,
   };
   return invoke<ChatAgentResponse>("chat_agent", { input: payload });
+}
+
+type SummarizeAgentConversationInput = {
+  model: string;
+  messages: ChatMessage[];
+  numCtx?: number | null;
+};
+
+export async function summarizeAgentConversation(
+  input: SummarizeAgentConversationInput,
+): Promise<string> {
+  return invoke<string>("summarize_agent_conversation", {
+    input: {
+      model: input.model,
+      messages: input.messages,
+      numCtx: input.numCtx ?? null,
+    },
+  });
 }
 
 export async function approveAgentAction(
