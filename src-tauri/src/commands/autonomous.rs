@@ -4,10 +4,11 @@
 //! and orchestrator controls to the frontend.
 
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 use crate::services::{
     agent_orchestrator, behavior_learner, guardrails, health_monitor,
-    opportunity_scanner, task_manager,
+    market_service, task_manager,
 };
 
 // ============================================================================
@@ -298,20 +299,39 @@ pub struct TaskActionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<TaskResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
 #[tauri::command]
-pub async fn approve_task(input: ApproveTaskInput) -> TaskActionResult {
-    match task_manager::approve_task(&input.task_id, input.reason.as_deref()) {
-        Ok(task) => TaskActionResult {
-            success: true,
-            task: Some(TaskResponse::from(task)),
-            error: None,
-        },
+pub async fn approve_task(app: tauri::AppHandle, input: ApproveTaskInput) -> TaskActionResult {
+    match task_manager::approve_task(&app, &input.task_id, input.reason.as_deref()).await {
+        Ok(result) => {
+            let task = TaskResponse::from(result.task);
+            let _ = app.emit(
+                "autonomous_tasks_updated",
+                serde_json::json!({
+                    "taskId": task.id,
+                    "status": task.status,
+                    "executionStatus": result.execution_status,
+                }),
+            );
+            TaskActionResult {
+                success: true,
+                task: Some(task),
+                message: Some(result.execution_message),
+                execution_status: Some(result.execution_status),
+                error: None,
+            }
+        }
         Err(e) => TaskActionResult {
             success: false,
             task: None,
+            message: None,
+            execution_status: None,
             error: Some(e),
         },
     }
@@ -325,16 +345,29 @@ pub struct RejectTaskInput {
 }
 
 #[tauri::command]
-pub async fn reject_task(input: RejectTaskInput) -> TaskActionResult {
+pub async fn reject_task(app: tauri::AppHandle, input: RejectTaskInput) -> TaskActionResult {
     match task_manager::reject_task(&input.task_id, input.reason.as_deref()) {
-        Ok(()) => TaskActionResult {
-            success: true,
-            task: None,
-            error: None,
-        },
+        Ok(()) => {
+            let _ = app.emit(
+                "autonomous_tasks_updated",
+                serde_json::json!({
+                    "taskId": input.task_id,
+                    "status": "rejected",
+                }),
+            );
+            TaskActionResult {
+                success: true,
+                task: None,
+                message: None,
+                execution_status: None,
+                error: None,
+            }
+        }
         Err(e) => TaskActionResult {
             success: false,
             task: None,
+            message: None,
+            execution_status: None,
             error: Some(e),
         },
     }
@@ -379,7 +412,9 @@ pub struct HealthSummary {
     pub risk_score: f64,
     pub component_scores: Vec<ComponentScoreResponse>,
     pub alerts: Vec<HealthAlertResponse>,
+    pub drift_analysis: Vec<DriftAnalysisResponse>,
     pub recommendations: Vec<String>,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -400,6 +435,17 @@ pub struct HealthAlertResponse {
     pub message: String,
     pub affected_assets: Vec<String>,
     pub recommended_action: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriftAnalysisResponse {
+    pub symbol: String,
+    pub target_pct: f64,
+    pub current_pct: f64,
+    pub drift_pct: f64,
+    pub drift_direction: String,
+    pub suggested_action: Option<String>,
 }
 
 impl From<health_monitor::PortfolioHealthSummary> for HealthSummary {
@@ -424,7 +470,16 @@ impl From<health_monitor::PortfolioHealthSummary> for HealthSummary {
                 affected_assets: a.affected_assets,
                 recommended_action: a.recommended_action,
             }).collect(),
+            drift_analysis: summary.drift_analysis.into_iter().map(|d| DriftAnalysisResponse {
+                symbol: d.symbol,
+                target_pct: d.target_pct,
+                current_pct: d.current_pct,
+                drift_pct: d.drift_pct,
+                drift_direction: d.drift_direction,
+                suggested_action: d.suggested_action,
+            }).collect(),
             recommendations: summary.recommendations,
+            created_at: 0,
         }
     }
 }
@@ -437,6 +492,8 @@ pub async fn get_portfolio_health() -> HealthResult {
                 serde_json::from_str(&record.component_scores_json).unwrap_or_default();
             let alerts: Vec<health_monitor::HealthAlert> =
                 serde_json::from_str(&record.alerts_json).unwrap_or_default();
+            let drift_analysis: Vec<health_monitor::DriftAnalysis> =
+                serde_json::from_str(&record.drift_analysis_json).unwrap_or_default();
             let recommendations: Vec<String> =
                 serde_json::from_str(&record.recommendations_json).unwrap_or_default();
 
@@ -461,7 +518,16 @@ pub async fn get_portfolio_health() -> HealthResult {
                         affected_assets: a.affected_assets,
                         recommended_action: a.recommended_action,
                     }).collect(),
+                    drift_analysis: drift_analysis.into_iter().map(|d| DriftAnalysisResponse {
+                        symbol: d.symbol,
+                        target_pct: d.target_pct,
+                        current_pct: d.current_pct,
+                        drift_pct: d.drift_pct,
+                        drift_direction: d.drift_direction,
+                        suggested_action: d.suggested_action,
+                    }).collect(),
                     recommendations,
+                    created_at: record.created_at,
                 }),
                 error: None,
             }
@@ -506,37 +572,47 @@ pub struct OpportunityMatch {
     pub recommended_action: Option<String>,
 }
 
-impl From<opportunity_scanner::MatchedOpportunity> for OpportunityMatch {
-    fn from(m: opportunity_scanner::MatchedOpportunity) -> Self {
+impl From<market_service::MarketOpportunity> for OpportunityMatch {
+    fn from(m: market_service::MarketOpportunity) -> Self {
         Self {
-            id: m.opportunity.id,
-            opportunity_type: m.opportunity.opportunity_type,
-            title: m.opportunity.title,
-            description: m.opportunity.description,
-            protocol: m.opportunity.protocol,
-            chain: m.opportunity.chain,
-            tokens: m.opportunity.tokens,
-            apy: m.opportunity.apy,
-            tvl_usd: m.opportunity.tvl_usd,
-            risk_level: m.opportunity.risk_level,
-            match_score: m.match_score,
-            match_reasons: m.match_reasons,
-            recommended_action: m.recommended_action,
+            id: m.id,
+            opportunity_type: m.category,
+            title: m.title,
+            description: m.summary,
+            protocol: m.protocol.unwrap_or_default(),
+            chain: m.chain,
+            tokens: m.symbols,
+            apy: m.metrics.iter().find(|metric| metric.kind == "apy")
+                .and_then(|metric| metric.value.trim_end_matches('%').parse::<f64>().ok()),
+            tvl_usd: m.metrics.iter().find(|metric| metric.kind == "tvl_usd")
+                .and_then(|metric| metric.value.replace(['$', ','], "").parse::<f64>().ok()),
+            risk_level: m.risk,
+            match_score: (m.score / 100.0).clamp(0.0, 1.0),
+            match_reasons: m.portfolio_fit.relevance_reasons,
+            recommended_action: Some(m.primary_action.label),
         }
     }
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetOpportunitiesInput {
     pub limit: Option<u32>,
 }
 
 #[tauri::command]
-pub async fn get_opportunities(input: GetOpportunitiesInput) -> OpportunitiesResult {
+pub async fn get_opportunities(app: tauri::AppHandle, input: GetOpportunitiesInput) -> OpportunitiesResult {
     let limit = input.limit.unwrap_or(10);
-    match opportunity_scanner::get_recent_matches(limit) {
-        Ok(matches) => OpportunitiesResult {
-            opportunities: matches.into_iter().map(OpportunityMatch::from).collect(),
+    let addresses = crate::commands::get_addresses(&app);
+    match market_service::fetch_opportunities(market_service::MarketFetchInput {
+        category: None,
+        chain: None,
+        include_research: Some(true),
+        wallet_addresses: Some(addresses),
+        limit: Some(limit),
+    }).await {
+        Ok(response) => OpportunitiesResult {
+            opportunities: response.items.into_iter().map(OpportunityMatch::from).collect(),
             error: None,
         },
         Err(e) => OpportunitiesResult {
@@ -601,8 +677,8 @@ pub struct OrchestratorControlResult {
 }
 
 #[tauri::command]
-pub async fn start_autonomous() -> OrchestratorControlResult {
-    match agent_orchestrator::start_orchestrator().await {
+pub async fn start_autonomous(app: tauri::AppHandle) -> OrchestratorControlResult {
+    match agent_orchestrator::start_orchestrator(app).await {
         Ok(_) => OrchestratorControlResult {
             success: true,
             is_running: true,
@@ -617,8 +693,8 @@ pub async fn start_autonomous() -> OrchestratorControlResult {
 }
 
 #[tauri::command]
-pub async fn stop_autonomous() -> OrchestratorControlResult {
-    match agent_orchestrator::stop_orchestrator().await {
+pub async fn stop_autonomous(app: tauri::AppHandle) -> OrchestratorControlResult {
+    match agent_orchestrator::stop_orchestrator(Some(&app)).await {
         Ok(_) => OrchestratorControlResult {
             success: true,
             is_running: false,
@@ -661,9 +737,14 @@ impl From<agent_orchestrator::AnalysisResult> for AnalysisResult {
 }
 
 #[tauri::command]
-pub async fn run_analysis_now() -> AnalysisResult {
-    match agent_orchestrator::analyze_now().await {
-        Ok(result) => AnalysisResult::from(result),
+pub async fn run_analysis_now(app: tauri::AppHandle) -> AnalysisResult {
+    match agent_orchestrator::analyze_now(&app).await {
+        Ok(result) => {
+            let _ = app.emit("autonomous_tasks_updated", serde_json::json!({
+                "source": "analysis_now",
+            }));
+            AnalysisResult::from(result)
+        }
         Err(e) => AnalysisResult {
             health_check_completed: false,
             health_score: None,

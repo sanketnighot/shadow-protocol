@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
+use crate::services::ai_evaluation::{production_eval_cases, summarize_metrics, AiEvaluationCase, AiEvaluationReport};
+use crate::services::ai_kernel;
 use crate::services::apps::state as apps_state;
 use crate::services::apps::{filecoin, flow, flow_actions, flow_bridge, flow_scheduler};
 use tauri::AppHandle;
@@ -38,6 +40,21 @@ pub struct DeleteStrategyInput {
 #[serde(rename_all = "camelCase")]
 pub struct GetExecutionLogInput {
     pub limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SummarizeAgentConversationInput {
+    pub model: String,
+    pub messages: Vec<agent_chat::ChatMessage>,
+    pub num_ctx: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiEvaluationFixtures {
+    pub cases: Vec<AiEvaluationCase>,
+    pub baseline: AiEvaluationReport,
 }
 
 #[derive(Debug, Deserialize)]
@@ -309,6 +326,31 @@ pub async fn chat_agent(app: tauri::AppHandle, input: agent_chat::ChatAgentInput
     agent_chat::run_agent(input, &app).await
 }
 
+#[tauri::command]
+pub async fn summarize_agent_conversation(
+    app: tauri::AppHandle,
+    input: SummarizeAgentConversationInput,
+) -> Result<String, String> {
+    let model = input.model.trim();
+    if model.is_empty() {
+        return Err("Model is required".to_string());
+    }
+    let messages: Vec<(String, String)> = input
+        .messages
+        .into_iter()
+        .map(|message| (message.role, message.content))
+        .collect();
+    ai_kernel::summarize_conversation(&app, model, &messages, input.num_ctx).await
+}
+
+#[tauri::command]
+pub async fn get_ai_evaluation_fixtures() -> Result<AiEvaluationFixtures, String> {
+    Ok(AiEvaluationFixtures {
+        cases: production_eval_cases(),
+        baseline: summarize_metrics(0.0, 0.0, 0.0, 0.0),
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApproveAgentActionInput {
@@ -563,7 +605,7 @@ pub async fn approve_agent_action(
         {
             flow_scheduler::submit_cron_intent(&app, cron, sid).await
         } else {
-            flow_scheduler::submit_schedule_intent(&app, intent, sid).await
+            flow_scheduler::submit_schedule_intent(&app, intent, sid, None, None).await
         };
         match exec_res {
             Ok(data) => {

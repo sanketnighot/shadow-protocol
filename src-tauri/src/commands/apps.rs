@@ -491,6 +491,14 @@ pub struct VincentDelegateeKeyInput {
     pub key: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsFlowCreateScheduleInput {
+    pub handler_type: String,
+    pub cron_expression: Option<String>,
+    pub intent_json: serde_json::Value,
+}
+
 #[tauri::command]
 pub async fn apps_flow_account_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     flow::account_status(&app).await
@@ -537,6 +545,60 @@ pub async fn apps_flow_cancel_scheduled_record(
         return Err("recordId required".to_string());
     }
     flow_scheduler::cancel_scheduled_by_record_id(&app, id).await
+}
+
+#[tauri::command]
+pub async fn apps_flow_create_schedule(
+    app: tauri::AppHandle,
+    input: AppsFlowCreateScheduleInput,
+) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
+    if !apps_state::is_tool_app_ready("flow").map_err(|e: DbError| e.to_string())? {
+        return Err("Install and enable the Flow integration first.".to_string());
+    }
+
+    let handler = input.handler_type.trim();
+    let handler_allowed = matches!(handler, "dca" | "rebalance" | "alert" | "custom");
+    if !handler_allowed {
+        return Err("Unsupported Flow handler type.".to_string());
+    }
+
+    let cron_expression = input
+        .cron_expression
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(cron) = cron_expression {
+        if cron.len() > 128 {
+            return Err("Cron expression is too long.".to_string());
+        }
+    }
+
+    if !input.intent_json.is_object() {
+        return Err("Schedule intent must be a JSON object.".to_string());
+    }
+    let summary = input
+        .intent_json
+        .get("summary")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .unwrap_or("");
+    if summary.len() < 3 || summary.len() > 140 {
+        return Err("Schedule summary must be between 3 and 140 characters.".to_string());
+    }
+    let encoded = serde_json::to_string(&input.intent_json).map_err(|e| e.to_string())?;
+    if encoded.len() > 512 {
+        return Err("Schedule details are too large. Keep the intent concise.".to_string());
+    }
+
+    flow_scheduler::submit_schedule_intent(
+        &app,
+        input.intent_json,
+        None,
+        Some(handler),
+        cron_expression,
+    )
+    .await
 }
 
 #[tauri::command]
