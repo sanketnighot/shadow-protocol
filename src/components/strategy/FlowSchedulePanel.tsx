@@ -41,6 +41,50 @@ const CRON_PRESETS = [
   { label: "Month End", value: "0 9 28 * *" },
 ] as const;
 
+/** Preset `operation` values for custom intents (JSON is built for you). */
+const CUSTOM_OPERATION_PRESETS = [
+  { value: "claim_rewards", label: "Claim rewards" },
+  { value: "snapshot_balances", label: "Log balances snapshot" },
+] as const;
+
+const CUSTOM_PRESET_VALUES: Set<string> = new Set(
+  CUSTOM_OPERATION_PRESETS.map((p) => p.value),
+);
+
+function isSimpleCustomPayload(json: string): boolean {
+  try {
+    const v = JSON.parse(json) as unknown;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+    const o = v as Record<string, unknown>;
+    const keys = Object.keys(o);
+    return (
+      keys.length === 1 &&
+      keys[0] === "operation" &&
+      typeof o.operation === "string"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function parseCustomSimpleSelection(json: string): {
+  preset: string;
+  otherOperation: string;
+} {
+  if (!isSimpleCustomPayload(json)) {
+    return { preset: "claim_rewards", otherOperation: "" };
+  }
+  try {
+    const op = (JSON.parse(json) as { operation: string }).operation.trim();
+    if (CUSTOM_PRESET_VALUES.has(op)) {
+      return { preset: op, otherOperation: "" };
+    }
+    return { preset: "other", otherOperation: op };
+  } catch {
+    return { preset: "claim_rewards", otherOperation: "" };
+  }
+}
+
 function formatUnixTime(seconds?: number | null): string {
   if (!seconds || seconds <= 0) return "Not set";
   try {
@@ -115,6 +159,8 @@ export function FlowSchedulePanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  /** Custom handler: simple presets vs raw JSON (for power users). */
+  const [customUseAdvancedJson, setCustomUseAdvancedJson] = useState(false);
 
   const cadenceReady =
     cadenceAddress === undefined ? true : cadenceAddress.trim().length > 0;
@@ -137,6 +183,15 @@ export function FlowSchedulePanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (draft.handlerType !== "custom") return;
+    const raw = draft.customJson.trim();
+    if (raw === "") return;
+    if (!isSimpleCustomPayload(draft.customJson)) {
+      setCustomUseAdvancedJson(true);
+    }
+  }, [draft.handlerType, draft.customJson]);
 
   const sync = useCallback(async () => {
     if (!strategyBuilderEnabled) return;
@@ -380,18 +435,31 @@ export function FlowSchedulePanel({
             </p>
             <select
               value={draft.handlerType}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  handlerType: event.currentTarget.value as FlowScheduleDraft["handlerType"],
-                }))
-              }
+              onChange={(event) => {
+                const nextHandler = event.currentTarget
+                  .value as FlowScheduleDraft["handlerType"];
+                setDraft((current) => {
+                  const next = { ...current, handlerType: nextHandler };
+                  if (
+                    nextHandler === "custom" &&
+                    next.customJson.trim() === ""
+                  ) {
+                    next.customJson = JSON.stringify({
+                      operation: "claim_rewards",
+                    });
+                  }
+                  return next;
+                });
+                if (nextHandler !== "custom") {
+                  setCustomUseAdvancedJson(false);
+                }
+              }}
               className="flex h-10 w-full rounded-sm border border-border bg-secondary px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               <option value="dca">DCA buy</option>
               <option value="rebalance">Rebalance</option>
               <option value="alert">Alert</option>
-              <option value="custom">Custom intent</option>
+              <option value="custom">Custom action</option>
             </select>
           </div>
         </div>
@@ -402,12 +470,13 @@ export function FlowSchedulePanel({
           </p>
           <input
             value={draft.summary}
-            onChange={(event) =>
+            onChange={(event) => {
+              const nextSummary = event.currentTarget.value.slice(0, 140);
               setDraft((current) => ({
                 ...current,
-                summary: event.currentTarget.value.slice(0, 140),
-              }))
-            }
+                summary: nextSummary,
+              }));
+            }}
             placeholder="Weekly FLOW accumulation"
             className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none"
           />
@@ -440,12 +509,13 @@ export function FlowSchedulePanel({
               </p>
               <input
                 value={draft.cronExpression}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextCron = event.currentTarget.value.slice(0, 128);
                   setDraft((current) => ({
                     ...current,
-                    cronExpression: event.currentTarget.value.slice(0, 128),
-                  }))
-                }
+                    cronExpression: nextCron,
+                  }));
+                }}
                 className="w-full rounded-sm border border-border bg-secondary px-3 py-2 font-mono text-xs text-foreground outline-none"
                 aria-label="Cron expression"
               />
@@ -484,12 +554,13 @@ export function FlowSchedulePanel({
               </p>
               <input
                 value={draft.fromSymbol}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextFromSymbol = event.currentTarget.value.slice(0, 16);
                   setDraft((current) => ({
                     ...current,
-                    fromSymbol: event.currentTarget.value.slice(0, 16),
-                  }))
-                }
+                    fromSymbol: nextFromSymbol,
+                  }));
+                }}
                 className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none"
               />
             </div>
@@ -499,12 +570,13 @@ export function FlowSchedulePanel({
               </p>
               <input
                 value={draft.toSymbol}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextToSymbol = event.currentTarget.value.slice(0, 16);
                   setDraft((current) => ({
                     ...current,
-                    toSymbol: event.currentTarget.value.slice(0, 16),
-                  }))
-                }
+                    toSymbol: nextToSymbol,
+                  }));
+                }}
                 placeholder="FUSD"
                 className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none"
               />
@@ -515,12 +587,13 @@ export function FlowSchedulePanel({
               </p>
               <input
                 value={draft.amount}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextAmount = event.currentTarget.value.slice(0, 32);
                   setDraft((current) => ({
                     ...current,
-                    amount: event.currentTarget.value.slice(0, 32),
-                  }))
-                }
+                    amount: nextAmount,
+                  }));
+                }}
                 placeholder="25"
                 className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none"
               />
@@ -535,12 +608,13 @@ export function FlowSchedulePanel({
             </p>
             <textarea
               value={draft.targetAllocationsText}
-              onChange={(event) =>
+              onChange={(event) => {
+                const nextAllocations = event.currentTarget.value.slice(0, 280);
                 setDraft((current) => ({
                   ...current,
-                  targetAllocationsText: event.currentTarget.value.slice(0, 280),
-                }))
-              }
+                  targetAllocationsText: nextAllocations,
+                }));
+              }}
               placeholder="FLOW:60, FUSD:40"
               className="min-h-24 w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none"
             />
@@ -548,21 +622,148 @@ export function FlowSchedulePanel({
         ) : null}
 
         {draft.handlerType === "custom" ? (
-          <div className="space-y-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-              Custom JSON
-            </p>
-            <textarea
-              value={draft.customJson}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  customJson: event.currentTarget.value.slice(0, 280),
-                }))
-              }
-              placeholder='{"operation":"claim_rewards"}'
-              className="min-h-24 w-full rounded-sm border border-border bg-secondary px-3 py-2 font-mono text-xs text-foreground outline-none"
-            />
+          <div className="space-y-3 rounded-sm border border-border bg-background/40 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+                  Custom action
+                </p>
+                <p className="mt-1 text-[11px] text-muted leading-relaxed">
+                  Pick a common Flow intent. SHADOW still sends one JSON object
+                  to the backend — you only choose the action name.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-primary underline underline-offset-2 hover:text-primary/80"
+                onClick={() => {
+                  if (customUseAdvancedJson) {
+                    if (!isSimpleCustomPayload(draft.customJson)) {
+                      setSubmitError(
+                        "This JSON is not a single { operation: \"…\" } object. Fix it or stay in advanced mode.",
+                      );
+                      return;
+                    }
+                    setSubmitError(null);
+                    setCustomUseAdvancedJson(false);
+                  } else {
+                    setSubmitError(null);
+                    setCustomUseAdvancedJson(true);
+                  }
+                }}
+              >
+                {customUseAdvancedJson ? "Use simple picker" : "Edit as JSON"}
+              </button>
+            </div>
+
+            {!customUseAdvancedJson ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="flow-custom-preset"
+                    className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted"
+                  >
+                    Action
+                  </label>
+                  <select
+                    id="flow-custom-preset"
+                    value={parseCustomSimpleSelection(draft.customJson).preset}
+                    onChange={(event) => {
+                      const v = event.currentTarget.value;
+                      setDraft((current) => {
+                        if (v === "other") {
+                          let op = "custom";
+                          try {
+                            const parsed = JSON.parse(
+                              current.customJson,
+                            ) as { operation?: string };
+                            if (
+                              typeof parsed.operation === "string" &&
+                              !CUSTOM_PRESET_VALUES.has(parsed.operation)
+                            ) {
+                              op = parsed.operation;
+                            }
+                          } catch {
+                            /* keep default */
+                          }
+                          return {
+                            ...current,
+                            customJson: JSON.stringify({ operation: op }),
+                          };
+                        }
+                        return {
+                          ...current,
+                          customJson: JSON.stringify({ operation: v }),
+                        };
+                      });
+                    }}
+                    className="flex h-10 w-full rounded-sm border border-border bg-secondary px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    {CUSTOM_OPERATION_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                    <option value="other">Other…</option>
+                  </select>
+                </div>
+                {parseCustomSimpleSelection(draft.customJson).preset ===
+                "other" ? (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="flow-custom-other-op"
+                      className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted"
+                    >
+                      Operation name
+                    </label>
+                    <input
+                      id="flow-custom-other-op"
+                      value={
+                        parseCustomSimpleSelection(draft.customJson)
+                          .otherOperation
+                      }
+                      onChange={(event) => {
+                        const text = event.currentTarget.value.slice(0, 64);
+                        setDraft((current) => ({
+                          ...current,
+                          customJson: JSON.stringify({
+                            operation: text.trim() || "custom",
+                          }),
+                        }));
+                      }}
+                      placeholder="e.g. claim_rewards"
+                      className="w-full rounded-sm border border-border bg-secondary px-3 py-2 font-mono text-sm text-foreground outline-none"
+                    />
+                    <p className="text-[10px] text-muted">
+                      Use lowercase words with underscores (same style as agent
+                      tools). Advanced users can switch to JSON for richer
+                      payloads.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+                  Advanced JSON
+                </p>
+                <textarea
+                  value={draft.customJson}
+                  onChange={(event) => {
+                    const nextCustomJson = event.currentTarget.value.slice(
+                      0,
+                      512,
+                    );
+                    setDraft((current) => ({
+                      ...current,
+                      customJson: nextCustomJson,
+                    }));
+                  }}
+                  placeholder='{"operation":"claim_rewards"}'
+                  className="min-h-28 w-full rounded-sm border border-border bg-secondary px-3 py-2 font-mono text-xs text-foreground outline-none"
+                />
+              </div>
+            )}
           </div>
         ) : null}
 
