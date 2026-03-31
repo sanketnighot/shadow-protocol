@@ -58,7 +58,7 @@ pub fn bundled_catalog() -> &'static [CatalogSeedRow] {
             author: "SHADOW (bundled)",
             features_json: r#"["Encrypted backup","Restore workflow","CID history","Optional auto-backup"]"#,
             permissions_json: r#"["backup.read_local_state","network.filecoin"]"#,
-            secret_requirements_json: r#"["filecoinApiKey"]"#,
+            secret_requirements_json: r#"[]"#,
             agent_tools_json: r#"["filecoin_protocol_list_backups","filecoin_protocol_request_backup","filecoin_protocol_request_restore"]"#,
             network_scopes_json: r#"["filecoin"]"#,
         },

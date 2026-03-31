@@ -373,6 +373,7 @@ pub async fn apps_flow_cancel_scheduled_record(
 
 #[tauri::command]
 pub async fn apps_filecoin_auto_restore(app: tauri::AppHandle) -> Result<bool, String> {
+    require_unlocked_session_for_app_settings()?;
     filecoin::restore_latest_snapshot(&app).await
 }
 
@@ -423,6 +424,7 @@ pub async fn apps_filecoin_quote_cost(
     app: tauri::AppHandle,
     input: AppsFilecoinQuoteInput,
 ) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
     if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
         return Err("Filecoin app not active".to_string());
     }
@@ -432,6 +434,7 @@ pub async fn apps_filecoin_quote_cost(
 
 #[tauri::command]
 pub async fn apps_filecoin_list_datasets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
     if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
         return Err("Filecoin app not active".to_string());
     }

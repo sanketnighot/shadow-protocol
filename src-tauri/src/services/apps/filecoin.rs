@@ -1,11 +1,20 @@
 //! Filecoin backup adapter — encrypted payload handling in Rust-owned flow; upload via sidecar.
+//! Synapse signing uses the same EVM private key as transfers: the currently unlocked SHADOW wallet session.
 
 use serde_json::Value;
 use tauri::AppHandle;
+use zeroize::Zeroizing;
 
 use super::runtime::{invoke_sidecar, RuntimeRequest};
 use crate::commands::get_addresses;
 use crate::services::local_db::{self, ActiveStrategy, PortfolioSnapshot, TransactionRow};
+
+/// Private key hex for the Filecoin sidecar (`apiKey` field). Must match the unlocked SHADOW wallet.
+fn filecoin_signing_key_for_sidecar() -> Result<Zeroizing<String>, String> {
+    crate::session::get_unlocked_key().ok_or_else(|| {
+        "Wallet locked — unlock your SHADOW wallet to use Filecoin storage.".to_string()
+    })
+}
 
 /// Apply a decoded snapshot JSON object to local state. Returns true if anything changed.
 pub fn apply_snapshot_from_payload(app: &AppHandle, root: &Value) -> Result<bool, String> {
@@ -182,9 +191,7 @@ pub async fn prepare_encrypted_backup(
     ciphertext_hex: String,
     policy: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
-        .unwrap_or(None)
-        .unwrap_or_default();
+    let api_key = filecoin_signing_key_for_sidecar()?;
 
     let res = invoke_sidecar(
         app,
@@ -194,7 +201,7 @@ pub async fn prepare_encrypted_backup(
             payload: serde_json::json!({
                 "scope": scope,
                 "ciphertextHex": ciphertext_hex,
-                "apiKey": api_key,
+                "apiKey": api_key.as_str(),
                 "policy": policy,
             }),
         },
@@ -323,9 +330,7 @@ pub async fn sidecar_quote_upload_costs(
     app: &AppHandle,
     data_size: u64,
 ) -> Result<serde_json::Value, String> {
-    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
-        .unwrap_or(None)
-        .unwrap_or_default();
+    let api_key = filecoin_signing_key_for_sidecar()?;
 
     let res = invoke_sidecar(
         app,
@@ -333,7 +338,7 @@ pub async fn sidecar_quote_upload_costs(
             op: "filecoin.cost_quote".to_string(),
             app_id: "filecoin-storage".to_string(),
             payload: serde_json::json!({
-                "apiKey": api_key,
+                "apiKey": api_key.as_str(),
                 "dataSize": data_size,
                 "withCDN": true,
             }),
@@ -352,16 +357,14 @@ pub async fn sidecar_quote_upload_costs(
 
 /// List on-chain storage datasets for the configured Filecoin key.
 pub async fn sidecar_list_datasets(app: &AppHandle) -> Result<serde_json::Value, String> {
-    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
-        .unwrap_or(None)
-        .unwrap_or_default();
+    let api_key = filecoin_signing_key_for_sidecar()?;
 
     let res = invoke_sidecar(
         app,
         RuntimeRequest {
             op: "filecoin.datasets_list".to_string(),
             app_id: "filecoin-storage".to_string(),
-            payload: serde_json::json!({ "apiKey": api_key }),
+            payload: serde_json::json!({ "apiKey": api_key.as_str() }),
         },
     )
     .await
@@ -376,9 +379,7 @@ pub async fn sidecar_list_datasets(app: &AppHandle) -> Result<serde_json::Value,
 }
 
 pub async fn prepare_restore(app: &AppHandle, cid: &str) -> Result<serde_json::Value, String> {
-    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
-        .unwrap_or(None)
-        .unwrap_or_default();
+    let api_key = filecoin_signing_key_for_sidecar()?;
 
     let res = invoke_sidecar(
         app,
@@ -387,7 +388,7 @@ pub async fn prepare_restore(app: &AppHandle, cid: &str) -> Result<serde_json::V
             app_id: "filecoin-storage".to_string(),
             payload: serde_json::json!({
                 "cid": cid,
-                "apiKey": api_key
+                "apiKey": api_key.as_str()
             }),
         },
     )

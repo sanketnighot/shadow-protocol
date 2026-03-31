@@ -657,6 +657,9 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
       <p className="text-xs text-muted leading-relaxed">
         Snapshots are JSON payloads (upgrade path: keychain-sealed ciphertext). Rows below are
         recorded locally after each successful Synapse upload; pricing uses on-chain USDFC quotes.
+        Synapse signing uses the{" "}
+        <span className="text-foreground/80">unlocked SHADOW wallet</span> (same key as transfers on
+        Filecoin Calibration)—unlock before backup, restore, quotes, or dataset listing.
       </p>
 
       <div className="space-y-3 rounded-sm border border-border bg-secondary/40 p-3">
