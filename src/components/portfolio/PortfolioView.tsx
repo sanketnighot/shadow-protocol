@@ -199,15 +199,15 @@ export function PortfolioView() {
           </div>
 
           {/* Portfolio Tabs & Content */}
-          <div className="rounded-sm border border-border bg-surface p-5 sm:p-8">
+          <div className="rounded-sm border border-border bg-surface p-4 sm:p-6">
             <PortfolioTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}
               tokensContent={
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                   <SmartOpportunities />
 
-                  <div className="mb-6 rounded-sm bg-white/[0.02] p-2">
+                  <div className="rounded-sm border border-border bg-white/2 p-3">
                     <PortfolioFilters
                       chain={chain}
                       sort={sort}
