@@ -40,6 +40,59 @@ export async function mintLitPkp(): Promise<unknown> {
   return invoke<unknown>("apps_lit_mint_pkp", {});
 }
 
+// ---------------------------------------------------------------------------
+// Vincent SDK helpers
+// ---------------------------------------------------------------------------
+
+export type VincentConsentStatus = {
+  hasConsent: boolean;
+  pkpAddress: string | null;
+  pkpPublicKey: string | null;
+  grantedAbilities: string[];
+  expiresAt: number | null;
+  expired: boolean;
+};
+
+export type VincentConsentGrant = {
+  pkpAddress: string;
+  pkpPublicKey: string;
+  grantedAbilities: string[];
+  expiresAt: number;
+};
+
+export type VincentConsentUrlResult = {
+  url: string;
+};
+
+export async function getVincentConsentUrl(): Promise<VincentConsentUrlResult> {
+  return invoke<VincentConsentUrlResult>("apps_vincent_consent_url", {});
+}
+
+export async function submitVincentJwt(jwt: string): Promise<VincentConsentGrant> {
+  return invoke<VincentConsentGrant>("apps_vincent_submit_jwt", { input: { jwt } });
+}
+
+export async function getVincentConsentStatus(): Promise<VincentConsentStatus> {
+  return invoke<VincentConsentStatus>("apps_vincent_consent_status", {});
+}
+
+export async function revokeVincentConsent(): Promise<void> {
+  return invoke("apps_vincent_revoke_consent", {});
+}
+
+export async function setVincentDelegateeKey(key: string): Promise<void> {
+  return invoke("apps_vincent_set_delegatee_key", { input: { key } });
+}
+
+export async function executeVincentApproved(
+  operation: string,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  return invoke<unknown>("apps_vincent_execute_approved", {
+    input: { operation, params },
+  });
+}
+
 export async function fetchFlowAccountStatusPreview(): Promise<unknown> {
   return invoke<unknown>("apps_flow_account_status", {});
 }

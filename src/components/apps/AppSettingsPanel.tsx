@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,13 @@ import { Label } from "@/components/ui/label";
 import {
   Activity,
   CalendarClock,
+  CheckCircle2,
   Copy,
+  ExternalLink,
   HardDrive,
+  Key,
+  Link2,
+  Link2Off,
   Settings2,
   ShieldCheck,
   Waves,
@@ -21,15 +26,21 @@ import type { ShadowApp } from "@/types/apps";
 import {
   fetchFlowAccountStatusPreview,
   fetchLitWalletStatusPreview,
+  getVincentConsentStatus,
+  getVincentConsentUrl,
   mintLitPkp,
   parseFlowConfig,
   parseFilecoinBackupMetadata,
   parseFilecoinConfig,
   parseLitConfig,
   protocolOptions,
+  revokeVincentConsent,
+  setVincentDelegateeKey,
+  submitVincentJwt,
   type FlowIntegrationConfig,
   type FilecoinIntegrationConfig,
   type LitIntegrationConfig,
+  type VincentConsentStatus,
 } from "@/lib/apps";
 import {
   useAppBackupsQuery,
@@ -93,6 +104,30 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
   const [adapterPreview, setAdapterPreview] = useState<string | null>(null);
   const [minting, setMinting] = useState(false);
 
+  // Vincent consent state
+  const [vincentConsent, setVincentConsent] = useState<VincentConsentStatus | null>(null);
+  const [vincentLoading, setVincentLoading] = useState(false);
+  const [vincentJwtInput, setVincentJwtInput] = useState("");
+  const [vincentJwtError, setVincentJwtError] = useState<string | null>(null);
+  const [showJwtInput, setShowJwtInput] = useState(false);
+  const [delegateeKeyInput, setDelegateeKeyInput] = useState("");
+  const [showDelegateeKeyInput, setShowDelegateeKeyInput] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
+
+  const loadVincentConsent = useCallback(async () => {
+    if (!panelOpen) return;
+    try {
+      const status = await getVincentConsentStatus();
+      setVincentConsent(status);
+    } catch {
+      // non-fatal
+    }
+  }, [panelOpen]);
+
+  useEffect(() => {
+    void loadVincentConsent();
+  }, [loadVincentConsent]);
+
   useEffect(() => {
     if (raw !== undefined) {
       setDraft(parseLitConfig(raw));
@@ -122,8 +157,8 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
           pkpTokenId: typeof result.tokenId === "string" ? result.tokenId : undefined,
         }));
         addNotification({
-          title: "PKP Agent Wallet Created",
-          description: `Address: ${address.slice(0, 10)}…${address.slice(-6)}`,
+          title: "Agent Wallet Created",
+          description: `PKP address: ${address.slice(0, 10)}…${address.slice(-6)}`,
           type: "success",
           createdAtLabel: "Just now",
         });
@@ -140,19 +175,105 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
     }
   };
 
+  const handleOpenConsentPage = async () => {
+    setVincentLoading(true);
+    try {
+      const { url } = await getVincentConsentUrl();
+      await (window as unknown as { __TAURI__?: unknown }).__TAURI__
+        ? import("@tauri-apps/plugin-opener").then(({ openUrl }) => openUrl(url))
+        : window.open(url, "_blank");
+      setShowJwtInput(true);
+    } catch {
+      setShowJwtInput(true); // Fallback: just show input
+    } finally {
+      setVincentLoading(false);
+    }
+  };
+
+  const handleSubmitJwt = async () => {
+    const jwt = vincentJwtInput.trim();
+    if (!jwt) return;
+    setVincentLoading(true);
+    setVincentJwtError(null);
+    try {
+      await submitVincentJwt(jwt);
+      await loadVincentConsent();
+      setShowJwtInput(false);
+      setVincentJwtInput("");
+      addNotification({
+        title: "Vincent Wallet Authorized",
+        description: "Vincent consent granted. Agent can now use delegated abilities.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "JWT verification failed.";
+      setVincentJwtError(msg);
+    } finally {
+      setVincentLoading(false);
+    }
+  };
+
+  const handleRevokeConsent = async () => {
+    if (!window.confirm("Revoke Vincent consent? The agent will no longer be able to execute abilities on your behalf.")) return;
+    try {
+      await revokeVincentConsent();
+      setVincentConsent(null);
+      addNotification({
+        title: "Vincent Access Revoked",
+        description: "Consent revoked. Re-authorize from settings when ready.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
+    } catch {
+      addNotification({
+        title: "Revoke Failed",
+        description: "Could not revoke consent. Try again.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
+    }
+  };
+
+  const handleSaveDelegateeKey = async () => {
+    const key = delegateeKeyInput.trim();
+    if (!key) return;
+    setSavingKey(true);
+    try {
+      await setVincentDelegateeKey(key);
+      setDelegateeKeyInput("");
+      setShowDelegateeKeyInput(false);
+      addNotification({
+        title: "Delegatee Key Saved",
+        description: "Stored in OS keychain. Vincent can now execute on-chain abilities.",
+        type: "success",
+        createdAtLabel: "Just now",
+      });
+    } catch {
+      addNotification({
+        title: "Key Save Failed",
+        description: "Could not store delegatee key.",
+        type: "warning",
+        createdAtLabel: "Just now",
+      });
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
   const commit = async () => {
     try {
       await save.mutateAsync({ appId, config: draft });
       addNotification({
         title: "Integration Updated",
-        description: "Lit settings saved locally.",
+        description: "Vincent Agent Wallet settings saved.",
         type: "success",
         createdAtLabel: "Just now",
       });
     } catch {
       addNotification({
         title: "Integration Error",
-        description: "Could not save Lit settings.",
+        description: "Could not save settings.",
         type: "warning",
         createdAtLabel: "Just now",
       });
@@ -160,15 +281,18 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
   };
 
   const hasPkp = Boolean(draft.pkpEthAddress);
+  const hasActiveConsent = vincentConsent?.hasConsent === true;
+  const consentExpired = vincentConsent?.expired === true;
 
   return (
     <div className="space-y-6">
-      {/* PKP Agent Wallet Section */}
+      {/* Vincent Agent Wallet Section */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Zap className="size-4 text-primary" />
-          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Agent Wallet (PKP)</p>
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Vincent Agent Wallet (PKP)</p>
         </div>
+
         {hasPkp ? (
           <div className="rounded-sm border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -180,24 +304,19 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
               className="w-full text-left font-mono text-xs text-foreground truncate hover:text-primary transition-colors"
               onClick={() => {
                 void navigator.clipboard.writeText(draft.pkpEthAddress ?? "");
-                addNotification({
-                  title: "Address Copied",
-                  description: "PKP wallet address copied to clipboard.",
-                  type: "success",
-                  createdAtLabel: "Just now",
-                });
+                addNotification({ title: "Address Copied", description: "PKP address copied.", type: "success", createdAtLabel: "Just now" });
               }}
             >
               {draft.pkpEthAddress}
             </button>
             <p className="text-[10px] text-muted">
-              Distributed MPC wallet on Lit&apos;s datil-test network. Key is split across 100+ TEE nodes — no single point of compromise.
+              Distributed MPC wallet on Lit datil-test. Key split across 100+ TEE nodes — no single point of compromise.
             </p>
           </div>
         ) : (
           <div className="rounded-sm border border-border bg-secondary p-3 space-y-3">
             <p className="text-xs text-muted leading-relaxed">
-              Create a PKP wallet for your AI agent. The wallet key is distributed across Lit&apos;s decentralized network — your existing wallet authenticates the creation process.
+              Create a PKP wallet for your AI agent. The wallet key is distributed across Lit&apos;s network — your existing wallet authenticates creation.
             </p>
             <Button
               type="button"
@@ -205,20 +324,192 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
               disabled={minting}
               onClick={() => void handleMintPkp()}
             >
-              {minting ? "Creating PKP wallet…" : "Create Agent Wallet"}
+              {minting ? "Creating wallet…" : "Create Agent Wallet"}
             </Button>
           </div>
         )}
       </div>
 
-      {/* Guardrails Section */}
+      {/* Vincent Consent Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Link2 className="size-4 text-primary" />
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Vincent Authorization</p>
+        </div>
+
+        {hasActiveConsent ? (
+          <div className="rounded-sm border border-violet-500/20 bg-violet-500/5 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-3.5 text-violet-400" />
+                <span className="text-xs text-violet-300 font-medium">Vincent Authorized</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] border-violet-500/40 text-violet-400">Active</Badge>
+            </div>
+            {vincentConsent?.pkpAddress && (
+              <p className="font-mono text-[10px] text-muted truncate">
+                {vincentConsent.pkpAddress}
+              </p>
+            )}
+            {vincentConsent && vincentConsent.grantedAbilities.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-muted">Granted Abilities</p>
+                <div className="flex flex-wrap gap-1">
+                  {vincentConsent.grantedAbilities.map((ab) => (
+                    <Badge key={ab} variant="outline" className="text-[9px] border-violet-500/30 text-violet-300 font-mono">
+                      {ab}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {vincentConsent?.expiresAt && (
+              <p className="text-[10px] text-muted">
+                Expires: {new Date(vincentConsent.expiresAt * 1000).toLocaleDateString()}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-[10px] uppercase tracking-wider text-red-400 border-red-500/30 hover:bg-red-500/10"
+              onClick={() => void handleRevokeConsent()}
+            >
+              <Link2Off className="size-3 mr-1.5" />
+              Revoke Access
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-sm border border-border bg-secondary p-3 space-y-3">
+            {consentExpired && (
+              <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-2 text-[10px] text-amber-400">
+                Vincent consent has expired. Please re-authorize.
+              </div>
+            )}
+            <p className="text-xs text-muted leading-relaxed">
+              Authorize SHADOW to execute DeFi abilities on your behalf using Vincent&apos;s delegated signing. This opens the Vincent consent page in your browser.
+            </p>
+
+            {!showJwtInput ? (
+              <Button
+                type="button"
+                className="w-full h-9 rounded-sm text-xs font-bold uppercase tracking-[0.14em]"
+                disabled={vincentLoading}
+                onClick={() => void handleOpenConsentPage()}
+              >
+                <ExternalLink className="size-3.5 mr-1.5" />
+                {vincentLoading ? "Opening…" : "Authorize Vincent Wallet"}
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[10px] text-muted">
+                  After authorizing on heyvincent.ai, paste your JWT token below:
+                </p>
+                <Input
+                  placeholder="Paste Vincent JWT token here…"
+                  value={vincentJwtInput}
+                  onChange={(e) => { setVincentJwtInput(e.target.value); setVincentJwtError(null); }}
+                  className="h-8 text-xs font-mono"
+                />
+                {vincentJwtError && (
+                  <p className="text-[10px] text-red-400">{vincentJwtError}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    className="flex-1 h-8 text-xs"
+                    disabled={vincentLoading || !vincentJwtInput.trim()}
+                    onClick={() => void handleSubmitJwt()}
+                  >
+                    {vincentLoading ? "Verifying…" : "Submit JWT"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => { setShowJwtInput(false); setVincentJwtInput(""); setVincentJwtError(null); }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!showJwtInput && (
+              <button
+                type="button"
+                className="w-full text-[10px] text-muted hover:text-foreground transition-colors underline underline-offset-2"
+                onClick={() => setShowJwtInput(true)}
+              >
+                Already have a JWT? Paste it here
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Delegatee Key Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Key className="size-4 text-primary" />
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Delegatee Key (OS Keychain)</p>
+        </div>
+        <p className="text-xs text-muted leading-relaxed mb-3">
+          The delegatee wallet key signs Vincent ability execution requests. Stored in your OS keychain — never exposed to the frontend.
+        </p>
+
+        {!showDelegateeKeyInput ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full h-8 text-[10px] uppercase tracking-wider"
+            onClick={() => setShowDelegateeKeyInput(true)}
+          >
+            <Key className="size-3 mr-1.5" />
+            Set Delegatee Key
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <Input
+              type="password"
+              placeholder="0x… private key for delegatee wallet"
+              value={delegateeKeyInput}
+              onChange={(e) => setDelegateeKeyInput(e.target.value)}
+              className="h-8 text-xs font-mono"
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="flex-1 h-8 text-xs"
+                disabled={savingKey || !delegateeKeyInput.trim()}
+                onClick={() => void handleSaveDelegateeKey()}
+              >
+                {savingKey ? "Saving…" : "Save to Keychain"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => { setShowDelegateeKeyInput(false); setDelegateeKeyInput(""); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Policy Guardrails Section */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <ShieldCheck className="size-4 text-primary" />
-          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Policy Guardrails</p>
+          <p className="font-mono text-[11px] tracking-[0.24em] text-muted uppercase">Local Policy Guardrails</p>
         </div>
         <p className="text-xs text-muted leading-relaxed mb-4">
-          Enforced by Lit TEE nodes before every transaction. Policies run as Lit Actions on the decentralized network — they can&apos;t be bypassed.
+          {hasActiveConsent
+            ? "Vincent on-chain policies are active. Local guardrails serve as an additional pre-flight check."
+            : "Enforced locally before every transaction. Enable Vincent for additional on-chain policy enforcement."}
         </p>
         {isLoading ? (
           <p className="text-xs font-mono text-muted">Loading configuration…</p>
@@ -227,9 +518,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
             <div className="space-y-4">
               <div className="flex justify-between items-center gap-4">
                 <span className="text-sm text-foreground">Daily notional limit (USD)</span>
-                <span className="text-sm font-mono text-primary tabular-nums">
-                  ${draft.dailySpendLimitUsd}
-                </span>
+                <span className="text-sm font-mono text-primary tabular-nums">${draft.dailySpendLimitUsd}</span>
               </div>
               <input
                 type="range"
@@ -237,23 +526,18 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                 max={5000}
                 step={50}
                 value={draft.dailySpendLimitUsd}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, dailySpendLimitUsd: Number(e.target.value) }))
-                }
+                onChange={(e) => setDraft((d) => ({ ...d, dailySpendLimitUsd: Number(e.target.value) }))}
                 className="h-1.5 w-full appearance-none rounded-full bg-secondary accent-primary cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-muted font-mono opacity-60">
-                <span>$0</span>
-                <span>$5000</span>
+                <span>$0</span><span>$5000</span>
               </div>
             </div>
 
             <div className="space-y-4 pt-2">
               <div className="flex justify-between items-center gap-4">
                 <span className="text-sm text-foreground">Per-trade limit (USD)</span>
-                <span className="text-sm font-mono text-primary tabular-nums">
-                  ${draft.perTradeLimitUsd}
-                </span>
+                <span className="text-sm font-mono text-primary tabular-nums">${draft.perTradeLimitUsd}</span>
               </div>
               <input
                 type="range"
@@ -261,9 +545,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                 max={5000}
                 step={25}
                 value={draft.perTradeLimitUsd}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, perTradeLimitUsd: Number(e.target.value) }))
-                }
+                onChange={(e) => setDraft((d) => ({ ...d, perTradeLimitUsd: Number(e.target.value) }))}
                 className="h-1.5 w-full appearance-none rounded-full bg-secondary accent-primary cursor-pointer"
               />
             </div>
@@ -271,9 +553,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
             <div className="space-y-4 pt-2">
               <div className="flex justify-between items-center gap-4">
                 <span className="text-sm text-foreground">Approval threshold (USD)</span>
-                <span className="text-sm font-mono text-primary tabular-nums">
-                  ${draft.approvalThresholdUsd}
-                </span>
+                <span className="text-sm font-mono text-primary tabular-nums">${draft.approvalThresholdUsd}</span>
               </div>
               <input
                 type="range"
@@ -281,9 +561,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                 max={50000}
                 step={100}
                 value={draft.approvalThresholdUsd}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, approvalThresholdUsd: Number(e.target.value) }))
-                }
+                onChange={(e) => setDraft((d) => ({ ...d, approvalThresholdUsd: Number(e.target.value) }))}
                 className="h-1.5 w-full appearance-none rounded-full bg-secondary accent-primary cursor-pointer"
               />
             </div>
@@ -294,17 +572,9 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                 {protocolOptions().map((p) => {
                   const on = draft.allowedProtocols.includes(p.id);
                   return (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between rounded-sm border border-border bg-secondary p-3"
-                    >
+                    <div key={p.id} className="flex items-center justify-between rounded-sm border border-border bg-secondary p-3">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            "size-2 rounded-full",
-                            on ? "bg-emerald-500" : "bg-muted",
-                          )}
-                        />
+                        <div className={cn("size-2 rounded-full", on ? "bg-emerald-500" : "bg-muted")} />
                         <span className="text-sm font-medium">{p.label}</span>
                       </div>
                       <Button
@@ -334,16 +604,11 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
                     setAdapterPreview(JSON.stringify(j, null, 2));
                   } catch {
                     setAdapterPreview(null);
-                    addNotification({
-                      title: "Integration Error",
-                      description: "Could not load Lit adapter status.",
-                      type: "warning",
-                      createdAtLabel: "Just now",
-                    });
+                    addNotification({ title: "Integration Error", description: "Could not load adapter status.", type: "warning", createdAtLabel: "Just now" });
                   }
                 }}
               >
-                Load adapter status (saved config)
+                Load adapter status
               </Button>
               {adapterPreview && (
                 <pre className="text-[10px] font-mono text-muted whitespace-pre-wrap break-all max-h-32 overflow-y-auto rounded-sm border border-border bg-secondary p-2">
@@ -360,7 +625,7 @@ function LitSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }
         disabled={save.isPending || isLoading}
         onClick={() => void commit()}
       >
-        Save Lit settings
+        Save Vincent Settings
       </Button>
     </div>
   );

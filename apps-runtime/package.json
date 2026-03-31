@@ -13,9 +13,10 @@
   "dependencies": {
     "@filoz/synapse-core": "^0.3.1",
     "@filoz/synapse-sdk": "^0.40.0",
-    "@lit-protocol/auth-helpers": "^8.2.1",
-    "@lit-protocol/constants": "^9.0.1",
+    "@lit-protocol/auth-helpers": "^7.0.9",
+    "@lit-protocol/constants": "^7.0.8",
     "@lit-protocol/lit-node-client": "^7.4.0",
+    "@lit-protocol/vincent-sdk": "^0.0.7",
     "@noble/hashes": "^2.0.1",
     "@onflow/config": "^1.11.1",
     "@onflow/fcl": "^1.21.10",
@@ -23,6 +24,11 @@
     "@onflow/types": "^1.5.0",
     "elliptic": "^6.6.1",
     "ethers": "^6.16.0",
+    "ethers-v5": "npm:ethers@^5.7.2",
     "viem": "^2.47.6"
+  },
+  "overrides": {
+    "@lit-protocol/auth-helpers": "^7.0.9",
+    "@lit-protocol/constants": "^7.0.8"
   }
 }
