@@ -118,6 +118,7 @@ pub fn run() {
             commands::delete_all_data,
             commands::portfolio_fetch_balances,
             commands::portfolio_fetch_balances_multi,
+            commands::portfolio_force_refresh,
             commands::portfolio_fetch_transactions,
             commands::portfolio_fetch_nfts,
             commands::portfolio_fetch_history,
@@ -173,6 +174,10 @@ pub fn run() {
             commands::apps_flow_sync_scheduled,
             commands::apps_flow_cancel_scheduled_record,
             commands::apps_filecoin_auto_restore,
+            commands::apps_filecoin_restore_by_cid,
+            commands::apps_filecoin_backup_now,
+            commands::apps_filecoin_quote_cost,
+            commands::apps_filecoin_list_datasets,
             commands::apps_set_secret,
             commands::apps_remove_secret,
             // Autonomous agent commands

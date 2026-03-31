@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tauri::AppHandle;
 
-use crate::services::chain::{chain_code_to_display, chain_to_explorer_base};
+use crate::services::chain::{chain_code_to_display, chain_to_explorer_tx_url};
 use crate::services::flow_domain::{is_cadence_flow_address, normalize_stored_wallet_token_chain};
 use crate::services::local_db;
 use crate::services::portfolio_service::{self, PortfolioAsset, PortfolioError};
@@ -78,6 +78,50 @@ pub async fn portfolio_fetch_balances(
     portfolio_service::fetch_balances(&address).await
 }
 
+/// Force a fresh fetch from Alchemy (EVM) and Flow sidecar (Cadence), bypassing the SQLite cache.
+/// Persists fresh EVM results to SQLite so subsequent cache reads are up-to-date.
+#[tauri::command]
+pub async fn portfolio_force_refresh(
+    addresses: Vec<String>,
+    app: AppHandle,
+) -> Result<Vec<PortfolioAsset>, PortfolioError> {
+    if addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Fresh fetch from Alchemy + Cadence sidecar — no SQLite reads
+    let mut combined = portfolio_service::fetch_balances_mixed(&app, &addresses).await?;
+
+    // Persist EVM assets to SQLite grouped by (wallet, chain) so cache is warm afterward
+    let mut by_wallet_chain: std::collections::HashMap<(String, String), Vec<local_db::TokenRow>> =
+        std::collections::HashMap::new();
+    for asset in &combined {
+        if let Some(addr) = &asset.wallet_address {
+            let row = local_db::TokenRow {
+                id: asset.id.clone(),
+                wallet_address: addr.clone(),
+                chain: asset.chain.clone(),
+                token_contract: asset.token_contract.clone(),
+                symbol: asset.symbol.clone(),
+                balance: asset.balance.clone(),
+                value_usd: asset.value_usd.clone(),
+                decimals: asset.decimals,
+                asset_type: asset.asset_type.clone(),
+            };
+            by_wallet_chain
+                .entry((addr.clone(), asset.chain.clone()))
+                .or_default()
+                .push(row);
+        }
+    }
+    for ((addr, chain), rows) in &by_wallet_chain {
+        let _ = local_db::upsert_tokens(addr, chain, rows);
+    }
+
+    portfolio_service::append_configured_cadence_assets_if_absent(&app, &mut combined).await?;
+    Ok(combined)
+}
+
 #[tauri::command]
 pub async fn portfolio_fetch_balances_multi(
     addresses: Vec<String>,
@@ -147,7 +191,6 @@ pub async fn portfolio_fetch_transactions(
         .map(|r| {
             let chain_code = r.chain.as_str();
             let chain_name = chain_code_to_display(chain_code).to_string();
-            let base = chain_to_explorer_base(chain_code);
             let tx_hash = r.tx_hash.clone();
             TransactionDisplay {
                 id: r.id,
@@ -159,7 +202,7 @@ pub async fn portfolio_fetch_transactions(
                 from_addr: r.from_addr,
                 to_addr: r.to_addr,
                 timestamp: r.timestamp,
-                block_explorer_url: format!("{}/tx/{}", base, tx_hash),
+                block_explorer_url: chain_to_explorer_tx_url(chain_code, &tx_hash),
             }
         })
         .collect())

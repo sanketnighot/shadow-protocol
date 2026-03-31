@@ -4,7 +4,8 @@ use serde_json::Value;
 use tauri::AppHandle;
 
 use super::runtime::{invoke_sidecar, RuntimeRequest};
-use crate::services::local_db::ActiveStrategy;
+use crate::commands::get_addresses;
+use crate::services::local_db::{self, ActiveStrategy, PortfolioSnapshot, TransactionRow};
 
 /// Apply a decoded snapshot JSON object to local state. Returns true if anything changed.
 pub fn apply_snapshot_from_payload(app: &AppHandle, root: &Value) -> Result<bool, String> {
@@ -51,6 +52,76 @@ pub fn apply_snapshot_from_payload(app: &AppHandle, root: &Value) -> Result<bool
         }
     }
 
+    if let Some(arr) = root.get("transactionHistory").and_then(|v| v.as_array()) {
+        for item in arr {
+            let Some(wallet) = item.get("walletAddress").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some(chain) = item.get("chain").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let row = TransactionRow {
+                id: item
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                tx_hash: item
+                    .get("txHash")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                chain: chain.to_string(),
+                from_addr: item
+                    .get("fromAddr")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                to_addr: item
+                    .get("toAddr")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                value: item
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                block_number: item.get("blockNumber").and_then(|v| v.as_i64()),
+                timestamp: item.get("timestamp").and_then(|v| v.as_i64()),
+                category: item
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                metadata: item
+                    .get("metadata")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            };
+            if row.id.is_empty() || row.tx_hash.is_empty() {
+                continue;
+            }
+            local_db::upsert_transactions(wallet, chain, std::slice::from_ref(&row))
+                .map_err(|e: local_db::DbError| e.to_string())?;
+            restored_something = true;
+        }
+    }
+
+    if let Some(arr) = root.get("portfolioSnapshots").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Ok(snap) = serde_json::from_value::<PortfolioSnapshot>(item.clone()) {
+                local_db::insert_portfolio_snapshot_at(
+                    snap.timestamp,
+                    &snap.total_usd,
+                    &snap.top_assets_json,
+                    &snap.wallet_breakdown_json,
+                    &snap.chain_breakdown_json,
+                    &snap.net_flow_usd,
+                    &snap.performance_usd,
+                )
+                .map_err(|e: local_db::DbError| e.to_string())?;
+                restored_something = true;
+            }
+        }
+    }
+
     Ok(restored_something)
 }
 
@@ -69,7 +140,16 @@ pub async fn restore_latest_snapshot(app: &AppHandle) -> Result<bool, String> {
         None => return Ok(false),
     };
 
-    let data: Value = prepare_restore(app, &latest.cid).await?;
+    restore_snapshot_by_cid(app, &latest.cid, "filecoin_auto_restore").await
+}
+
+/// Restore a specific backup CID (decrypt payload and apply snapshot fields).
+pub async fn restore_snapshot_by_cid(
+    app: &AppHandle,
+    cid: &str,
+    audit_kind: &str,
+) -> Result<bool, String> {
+    let data: Value = prepare_restore(app, cid).await?;
 
     let hex = data
         .get("ciphertextHex")
@@ -86,9 +166,9 @@ pub async fn restore_latest_snapshot(app: &AppHandle) -> Result<bool, String> {
     let restored = apply_snapshot_from_payload(app, &root)?;
     if restored {
         crate::services::audit::record(
-            "filecoin_auto_restore",
+            audit_kind,
             "filecoin",
-            Some(&latest.cid),
+            Some(cid),
             &serde_json::json!({ "scope": root.get("scope") }),
         );
     }
@@ -168,7 +248,8 @@ pub async fn upload_and_record_snapshot(
     scope: serde_json::Value,
     policy: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    let payload = super::payload::backup_payload_from_scope(app, &scope)?;
+    let addrs = get_addresses(app);
+    let payload = super::payload::backup_payload_from_scope(app, &scope, &addrs)?;
     let ciphertext_hex = hex::encode(&payload);
     let data = prepare_encrypted_backup(app, scope.clone(), ciphertext_hex, policy).await?;
     let cid = data
@@ -235,6 +316,63 @@ pub async fn trigger_autonomous_backup(app: &tauri::AppHandle) -> Result<(), Str
     let policy = cfg.get("policy").cloned();
     upload_and_record_snapshot(app, scope, policy).await?;
     Ok(())
+}
+
+/// Synapse cost quote via sidecar (USDFC rate / deposit).
+pub async fn sidecar_quote_upload_costs(
+    app: &AppHandle,
+    data_size: u64,
+) -> Result<serde_json::Value, String> {
+    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
+        .unwrap_or(None)
+        .unwrap_or_default();
+
+    let res = invoke_sidecar(
+        app,
+        RuntimeRequest {
+            op: "filecoin.cost_quote".to_string(),
+            app_id: "filecoin-storage".to_string(),
+            payload: serde_json::json!({
+                "apiKey": api_key,
+                "dataSize": data_size,
+                "withCDN": true,
+            }),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    if res.ok {
+        Ok(res.data)
+    } else {
+        Err(res
+            .error_message
+            .unwrap_or_else(|| "Filecoin cost quote failed".to_string()))
+    }
+}
+
+/// List on-chain storage datasets for the configured Filecoin key.
+pub async fn sidecar_list_datasets(app: &AppHandle) -> Result<serde_json::Value, String> {
+    let api_key = crate::services::settings::get_app_secret("filecoin-storage", "filecoinApiKey")
+        .unwrap_or(None)
+        .unwrap_or_default();
+
+    let res = invoke_sidecar(
+        app,
+        RuntimeRequest {
+            op: "filecoin.datasets_list".to_string(),
+            app_id: "filecoin-storage".to_string(),
+            payload: serde_json::json!({ "apiKey": api_key }),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    if res.ok {
+        Ok(res.data)
+    } else {
+        Err(res
+            .error_message
+            .unwrap_or_else(|| "Filecoin dataset list failed".to_string()))
+    }
 }
 
 pub async fn prepare_restore(app: &AppHandle, cid: &str) -> Result<serde_json::Value, String> {

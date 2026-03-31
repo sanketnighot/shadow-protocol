@@ -5,13 +5,21 @@ use tauri::AppHandle;
 
 use crate::services::agent_state::{read_memory, read_soul};
 use crate::services::apps::state::list_all_app_configs;
-use crate::services::local_db::{self, ActiveStrategy};
+use crate::services::local_db::{self, ActiveStrategy, PortfolioSnapshot};
 
 /// Snapshot format version written to Filecoin backup payloads.
 pub const SNAPSHOT_VERSION: u64 = 2;
 
+const BACKUP_TX_LIMIT: i64 = 100;
+const BACKUP_SNAPSHOT_LIMIT: u32 = 50;
+
 /// Build a JSON snapshot for upload from scope flags (merged from user config + job defaults).
-pub fn backup_payload_from_scope(app: &AppHandle, scope: &Value) -> Result<Vec<u8>, String> {
+/// `wallet_addresses` is used for transaction history scope (EVM addresses in `wallets.json`).
+pub fn backup_payload_from_scope(
+    app: &AppHandle,
+    scope: &Value,
+    wallet_addresses: &[String],
+) -> Result<Vec<u8>, String> {
     let mut obj = Map::new();
     obj.insert("v".to_string(), Value::Number(SNAPSHOT_VERSION.into()));
     obj.insert("scope".to_string(), scope.clone());
@@ -74,6 +82,51 @@ pub fn backup_payload_from_scope(app: &AppHandle, scope: &Value) -> Result<Vec<u
         obj.insert(
             "strategies".to_string(),
             serde_json::to_value(strategies).map_err(|e| e.to_string())?,
+        );
+    }
+
+    if scope
+        .get("transactionHistory")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        let mut arr = Vec::new();
+        for w in wallet_addresses {
+            let w = w.trim();
+            if w.is_empty() {
+                continue;
+            }
+            let per = local_db::get_transactions_for_wallets(&[w.to_string()], Some(BACKUP_TX_LIMIT))
+                .map_err(|e| e.to_string())?;
+            for r in per {
+                arr.push(serde_json::json!({
+                    "walletAddress": w,
+                    "id": r.id,
+                    "txHash": r.tx_hash,
+                    "chain": r.chain,
+                    "fromAddr": r.from_addr,
+                    "toAddr": r.to_addr,
+                    "value": r.value,
+                    "blockNumber": r.block_number,
+                    "timestamp": r.timestamp,
+                    "category": r.category,
+                    "metadata": r.metadata,
+                }));
+            }
+        }
+        obj.insert("transactionHistory".to_string(), Value::Array(arr));
+    }
+
+    if scope
+        .get("portfolioSnapshots")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        let snaps: Vec<PortfolioSnapshot> =
+            local_db::get_portfolio_snapshots(BACKUP_SNAPSHOT_LIMIT).map_err(|e| e.to_string())?;
+        obj.insert(
+            "portfolioSnapshots".to_string(),
+            serde_json::to_value(snaps).map_err(|e| e.to_string())?,
         );
     }
 

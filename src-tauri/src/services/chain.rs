@@ -87,6 +87,16 @@ pub fn chain_to_explorer_base(chain: &str) -> &'static str {
     }
 }
 
+/// Transaction detail URL for a chain (Filfox uses `/message/` for FEVM txs).
+pub fn chain_to_explorer_tx_url(chain: &str, tx_hash: &str) -> String {
+    let base = chain_to_explorer_base(chain);
+    if chain == "FIL-CAL" {
+        format!("{}/message/{}", base.trim_end_matches('/'), tx_hash)
+    } else {
+        format!("{}/tx/{}", base.trim_end_matches('/'), tx_hash)
+    }
+}
+
 pub fn network_to_chain_display(network: &str) -> (&'static str, &'static str) {
     let normalized = network
         .trim()

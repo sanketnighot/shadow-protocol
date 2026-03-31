@@ -7,6 +7,8 @@ use super::chain::network_to_chain_display;
 use super::local_db::{self, NftRow, TokenRow, TransactionRow};
 use super::portfolio_service::{self, PortfolioAsset};
 
+/// Alchemy-only networks (NFT v3 + `alchemy_getAssetTransfers`). Filecoin Calibration (`FIL-CAL`)
+/// is excluded: use Glif RPC for balances via `portfolio_service::fetch_balances` instead.
 const BASE_NETWORKS: &[&str] = &[
     "eth-mainnet",
     "base-mainnet",

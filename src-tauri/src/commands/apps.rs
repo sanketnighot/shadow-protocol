@@ -378,6 +378,68 @@ pub async fn apps_filecoin_auto_restore(app: tauri::AppHandle) -> Result<bool, S
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AppsFilecoinRestoreByCidInput {
+    pub cid: String,
+}
+
+#[tauri::command]
+pub async fn apps_filecoin_restore_by_cid(
+    app: tauri::AppHandle,
+    input: AppsFilecoinRestoreByCidInput,
+) -> Result<bool, String> {
+    require_unlocked_session_for_app_settings()?;
+    let cid = input.cid.trim();
+    if cid.is_empty() || cid.len() > 256 {
+        return Err("Invalid CID".to_string());
+    }
+    if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
+        return Err("Filecoin app not active".to_string());
+    }
+    filecoin::restore_snapshot_by_cid(&app, cid, "filecoin_restore_by_cid").await
+}
+
+#[tauri::command]
+pub async fn apps_filecoin_backup_now(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    require_unlocked_session_for_app_settings()?;
+    if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
+        return Err("Filecoin app not active".to_string());
+    }
+    let cfg_raw =
+        apps_state::get_app_config_json("filecoin-storage").map_err(|e: DbError| e.to_string())?;
+    let cfg: serde_json::Value = serde_json::from_str(&cfg_raw).unwrap_or_default();
+    let scope = filecoin::merge_filecoin_backup_scope(serde_json::json!({}), &cfg);
+    let policy = cfg.get("policy").cloned();
+    filecoin::upload_and_record_snapshot(&app, scope, policy).await
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsFilecoinQuoteInput {
+    pub data_size: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn apps_filecoin_quote_cost(
+    app: tauri::AppHandle,
+    input: AppsFilecoinQuoteInput,
+) -> Result<serde_json::Value, String> {
+    if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
+        return Err("Filecoin app not active".to_string());
+    }
+    let size = input.data_size.unwrap_or(1024).clamp(127, 1_065_353_216);
+    filecoin::sidecar_quote_upload_costs(&app, size).await
+}
+
+#[tauri::command]
+pub async fn apps_filecoin_list_datasets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    if !apps_state::is_tool_app_ready("filecoin-storage").map_err(|e| e.to_string())? {
+        return Err("Filecoin app not active".to_string());
+    }
+    filecoin::sidecar_list_datasets(&app).await
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppsSecretInput {
     pub app_id: String,
     pub key: String,

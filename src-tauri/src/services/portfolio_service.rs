@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::chain::{chain_code_to_display, network_to_chain_display};
+use super::chain::{chain_code_to_display, network_to_chain_display, FILECOIN_CALIBRATION_RPC_URL};
 use super::flow_domain::{cadence_account_key, is_cadence_flow_address, is_flow_evm_style_address};
 
 const MAINNET_NETWORKS: &[&str] = &["eth-mainnet", "base-mainnet", "polygon-mainnet"];
@@ -27,6 +27,75 @@ fn flow_portfolio_networks() -> Vec<&'static str> {
 
 /// Native FLOW on Flow EVM uses 18 decimals (standard EVM); Cadence FLOW uses 8.
 const FLOW_EVM_NATIVE_DECIMALS: u8 = 18;
+
+const FILECOIN_CALIBRATION_NATIVE_DECIMALS: u8 = 18;
+
+async fn glif_eth_get_balance(client: &Client, address: &str) -> Option<String> {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1_u8,
+        "method": "eth_getBalance",
+        "params": [address, "latest"],
+    });
+    let resp = client
+        .post(FILECOIN_CALIBRATION_RPC_URL)
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let v: serde_json::Value = resp.json().await.ok()?;
+    if v.get("error").is_some() {
+        return None;
+    }
+    v.get("result")
+        .and_then(|r| r.as_str())
+        .map(std::string::ToString::to_string)
+}
+
+async fn append_filecoin_calibration_native(
+    assets: &mut Vec<PortfolioAsset>,
+    address: &str,
+    client: &Client,
+) {
+    if assets.iter().any(|a| a.chain == "FIL-CAL" && a.token_contract.is_empty()) {
+        return;
+    }
+    let Some(hex_bal) = glif_eth_get_balance(client, address).await else {
+        return;
+    };
+    let s = hex_bal.trim();
+    let raw = s.strip_prefix("0x").unwrap_or(s);
+    if raw.is_empty() || raw.chars().all(|c| c == '0') {
+        return;
+    }
+    let amount = raw_balance_to_amount(&hex_bal, FILECOIN_CALIBRATION_NATIVE_DECIMALS);
+    if amount <= 0.0 {
+        return;
+    }
+    let price = get_token_price_usd("FIL").await.unwrap_or(0.0);
+    let value_usd_f64 = amount * price;
+    let value_usd = format!("${:.2}", value_usd_f64);
+    let balance_formatted = format_balance_display(amount);
+    let balance_display = format!("{balance_formatted} tFIL");
+
+    assets.push(PortfolioAsset {
+        id: format!("asset-FIL-CAL-{}", address.to_lowercase()),
+        symbol: "tFIL".to_string(),
+        chain: "FIL-CAL".to_string(),
+        chain_name: "Filecoin Calibration".to_string(),
+        balance: balance_display,
+        value_usd,
+        asset_type: "native".to_string(),
+        token_contract: String::new(),
+        decimals: FILECOIN_CALIBRATION_NATIVE_DECIMALS,
+        wallet_address: Some(address.to_string()),
+        unified_balance_note: None,
+        flow_cross_vm_bridge_eligible: None,
+    });
+}
 
 async fn post_alchemy_portfolio_tokens(
     client: &Client,
@@ -418,13 +487,12 @@ fn annotate_flow_cross_vm(assets: &mut [PortfolioAsset]) {
 
 /// When portfolio rows come only from SQLite (EVM wallets), we never call [`fetch_balances_mixed`],
 /// so the user's configured Cadence account would be missing. Append it here if absent.
+/// Intentionally does NOT gate on `is_tool_app_ready` — a configured Cadence address is
+/// sufficient to attempt a fetch via the sidecar.
 pub async fn append_configured_cadence_assets_if_absent(
     app: &AppHandle,
     assets: &mut Vec<PortfolioAsset>,
 ) -> Result<(), PortfolioError> {
-    if !super::apps::state::is_tool_app_ready("flow").unwrap_or(false) {
-        return Ok(());
-    }
     let Some(cad_key) = super::apps::flow::configured_cadence_address() else {
         return Ok(());
     };
@@ -480,17 +548,15 @@ pub async fn fetch_balances_mixed(
         all.extend(evm_assets);
     }
 
-    if super::apps::state::is_tool_app_ready("flow").unwrap_or(false) {
-        if let Some(ref cad_key) = super::apps::flow::configured_cadence_address() {
-            let already = addresses.iter().filter_map(|a| cadence_account_key(a.trim())).any(|k| &k == cad_key);
-            if !already {
-                let flow_json = super::apps::flow::fetch_balances(app, cad_key)
-                    .await
-                    .map_err(|e| PortfolioError::FetchFailed(format!("Flow fetch failed: {e}")))?;
-                let parsed = assets_from_flow_sidecar_response(flow_json, cad_key);
-                if !parsed.is_empty() {
-                    all.extend(parsed);
-                }
+    if let Some(ref cad_key) = super::apps::flow::configured_cadence_address() {
+        let already = addresses.iter().filter_map(|a| cadence_account_key(a.trim())).any(|k| &k == cad_key);
+        if !already {
+            let flow_json = super::apps::flow::fetch_balances(app, cad_key)
+                .await
+                .map_err(|e| PortfolioError::FetchFailed(format!("Flow fetch failed: {e}")))?;
+            let parsed = assets_from_flow_sidecar_response(flow_json, cad_key);
+            if !parsed.is_empty() {
+                all.extend(parsed);
             }
         }
     }
@@ -636,6 +702,8 @@ pub async fn fetch_balances(address: &str) -> Result<Vec<PortfolioAsset>, Portfo
     }
 
     merge_flow_evm_native_via_alchemy_rpc(&mut assets, address, &client, &api_key).await;
+
+    append_filecoin_calibration_native(&mut assets, address, &client).await;
 
     assets.sort_by(|a, b| {
         let a_val: f64 = a.value_usd.trim_start_matches('$').parse().unwrap_or(0.0);

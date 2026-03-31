@@ -592,10 +592,39 @@ pub fn insert_portfolio_snapshot_full(
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
+    insert_portfolio_snapshot_at(
+        now,
+        total_usd,
+        top_assets_json,
+        wallet_breakdown_json,
+        chain_breakdown_json,
+        net_flow_usd,
+        performance_usd,
+    )
+}
+
+/// Insert a snapshot row with an explicit timestamp (e.g. Filecoin restore).
+pub fn insert_portfolio_snapshot_at(
+    timestamp: i64,
+    total_usd: &str,
+    top_assets_json: &str,
+    wallet_breakdown_json: &str,
+    chain_breakdown_json: &str,
+    net_flow_usd: &str,
+    performance_usd: &str,
+) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
             "INSERT INTO portfolio_snapshots (timestamp, total_usd, top_assets_json, wallet_breakdown_json, chain_breakdown_json, net_flow_usd, performance_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![now, total_usd, top_assets_json, wallet_breakdown_json, chain_breakdown_json, net_flow_usd, performance_usd],
+            params![
+                timestamp,
+                total_usd,
+                top_assets_json,
+                wallet_breakdown_json,
+                chain_breakdown_json,
+                net_flow_usd,
+                performance_usd
+            ],
         )?;
         Ok(())
     })
@@ -1003,7 +1032,7 @@ pub fn get_strategy_executions(
     })
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortfolioSnapshot {
     pub timestamp: i64,
