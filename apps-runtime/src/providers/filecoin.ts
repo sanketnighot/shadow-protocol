@@ -1,7 +1,6 @@
 import { Synapse, formatUnits, parseUnits } from '@filoz/synapse-sdk';
+import { calibration } from '@filoz/synapse-core/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { filecoinCalibration } from 'viem/chains';
-import type { Chain } from '@filoz/synapse-core/chains';
 
 const USDFC_DECIMALS = 18;
 
@@ -73,7 +72,7 @@ export class SynapseFilecoinStorageProvider implements FilecoinStorageProvider {
       const account = privateKeyToAccount(keyStr as `0x${string}`);
       return Synapse.create({
         account,
-        chain: filecoinCalibration as unknown as Chain,
+        chain: calibration,
         source: "shadow-protocol",
         withCDN,
       });
