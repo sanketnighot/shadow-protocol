@@ -9,14 +9,16 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
+use crate::commands;
 use super::local_db;
 use super::behavior_learner;
 use super::guardrails;
 use super::health_monitor;
-use super::opportunity_scanner;
+use super::market_service;
 use super::task_manager;
 
 /// Orchestrator state.
@@ -90,7 +92,7 @@ static ORCHESTRATOR_CONFIG: Lazy<Arc<RwLock<OrchestratorConfig>>> =
     Lazy::new(|| Arc::new(RwLock::new(OrchestratorConfig::default())));
 
 /// Start the autonomous agent orchestrator.
-pub async fn start_orchestrator() -> Result<(), String> {
+pub async fn start_orchestrator(app: AppHandle) -> Result<(), String> {
     if ORCHESTRATOR_RUNNING.load(Ordering::SeqCst) {
         return Err("Orchestrator is already running".to_string());
     }
@@ -110,24 +112,29 @@ pub async fn start_orchestrator() -> Result<(), String> {
         state.is_running = true;
         state.errors.clear();
     }
+    emit_orchestrator_state(&app).await;
 
     info!("orchestrator.started");
 
     // Spawn the main loop
     tokio::spawn(async move {
-        run_orchestrator_loop().await;
+        run_orchestrator_loop(app).await;
     });
 
     Ok(())
 }
 
 /// Stop the orchestrator.
-pub async fn stop_orchestrator() -> Result<(), String> {
+pub async fn stop_orchestrator(app: Option<&AppHandle>) -> Result<(), String> {
     ORCHESTRATOR_RUNNING.store(false, Ordering::SeqCst);
 
     {
         let mut state = ORCHESTRATOR_STATE.write().await;
         state.is_running = false;
+    }
+
+    if let Some(app) = app {
+        emit_orchestrator_state(app).await;
     }
 
     info!("orchestrator.stopped");
@@ -148,7 +155,7 @@ pub async fn update_config(config: OrchestratorConfig) -> Result<(), String> {
 }
 
 /// Main orchestrator loop.
-async fn run_orchestrator_loop() {
+async fn run_orchestrator_loop(app: AppHandle) {
     let mut last_health_check: i64 = 0;
     let mut last_opportunity_scan: i64 = 0;
 
@@ -176,7 +183,7 @@ async fn run_orchestrator_loop() {
 
         // Run health check if interval elapsed
         if now - last_health_check > config.health_check_interval_secs as i64 {
-            match run_health_check_cycle().await {
+            match run_health_check_cycle(&app).await {
                 Ok(_) => {
                     last_health_check = now;
                     let mut state = ORCHESTRATOR_STATE.write().await;
@@ -192,7 +199,7 @@ async fn run_orchestrator_loop() {
 
         // Run opportunity scan if interval elapsed
         if now - last_opportunity_scan > config.opportunity_scan_interval_secs as i64 {
-            match run_opportunity_scan_cycle().await {
+            match run_opportunity_scan_cycle(&app).await {
                 Ok(count) => {
                     last_opportunity_scan = now;
                     let mut state = ORCHESTRATOR_STATE.write().await;
@@ -207,7 +214,7 @@ async fn run_orchestrator_loop() {
         }
 
         // Run task generation cycle
-        match run_task_generation_cycle().await {
+        match run_task_generation_cycle(&app).await {
             Ok(count) => {
                 let mut state = ORCHESTRATOR_STATE.write().await;
                 state.tasks_generated += count;
@@ -221,6 +228,8 @@ async fn run_orchestrator_loop() {
             }
         }
 
+        emit_orchestrator_state(&app).await;
+
         // Sleep until next cycle
         tokio::time::sleep(Duration::from_secs(config.check_interval_secs)).await;
     }
@@ -228,54 +237,19 @@ async fn run_orchestrator_loop() {
     // Clear running state on exit
     let mut state = ORCHESTRATOR_STATE.write().await;
     state.is_running = false;
+    drop(state);
+    emit_orchestrator_state(&app).await;
 }
 
 /// Run health check cycle.
-async fn run_health_check_cycle() -> Result<(), String> {
+async fn run_health_check_cycle(app: &AppHandle) -> Result<(), String> {
     info!("orchestrator.health_check_start");
-
-    // In production, this would fetch actual portfolio data
-    // For now, use placeholder data
-    let holdings = vec![
-        health_monitor::AssetHolding {
-            symbol: "ETH".to_string(),
-            value_usd: 5000.0,
-            percentage: 50.0,
-            chain: "ethereum".to_string(),
-            is_stablecoin: false,
-        },
-        health_monitor::AssetHolding {
-            symbol: "USDC".to_string(),
-            value_usd: 3000.0,
-            percentage: 30.0,
-            chain: "ethereum".to_string(),
-            is_stablecoin: true,
-        },
-        health_monitor::AssetHolding {
-            symbol: "POL".to_string(),
-            value_usd: 2000.0,
-            percentage: 20.0,
-            chain: "polygon".to_string(),
-            is_stablecoin: false,
-        },
-    ];
-
-    let targets = vec![
-        health_monitor::TargetAllocation {
-            symbol: "ETH".to_string(),
-            target_pct: 40.0,
-        },
-        health_monitor::TargetAllocation {
-            symbol: "USDC".to_string(),
-            target_pct: 40.0,
-        },
-        health_monitor::TargetAllocation {
-            symbol: "POL".to_string(),
-            target_pct: 20.0,
-        },
-    ];
-
-    let summary = health_monitor::run_health_check(&holdings, &targets, 10000.0)?;
+    let context = load_portfolio_context(app).await?;
+    let summary = health_monitor::run_health_check(
+        &context.holdings,
+        &context.targets,
+        context.total_value_usd,
+    )?;
 
     info!(
         overall_score = summary.overall_score,
@@ -287,48 +261,39 @@ async fn run_health_check_cycle() -> Result<(), String> {
 }
 
 /// Run opportunity scan cycle.
-async fn run_opportunity_scan_cycle() -> Result<u32, String> {
+async fn run_opportunity_scan_cycle(app: &AppHandle) -> Result<u32, String> {
     info!("orchestrator.opportunity_scan_start");
-
-    let config = opportunity_scanner::ScannerConfig::default();
-
-    let portfolio = opportunity_scanner::PortfolioContext {
-        total_value_usd: 10000.0,
-        holdings: vec![
-            opportunity_scanner::HoldingInfo {
-                symbol: "ETH".to_string(),
-                value_usd: 5000.0,
-                chain: "ethereum".to_string(),
-            },
-            opportunity_scanner::HoldingInfo {
-                symbol: "USDC".to_string(),
-                value_usd: 3000.0,
-                chain: "ethereum".to_string(),
-            },
-            opportunity_scanner::HoldingInfo {
-                symbol: "POL".to_string(),
-                value_usd: 2000.0,
-                chain: "polygon".to_string(),
-            },
-        ],
-        chain_distribution: {
-            let mut map = HashMap::new();
-            map.insert("ethereum".to_string(), 80.0);
-            map.insert("polygon".to_string(), 20.0);
-            map
+    let addresses = commands::get_addresses(app);
+    let refresh = market_service::refresh_opportunities(
+        Some(app),
+        market_service::MarketRefreshInput {
+            include_research: Some(true),
+            wallet_addresses: Some(addresses.clone()),
+            force: Some(true),
         },
-        stablecoin_pct: 30.0,
-    };
+    )
+    .await?;
 
-    let matches = opportunity_scanner::scan_opportunities(&portfolio, &config)?;
+    let matches = market_service::fetch_opportunities(market_service::MarketFetchInput {
+        category: None,
+        chain: None,
+        include_research: Some(true),
+        wallet_addresses: Some(addresses),
+        limit: Some(10),
+    })
+    .await?;
 
-    info!(count = matches.len(), "orchestrator.opportunities_found");
+    info!(
+        count = matches.items.len(),
+        refreshed = refresh.item_count,
+        "orchestrator.opportunities_found"
+    );
 
-    Ok(matches.len() as u32)
+    Ok(matches.items.len() as u32)
 }
 
 /// Run task generation cycle.
-async fn run_task_generation_cycle() -> Result<u32, String> {
+async fn run_task_generation_cycle(app: &AppHandle) -> Result<u32, String> {
     info!("orchestrator.task_generation_start");
 
     // Check pending tasks limit
@@ -344,23 +309,38 @@ async fn run_task_generation_cycle() -> Result<u32, String> {
         return Ok(0);
     }
 
-    // Get latest health check
+    let addresses = commands::get_addresses(app);
+    let context = load_portfolio_context(app).await?;
+
     let health = health_monitor::get_latest_health()?;
 
     // Build task context
     let (health_alerts, drift_analysis) = if let Some(ref h) = health {
         let alerts: Vec<health_monitor::HealthAlert> = serde_json::from_str(&h.alerts_json)
             .unwrap_or_default();
-        let _recommendations = &h.recommendations_json;
-        (alerts, vec![]) // Would parse drift from recommendations
+        let drift: Vec<health_monitor::DriftAnalysis> =
+            serde_json::from_str(&h.drift_analysis_json).unwrap_or_default();
+        (alerts, drift)
     } else {
         (vec![], vec![])
     };
 
+    let opportunities = market_service::fetch_opportunities(market_service::MarketFetchInput {
+        category: None,
+        chain: None,
+        include_research: Some(true),
+        wallet_addresses: Some(addresses),
+        limit: Some(10),
+    })
+    .await
+    .map(|response| response.items)
+    .unwrap_or_default();
+
     let ctx = task_manager::TaskContext {
-        portfolio_value_usd: 10000.0,
+        portfolio_value_usd: context.total_value_usd,
         health_alerts,
         drift_analysis,
+        opportunities,
         user_preferences: behavior_learner::get_preferences_map(),
     };
 
@@ -381,12 +361,149 @@ async fn run_task_generation_cycle() -> Result<u32, String> {
 
             // Store reasoning chain
             store_reasoning_chain(gen).await;
+            let _ = app.emit("autonomous_task_created", serde_json::json!({
+                "taskId": gen.task.id,
+                "title": gen.task.title,
+            }));
         }
     }
 
     info!(created, "orchestrator.tasks_generated");
 
     Ok(created)
+}
+
+#[derive(Debug, Clone)]
+struct LivePortfolioContext {
+    total_value_usd: f64,
+    holdings: Vec<health_monitor::AssetHolding>,
+    targets: Vec<health_monitor::TargetAllocation>,
+}
+
+async fn load_portfolio_context(app: &AppHandle) -> Result<LivePortfolioContext, String> {
+    let addresses = commands::get_addresses(app);
+    if addresses.is_empty() {
+        return Err("No wallets are connected".to_string());
+    }
+
+    let assets = commands::portfolio_fetch_balances_multi(addresses, app.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut by_symbol_chain: HashMap<(String, String), f64> = HashMap::new();
+    let mut total_value_usd = 0.0;
+
+    for asset in assets {
+        let value = parse_money(&asset.value_usd);
+        if value <= 0.0 {
+            continue;
+        }
+        total_value_usd += value;
+        *by_symbol_chain
+            .entry((asset.symbol.clone(), normalize_market_chain(&asset.chain).to_string()))
+            .or_insert(0.0) += value;
+    }
+
+    if total_value_usd <= 0.0 {
+        return Err("No portfolio value available for orchestrator analysis".to_string());
+    }
+
+    let holdings = by_symbol_chain
+        .into_iter()
+        .map(|((symbol, chain), value_usd)| health_monitor::AssetHolding {
+            symbol: symbol.clone(),
+            value_usd,
+            percentage: (value_usd / total_value_usd) * 100.0,
+            chain,
+            is_stablecoin: is_stable_symbol(&symbol),
+        })
+        .collect::<Vec<_>>();
+    let targets = derive_target_allocations(&holdings);
+
+    Ok(LivePortfolioContext {
+        total_value_usd,
+        holdings,
+        targets,
+    })
+}
+
+fn derive_target_allocations(
+    holdings: &[health_monitor::AssetHolding],
+) -> Vec<health_monitor::TargetAllocation> {
+    if holdings.is_empty() {
+        return Vec::new();
+    }
+
+    let stablecoin_symbols = holdings
+        .iter()
+        .filter(|holding| holding.is_stablecoin)
+        .map(|holding| holding.symbol.clone())
+        .collect::<Vec<_>>();
+    let non_stable_symbols = holdings
+        .iter()
+        .filter(|holding| !holding.is_stablecoin)
+        .map(|holding| holding.symbol.clone())
+        .collect::<Vec<_>>();
+
+    let stable_target_total = if stablecoin_symbols.is_empty() {
+        0.0
+    } else {
+        30.0
+    };
+    let non_stable_total = 100.0 - stable_target_total;
+
+    let stable_each = if stablecoin_symbols.is_empty() {
+        0.0
+    } else {
+        stable_target_total / stablecoin_symbols.len() as f64
+    };
+    let non_stable_each = if non_stable_symbols.is_empty() {
+        0.0
+    } else {
+        non_stable_total / non_stable_symbols.len() as f64
+    };
+
+    holdings
+        .iter()
+        .map(|holding| health_monitor::TargetAllocation {
+            symbol: holding.symbol.clone(),
+            target_pct: if holding.is_stablecoin {
+                stable_each
+            } else {
+                non_stable_each
+            },
+        })
+        .collect()
+}
+
+fn normalize_market_chain(chain_code: &str) -> &'static str {
+    match chain_code {
+        "ETH" | "ETH-SEP" => "ethereum",
+        "BASE" | "BASE-SEP" => "base",
+        "POL" | "POL-AMOY" => "polygon",
+        "FLOW" | "FLOW-EVM" | "FLOW-TEST" | "FLOW-EVM-TEST" => "flow",
+        _ => "multi_chain",
+    }
+}
+
+fn is_stable_symbol(symbol: &str) -> bool {
+    matches!(
+        symbol.to_ascii_uppercase().as_str(),
+        "USDC" | "USDT" | "DAI" | "USDE" | "FDUSD" | "USDBC"
+    )
+}
+
+fn parse_money(raw: &str) -> f64 {
+    raw.chars()
+        .filter(|ch| ch.is_ascii_digit() || *ch == '.' || *ch == '-')
+        .collect::<String>()
+        .parse::<f64>()
+        .unwrap_or(0.0)
+}
+
+async fn emit_orchestrator_state(app: &AppHandle) {
+    let state = get_state().await;
+    let _ = app.emit("autonomous_orchestrator_updated", state);
 }
 
 /// Store reasoning chain for a generated task.
@@ -490,16 +607,18 @@ pub fn get_reasoning_chain(task_id: &str) -> Result<Option<ReasoningChain>, Stri
 }
 
 /// Generate a one-time analysis on demand.
-pub async fn analyze_now() -> Result<AnalysisResult, String> {
+pub async fn analyze_now(app: &AppHandle) -> Result<AnalysisResult, String> {
     let mut result = AnalysisResult::default();
 
     // Run health check
-    match run_health_check_cycle().await {
+    match run_health_check_cycle(app).await {
         Ok(_) => {
             result.health_check_completed = true;
             if let Some(summary) = health_monitor::get_latest_health()? {
                 result.health_score = Some(summary.overall_score);
-                result.alert_count = summary.alerts_json.matches("\"").count() / 2;
+                let alerts: Vec<health_monitor::HealthAlert> =
+                    serde_json::from_str(&summary.alerts_json).unwrap_or_default();
+                result.alert_count = alerts.len();
             }
         }
         Err(e) => {
@@ -508,13 +627,20 @@ pub async fn analyze_now() -> Result<AnalysisResult, String> {
     }
 
     // Run opportunity scan
-    match run_opportunity_scan_cycle().await {
+    match run_opportunity_scan_cycle(app).await {
         Ok(count) => {
             result.opportunity_scan_completed = true;
             result.opportunities_found = count;
         }
         Err(e) => {
             result.errors.push(format!("Opportunity scan: {}", e));
+        }
+    }
+
+    match run_task_generation_cycle(app).await {
+        Ok(_) => {}
+        Err(e) => {
+            result.errors.push(format!("Task generation: {}", e));
         }
     }
 

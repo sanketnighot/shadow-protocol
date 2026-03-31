@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Opportunity scanner service for market opportunity detection and matching.
 //!
 //! Scans for DeFi opportunities (yield, swaps, staking) and matches them

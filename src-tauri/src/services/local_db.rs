@@ -510,6 +510,12 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
         "metadata_json",
         "TEXT NOT NULL DEFAULT '{}'",
     )?;
+    ensure_column(
+        conn,
+        "portfolio_health",
+        "drift_analysis_json",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )?;
 
     // After ensuring columns exist, run data migrations.
     crate::services::strategy_legacy::migrate_legacy_strategies(conn)?;
@@ -1986,6 +1992,7 @@ pub struct PortfolioHealthRecord {
     pub risk_score: f64,
     pub component_scores_json: String,
     pub alerts_json: String,
+    pub drift_analysis_json: String,
     pub recommendations_json: String,
     pub created_at: i64,
 }
@@ -2013,6 +2020,7 @@ pub struct GuardrailViolationRecord {
 }
 
 /// Opportunity match with personalization
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpportunityMatchRecord {
@@ -2087,6 +2095,20 @@ pub fn update_task_status(id: &str, status: &str) -> Result<bool, DbError> {
         let changed = conn.execute(
             "UPDATE tasks SET status = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, status, now],
+        )?;
+        Ok(changed > 0)
+    })
+}
+
+pub fn update_task_related_entities(id: &str, related_entities_json: &str) -> Result<bool, DbError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    with_connection(|conn| {
+        let changed = conn.execute(
+            "UPDATE tasks SET related_entities_json = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, related_entities_json, now],
         )?;
         Ok(changed > 0)
     })
@@ -2424,7 +2446,7 @@ pub fn clear_learned_preferences() -> Result<(), DbError> {
 pub fn insert_portfolio_health(record: &PortfolioHealthRecord) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
-            "INSERT INTO portfolio_health (id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, recommendations_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO portfolio_health (id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, drift_analysis_json, recommendations_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 record.id,
                 record.overall_score,
@@ -2434,6 +2456,7 @@ pub fn insert_portfolio_health(record: &PortfolioHealthRecord) -> Result<(), DbE
                 record.risk_score,
                 record.component_scores_json,
                 record.alerts_json,
+                record.drift_analysis_json,
                 record.recommendations_json,
                 record.created_at,
             ],
@@ -2445,7 +2468,7 @@ pub fn insert_portfolio_health(record: &PortfolioHealthRecord) -> Result<(), DbE
 pub fn get_latest_portfolio_health() -> Result<Option<PortfolioHealthRecord>, DbError> {
     with_connection(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, recommendations_json, created_at FROM portfolio_health ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, drift_analysis_json, recommendations_json, created_at FROM portfolio_health ORDER BY created_at DESC LIMIT 1",
         )?;
         let mut rows = stmt.query([])?;
         if let Some(row) = rows.next()? {
@@ -2458,8 +2481,9 @@ pub fn get_latest_portfolio_health() -> Result<Option<PortfolioHealthRecord>, Db
                 risk_score: row.get(5)?,
                 component_scores_json: row.get(6)?,
                 alerts_json: row.get(7)?,
-                recommendations_json: row.get(8)?,
-                created_at: row.get(9)?,
+                drift_analysis_json: row.get(8)?,
+                recommendations_json: row.get(9)?,
+                created_at: row.get(10)?,
             }))
         } else {
             Ok(None)
@@ -2470,7 +2494,7 @@ pub fn get_latest_portfolio_health() -> Result<Option<PortfolioHealthRecord>, Db
 pub fn get_portfolio_health_history(limit: u32) -> Result<Vec<PortfolioHealthRecord>, DbError> {
     with_connection(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, recommendations_json, created_at FROM portfolio_health ORDER BY created_at DESC LIMIT ?1",
+            "SELECT id, overall_score, drift_score, concentration_score, performance_score, risk_score, component_scores_json, alerts_json, drift_analysis_json, recommendations_json, created_at FROM portfolio_health ORDER BY created_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(params![limit], |row| {
             Ok(PortfolioHealthRecord {
@@ -2482,8 +2506,9 @@ pub fn get_portfolio_health_history(limit: u32) -> Result<Vec<PortfolioHealthRec
                 risk_score: row.get(5)?,
                 component_scores_json: row.get(6)?,
                 alerts_json: row.get(7)?,
-                recommendations_json: row.get(8)?,
-                created_at: row.get(9)?,
+                drift_analysis_json: row.get(8)?,
+                recommendations_json: row.get(9)?,
+                created_at: row.get(10)?,
             })
         })?;
         let mut out = Vec::new();
@@ -2607,6 +2632,7 @@ pub fn get_guardrail_violations(limit: u32) -> Result<Vec<GuardrailViolationReco
 // OPPORTUNITY MATCHES CRUD OPERATIONS
 // ============================================================
 
+#[allow(dead_code)]
 pub fn upsert_opportunity_match(record: &OpportunityMatchRecord) -> Result<(), DbError> {
     with_connection(|conn| {
         conn.execute(
@@ -2639,6 +2665,7 @@ pub fn upsert_opportunity_match(record: &OpportunityMatchRecord) -> Result<(), D
     })
 }
 
+#[allow(dead_code)]
 pub fn get_opportunity_matches(urgency_filter: Option<&str>, limit: u32) -> Result<Vec<OpportunityMatchRecord>, DbError> {
     with_connection(|conn| {
         let query = if urgency_filter.is_some() {

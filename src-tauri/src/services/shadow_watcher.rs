@@ -7,6 +7,8 @@ use serde::Serialize;
 use reqwest::Client;
 use tracing::{error, warn, info};
 
+use super::ai_kernel;
+use super::ai_profiles::{profile_config, AiProfileId};
 use super::sonar_client;
 use super::ollama_client;
 use super::anonymizer;
@@ -113,27 +115,33 @@ async fn run_watcher_cycle(app: &AppHandle, client: &Client) -> Result<(), Strin
         };
 
         // 6. Use Local Ollama to evaluate if this news warrants an alert
-        let eval_prompt = format!(
-            "System: You are an autonomous risk evaluator.
-Context:
-User Portfolio:
-{}
-
-Recent News for {}:
-{}
-
-Task: Determine if this news represents a significant risk to the user's position that requires an immediate alert.
-Rules:
-- If news is minor or positive, do NOT alert.
-- If news involves exploits, major liquidations, or critical bearish catalysts, output an ALERT.
-- Be concise.
-
-Output format (JSON ONLY):
-{{\"alert\": true/false, \"severity\": \"warning/critical\", \"reason\": \"short reason\", \"suggestion\": \"short action\"}}"
-        , anon_context, asset, news);
-
-        let messages = vec![("user".into(), eval_prompt)];
-        let eval_resp = match ollama_client::chat(client, DEFAULT_OLLAMA_MODEL, &messages, Some(4096)).await {
+        let profile = profile_config(AiProfileId::RiskWatcher);
+        let request = ai_kernel::AiKernelRequest {
+            profile: AiProfileId::RiskWatcher,
+            model: DEFAULT_OLLAMA_MODEL.to_string(),
+            messages: vec![ai_kernel::AiKernelMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Evaluate whether the following market news warrants an immediate portfolio alert.\n\nAnonymized portfolio:\n{}\n\nAsset: {}\n\nRecent news:\n{}",
+                    anon_context, asset, news
+                ),
+            }],
+            num_ctx: Some(profile.default_num_ctx),
+            rolling_summary: None,
+            structured_facts: None,
+            agent_context: super::tool_router::AgentContext::default(),
+        };
+        let messages = ai_kernel::build_request_messages(app, &request);
+        let eval_resp = match ollama_client::chat_with_settings(
+            client,
+            DEFAULT_OLLAMA_MODEL,
+            &messages,
+            ai_kernel::resolve_num_ctx(&request),
+            profile.temperature,
+            Some(risk_watcher_schema()),
+        )
+        .await
+        {
             Ok(r) => r,
             Err(e) => {
                 // Don't fail the whole cycle for LLM errors - it's optional
@@ -168,11 +176,18 @@ struct EvalDecision {
 }
 
 fn parse_eval_decision(text: &str) -> Option<EvalDecision> {
-    let cleaned = if let Some(start) = text.find('{') {
-        let end = text.rfind('}')?;
-        &text[start..=end]
-    } else {
-        text
-    };
-    serde_json::from_str(cleaned).ok()
+    serde_json::from_str(text).ok()
+}
+
+fn risk_watcher_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "alert": { "type": "boolean" },
+            "severity": { "type": "string" },
+            "reason": { "type": "string" },
+            "suggestion": { "type": "string" }
+        },
+        "required": ["alert", "severity", "reason", "suggestion"]
+    })
 }

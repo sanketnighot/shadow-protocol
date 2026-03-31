@@ -4,10 +4,10 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::audit;
+use super::ai_kernel;
 use super::local_db::{self, ApprovalRecord};
 use super::ollama_client;
 use super::tool_router::{self, AgentContext, ToolResult};
-use super::agent_state::{read_soul, read_memory};
 use tauri::AppHandle;
 
 const MAX_TOOL_ROUNDS: u32 = 5;
@@ -21,6 +21,8 @@ pub struct ChatAgentInput {
     pub wallet_address: Option<String>,
     pub wallet_addresses: Option<Vec<String>>,
     pub num_ctx: Option<u32>,
+    /// Rolling summary for older messages when the frontend has compacted the thread.
+    pub rolling_summary: Option<String>,
     /// Recent structured facts from tool outputs for follow-up context.
     pub structured_facts: Option<String>,
     /// When true, advice pipeline simulates; no swap execution.
@@ -216,36 +218,27 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
         all_addresses: wallet_addresses.clone(),
     };
 
-    let base_tools_prompt = tool_router::tools_system_prompt(&agent_ctx);
-    
-    // Inject Soul and Memory
-    let soul = read_soul(app).unwrap_or_default();
-    let memory = read_memory(app).unwrap_or_default();
-    
-    let mut memory_facts = String::new();
-    if !memory.facts.is_empty() {
-        memory_facts.push_str("\n\nUser Profile & Memory Facts:\n");
-        for fact in memory.facts {
-            memory_facts.push_str(&format!("- {}\n", fact.fact));
-        }
-    }
-
-    let tools_prompt = format!(
-        "{}\n\nAgent Soul / Persona:\n{}\nRisk Appetite: {}\nPreferred Chains: {}{}",
-        base_tools_prompt,
-        soul.persona,
-        soul.risk_appetite,
-        soul.preferred_chains.join(", "),
-        memory_facts
-    );
-
-    let mut built_messages: Vec<(String, String)> = vec![("system".into(), tools_prompt)];
-    
-    // Add existing conversation history
-    for m in &input.messages {
-        let role = if m.role == "assistant" { "assistant" } else { "user" };
-        built_messages.push((role.to_string(), m.content.clone()));
-    }
+    let request = ai_kernel::AiKernelRequest {
+        profile: super::ai_profiles::AiProfileId::ChatAssistant,
+        model: input.model.clone(),
+        messages: input
+            .messages
+            .iter()
+            .map(|message| ai_kernel::AiKernelMessage {
+                role: if message.role == "assistant" {
+                    "assistant".to_string()
+                } else {
+                    "user".to_string()
+                },
+                content: message.content.clone(),
+            })
+            .collect(),
+        num_ctx: input.num_ctx,
+        rolling_summary: input.rolling_summary.clone(),
+        structured_facts: input.structured_facts.clone(),
+        agent_context: agent_ctx.clone(),
+    };
+    let mut built_messages: Vec<(String, String)> = ai_kernel::build_request_messages(app, &request);
 
     let mut blocks = Vec::new();
     let mut current_round = 0;
@@ -263,7 +256,7 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
             &client,
             &input.model,
             &built_messages,
-            input.num_ctx,
+            ai_kernel::resolve_num_ctx(&request),
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -295,7 +288,7 @@ pub async fn run_agent(input: ChatAgentInput, app: &AppHandle) -> Result<ChatAge
                         content: content.clone(),
                     });
 
-                    let observation = format!("Observation from {}: {}", tool_name, content);
+                    let observation = ai_kernel::compact_tool_observation(&tool_name, &content);
                     built_messages.push(("user".into(), observation));
                 }
                 ToolResult::ApprovalRequired { tool_name, payload } => {

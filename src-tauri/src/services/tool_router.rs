@@ -910,7 +910,8 @@ pub async fn route_and_execute(
 }
 
 /// Runtime context injected into the system prompt so the LLM knows what app state exists.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentContext {
     pub wallet_count: u32,
     pub active_address: Option<String>,

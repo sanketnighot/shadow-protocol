@@ -69,6 +69,8 @@ pub async fn submit_schedule_intent(
     app: &AppHandle,
     intent_json: serde_json::Value,
     strategy_id: Option<&str>,
+    handler_type: Option<&str>,
+    cron_expression: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let addr = configured_cadence_address().ok_or_else(|| {
         "Configure cadenceAddress in Flow app settings (16 hex Cadence account).".to_string()
@@ -112,8 +114,8 @@ pub async fn submit_schedule_intent(
         id: uuid::Uuid::new_v4().to_string(),
         strategy_id: strategy_id.map(|s| s.to_string()),
         flow_scheduler_numeric_id: None,
-        handler_type: "intent_log".to_string(),
-        cron_expression: None,
+        handler_type: handler_type.unwrap_or("intent_log").to_string(),
+        cron_expression: cron_expression.map(|value| value.to_string()),
         status: "submitted".to_string(),
         priority: "medium".to_string(),
         fee_paid: String::new(),

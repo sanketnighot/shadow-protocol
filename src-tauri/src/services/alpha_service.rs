@@ -7,10 +7,11 @@ use serde::Serialize;
 use reqwest::Client;
 use tracing::{error, warn, info};
 
+use super::ai_kernel;
+use super::ai_profiles::{profile_config, AiProfileId};
 use super::sonar_client;
 use super::ollama_client;
 use super::market_service::MarketOpportunity;
-use crate::services::agent_state::{read_soul, read_memory};
 
 const ALPHA_INTERVAL_SECS: u64 = 86400; // 24 hours
 const FIRST_RUN_LOG_DELAY_SECS: u64 = 10; // Delay first cycle
@@ -89,54 +90,58 @@ async fn run_alpha_cycle(app: &AppHandle, client: &Client) -> Result<(), String>
         }
     };
 
-    // 3. Read soul and memory for personalized context
-    let soul = read_soul(app).unwrap_or_default();
-    let memory = read_memory(app).unwrap_or_default();
-
-    let memory_facts = if memory.facts.is_empty() {
-        String::new()
-    } else {
-        let facts: Vec<String> = memory.facts.iter()
-            .map(|f| format!("- {}", f.fact))
-            .collect();
-        format!("\n\nUser Profile & Memory Facts:\n{}", facts.join("\n"))
+    let profile = profile_config(AiProfileId::AlphaBrief);
+    let request = ai_kernel::AiKernelRequest {
+        profile: AiProfileId::AlphaBrief,
+        model: model.to_string(),
+        messages: vec![ai_kernel::AiKernelMessage {
+            role: "user".to_string(),
+            content: format!(
+                "Synthesize today's market research into a concise daily alpha brief.\n\nMarket research:\n{}",
+                news
+            ),
+        }],
+        num_ctx: Some(profile.default_num_ctx.min(4096)),
+        rolling_summary: None,
+        structured_facts: None,
+        agent_context: super::tool_router::AgentContext::default(),
     };
-
-    // 4. Synthesize using local LLM with personalized context
-    let prompt = format!(
-        "System: {}\n\nRisk Appetite: {}\nPreferred Chains: {}{}\n\nTask: Synthesize the news into a 2-sentence 'Daily Alpha Brief' for a user with the above profile and context.\nIf a specific trade is mentioned, generate a JSON opportunity.\n\nToday's Market News:\n{}\n\nOutput format (JSON ONLY):\n{{\"headline\": \"short title\", \"summary\": \"2 sentences\", \"opportunity\": null or {{\"type\": \"swap\", \"asset\": \"...\"}}}}",
-        soul.persona,
-        soul.risk_appetite,
-        soul.preferred_chains.join(", "),
-        memory_facts,
-        news
-    );
-
-    let messages = vec![("user".into(), prompt)];
-    let resp = match ollama_client::chat(client, model, &messages, Some(2048)).await {
+    let messages = ai_kernel::build_request_messages(app, &request);
+    let resp = match ollama_client::chat_with_settings(
+        client,
+        model,
+        &messages,
+        ai_kernel::resolve_num_ctx(&request),
+        profile.temperature,
+        Some(alpha_brief_schema()),
+    )
+    .await
+    {
         Ok(r) => r,
         Err(e) => return Err(format!("LLM synthesis failed with model {}: {}", model, e)),
     };
 
-    if let Some(mut brief) = parse_brief(&resp) {
-        if let Ok(opportunity) = super::market_service::top_cached_opportunity() {
-            brief.opportunity_id = opportunity.as_ref().map(|item| item.id.clone());
-            brief.opportunity = opportunity;
-        }
-        let _ = app.emit("shadow_brief", brief);
+    let mut brief = parse_brief(&resp).ok_or_else(|| "Invalid alpha brief JSON".to_string())?;
+    if let Ok(opportunity) = super::market_service::top_cached_opportunity() {
+        brief.opportunity_id = opportunity.as_ref().map(|item| item.id.clone());
+        brief.opportunity = opportunity;
     }
+    let _ = app.emit("shadow_brief", brief);
 
     Ok(())
 }
 
 fn parse_brief(text: &str) -> Option<ShadowBrief> {
-    let cleaned = if let Some(start) = text.find('{') {
-        let end = text.rfind('}')?;
-        &text[start..=end]
-    } else {
-        text
-    };
+    serde_json::from_str(text).ok()
+}
 
-    // In a real app, we'd map this to ShadowBrief properly
-    serde_json::from_str(cleaned).ok()
+fn alpha_brief_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "headline": { "type": "string" },
+            "summary": { "type": "string" }
+        },
+        "required": ["headline", "summary"]
+    })
 }

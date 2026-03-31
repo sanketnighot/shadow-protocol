@@ -14,11 +14,16 @@ struct ChatRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<ChatOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
 struct ChatOptions {
-    num_ctx: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_ctx: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +54,17 @@ pub async fn chat(
     messages: &[(String, String)],
     num_ctx: Option<u32>,
 ) -> Result<String, OllamaError> {
+    chat_with_settings(client, model, messages, num_ctx, None, None).await
+}
+
+pub async fn chat_with_settings(
+    client: &Client,
+    model: &str,
+    messages: &[(String, String)],
+    num_ctx: Option<u32>,
+    temperature: Option<f32>,
+    format: Option<serde_json::Value>,
+) -> Result<String, OllamaError> {
     let ollama_messages: Vec<OllamaMessage> = messages
         .iter()
         .map(|(role, content)| OllamaMessage {
@@ -61,7 +77,12 @@ pub async fn chat(
         model: model.to_string(),
         messages: ollama_messages,
         stream: false,
-        options: num_ctx.map(|n| ChatOptions { num_ctx: n }),
+        options: if num_ctx.is_some() || temperature.is_some() {
+            Some(ChatOptions { num_ctx, temperature })
+        } else {
+            None
+        },
+        format,
     };
 
     let url = format!("{}/api/chat", OLLAMA_HOST);

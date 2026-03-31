@@ -195,6 +195,8 @@ pub fn run_health_check(
             .unwrap_or_else(|_| "[]".to_string()),
         alerts_json: serde_json::to_string(&summary.alerts)
             .unwrap_or_else(|_| "[]".to_string()),
+        drift_analysis_json: serde_json::to_string(&summary.drift_analysis)
+            .unwrap_or_else(|_| "[]".to_string()),
         recommendations_json: serde_json::to_string(&summary.recommendations)
             .unwrap_or_else(|_| "[]".to_string()),
         created_at: now,
