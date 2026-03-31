@@ -101,6 +101,8 @@ describe("parseFilecoinConfig", () => {
     expect(c.policy.ttl).toBe(180);
     expect(c.policy.costLimit).toBe(0.01);
     expect(c.backupScope.agentMemory).toBe(true);
+    expect(c.backupScope.transactionHistory).toBe(false);
+    expect(c.backupScope.portfolioSnapshots).toBe(false);
   });
   
   it("parses valid config successfully", () => {

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 
 import { QUICK_ACTIONS } from "@/data/mock";
@@ -33,6 +33,9 @@ export function usePortfolio(params: PortfolioParams = {}) {
   const { addresses = [], activeAddress = null } = params;
   const addressesToFetch =
     addresses.length > 0 ? addresses : activeAddress ? [activeAddress] : [];
+
+  const queryClient = useQueryClient();
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
 
   const {
     data: rawAssets = [],
@@ -154,6 +157,22 @@ export function usePortfolio(params: PortfolioParams = {}) {
     }));
   }, [history]);
 
+  const forceRefresh = async () => {
+    if (addressesToFetch.length === 0) return;
+    setIsForceRefreshing(true);
+    try {
+      const fresh = await invoke<PortfolioAsset[]>("portfolio_force_refresh", {
+        addresses: addressesToFetch,
+      });
+      queryClient.setQueryData(
+        ["portfolio", "balances", addressesToFetch],
+        fresh,
+      );
+    } finally {
+      setIsForceRefreshing(false);
+    }
+  };
+
   return {
     assets,
     totalValueLabel,
@@ -170,8 +189,9 @@ export function usePortfolio(params: PortfolioParams = {}) {
     allocationTarget: history?.allocationTarget ?? [],
     performanceSummary: history?.summary ?? null,
     isLoading,
-    isFetching,
+    isFetching: isFetching || isForceRefreshing,
     refetch,
+    forceRefresh,
     balanceError: isError
       ? (typeof error === "string"
           ? error

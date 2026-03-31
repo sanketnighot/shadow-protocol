@@ -116,6 +116,8 @@ export type FilecoinIntegrationConfig = {
     agentMemory: boolean;
     configs: boolean;
     strategies: boolean;
+    transactionHistory: boolean;
+    portfolioSnapshots: boolean;
   };
   policy: {
     ttl: number;
@@ -244,6 +246,10 @@ export function parseFilecoinConfig(raw: unknown): FilecoinIntegrationConfig {
       agentMemory: typeof scope.agentMemory === "boolean" ? scope.agentMemory : true,
       configs: typeof scope.configs === "boolean" ? scope.configs : true,
       strategies: typeof scope.strategies === "boolean" ? scope.strategies : true,
+      transactionHistory:
+        typeof scope.transactionHistory === "boolean" ? scope.transactionHistory : false,
+      portfolioSnapshots:
+        typeof scope.portfolioSnapshots === "boolean" ? scope.portfolioSnapshots : false,
     },
     policy: {
       ttl: typeof policy.ttl === "number" ? policy.ttl : 180,
@@ -383,4 +389,39 @@ export type AppBackupRow = {
 
 export async function listAppBackups(): Promise<AppBackupRow[]> {
   return invoke<AppBackupRow[]>("apps_list_backups", {});
+}
+
+export type FilecoinCostQuote = {
+  ratePerMonthUsdfc: string;
+  depositNeededUsdfc: string;
+  ready: boolean;
+  needsFwssMaxApproval: boolean;
+};
+
+export type FilecoinDataSetRow = {
+  pdpVerifierDataSetId?: string;
+  activePieceCount?: string;
+  isLive?: boolean;
+  withCDN?: boolean;
+  metadata?: unknown;
+};
+
+export async function fetchFilecoinCostQuote(dataSize: number): Promise<FilecoinCostQuote> {
+  return invoke<FilecoinCostQuote>("apps_filecoin_quote_cost", {
+    input: { dataSize },
+  });
+}
+
+export async function fetchFilecoinDatasets(): Promise<{ dataSets: FilecoinDataSetRow[] }> {
+  return invoke<{ dataSets: FilecoinDataSetRow[] }>("apps_filecoin_list_datasets", {});
+}
+
+export async function restoreFilecoinByCid(cid: string): Promise<boolean> {
+  return invoke<boolean>("apps_filecoin_restore_by_cid", {
+    input: { cid },
+  });
+}
+
+export async function backupFilecoinNow(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("apps_filecoin_backup_now", {});
 }

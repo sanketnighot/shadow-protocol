@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  backupFilecoinNow,
   fetchAppsMarketplace,
   fetchAppsRefreshHealth,
   fetchAppsRuntimeHealth,
+  fetchFilecoinCostQuote,
+  fetchFilecoinDatasets,
   getAppConfig,
   installApp,
   listAppBackups,
+  restoreFilecoinByCid,
   setAppConfig,
   setAppEnabled,
   uninstallApp,
@@ -87,6 +91,49 @@ export function useAppBackupsQuery(panelOpen: boolean, filecoinOnly: boolean) {
     queryKey: ["apps", "backups"],
     queryFn: listAppBackups,
     enabled: panelOpen && filecoinOnly,
+  });
+}
+
+export function useFilecoinCostQuoteQuery(dataSize: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["apps", "filecoin-quote", dataSize] as const,
+    queryFn: () => fetchFilecoinCostQuote(dataSize),
+    enabled: enabled && dataSize >= 127,
+    staleTime: 60_000,
+  });
+}
+
+export function useFilecoinDatasetsQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: ["apps", "filecoin-datasets"] as const,
+    queryFn: fetchFilecoinDatasets,
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useFilecoinBackupNowMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: backupFilecoinNow,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["apps", "backups"] });
+      await qc.invalidateQueries({ queryKey: QK });
+      await qc.invalidateQueries({ queryKey: ["apps", "filecoin-datasets"] });
+      await qc.invalidateQueries({ queryKey: ["apps", "filecoin-quote"] });
+    },
+  });
+}
+
+export function useFilecoinRestoreByCidMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: restoreFilecoinByCid,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["apps", "backups"] });
+      await qc.invalidateQueries({ queryKey: ["portfolio", "balances"] });
+      await qc.invalidateQueries({ queryKey: ["portfolio", "transactions"] });
+    },
   });
 }
 
