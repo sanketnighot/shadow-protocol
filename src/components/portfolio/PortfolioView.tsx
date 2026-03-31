@@ -32,7 +32,7 @@ type PortfolioTabId = "tokens" | "nfts" | "transactions";
 
 export function PortfolioView() {
   const { addresses, activeAddress, refreshWallets } = useWalletStore();
-  const { assets, totalValueLabel, dailyChangeLabel, chains, series, targetSeries, isLoading, isFetching, refetch, balanceError } = usePortfolio({
+  const { assets, totalValueLabel, dailyChangeLabel, chains, series, targetSeries, isLoading, isFetching, forceRefresh, balanceError } = usePortfolio({
     addresses,
     activeAddress,
   });
@@ -74,9 +74,14 @@ export function PortfolioView() {
         (type === "token" && asset.type === "native");
 
       const hasBalance = parseFloat(asset.balance.replace(/[^0-9.]/g, "")) > 0;
-      const isTestnet = ["ETH-SEP", "BASE-SEP", "POL-AMOY", "FLOW-TEST", "FLOW-EVM-TEST"].includes(
-        asset.chain,
-      );
+      const isTestnet = [
+        "ETH-SEP",
+        "BASE-SEP",
+        "POL-AMOY",
+        "FLOW-TEST",
+        "FLOW-EVM-TEST",
+        "FIL-CAL",
+      ].includes(asset.chain);
       // If the user picked a specific chain (e.g. Flow EVM Testnet), show those rows even when
       // developer mode is off — otherwise the filter button and empty state contradict each other.
       const viewingThisChainExplicitly = chain !== "All" && asset.chain === chain;
@@ -128,7 +133,7 @@ export function PortfolioView() {
             variant="ghost"
             size="sm"
             className="rounded-sm bg-white/5 hover:bg-white/10"
-            onClick={() => void refetch()}
+            onClick={() => void forceRefresh()}
             disabled={isFetching}
           >
             <RefreshCw

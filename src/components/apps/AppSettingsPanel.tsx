@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
+  Activity,
+  Copy,
   HardDrive,
   ShieldCheck,
   Waves,
   Zap,
-  Activity,
 } from "lucide-react";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
@@ -33,6 +34,10 @@ import {
   useAppConfigQuery,
   useAppsMutations,
   useAppsRuntimeHealthQuery,
+  useFilecoinBackupNowMutation,
+  useFilecoinCostQuoteQuery,
+  useFilecoinDatasetsQuery,
+  useFilecoinRestoreByCidMutation,
   useSetAppConfigMutation,
 } from "@/hooks/useApps";
 import { cn } from "@/lib/utils";
@@ -583,12 +588,40 @@ function formatBackupTime(createdAt: number): string {
   }
 }
 
+function formatBackupBytes(n: number | null): string {
+  if (n == null || n <= 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function filecoinStatusBadgeClass(status: string): string {
+  if (status === "complete") return "border-emerald-500/40 text-emerald-400";
+  if (status === "partial") return "border-amber-500/40 text-amber-400";
+  return "border-red-500/40 text-red-400";
+}
+
 function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: boolean }) {
   const { data: raw, isLoading } = useAppConfigQuery(appId, panelOpen);
   const backups = useAppBackupsQuery(panelOpen, true);
   const save = useSetAppConfigMutation();
+  const backupNow = useFilecoinBackupNowMutation();
+  const restoreByCid = useFilecoinRestoreByCidMutation();
   const addNotification = useUiStore((s) => s.addNotification);
   const [draft, setDraft] = useState<FilecoinIntegrationConfig>(() => parseFilecoinConfig({}));
+
+  const estimateQuoteSize = useMemo(() => {
+    const first = backups.data?.[0]?.sizeBytes;
+    return typeof first === "number" && first >= 127 ? first : 2048;
+  }, [backups.data]);
+
+  const quoteQ = useFilecoinCostQuoteQuery(estimateQuoteSize, panelOpen && !isLoading);
+  const datasetsQ = useFilecoinDatasetsQuery(panelOpen && !isLoading);
+
+  const totalBackupBytes = useMemo(() => {
+    const list = backups.data ?? [];
+    return list.reduce((acc, b) => acc + (typeof b.sizeBytes === "number" ? b.sizeBytes : 0), 0);
+  }, [backups.data]);
 
   useEffect(() => {
     if (raw !== undefined) {
@@ -625,6 +658,78 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
         Snapshots are JSON payloads (upgrade path: keychain-sealed ciphertext). Rows below are
         recorded locally after each successful Synapse upload; pricing uses on-chain USDFC quotes.
       </p>
+
+      <div className="space-y-3 rounded-sm border border-border bg-secondary/40 p-3">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted">Storage overview</p>
+        <div className="grid gap-2 text-[10px] font-mono text-muted sm:grid-cols-2">
+          <div>
+            Backups: <span className="text-foreground">{backups.data?.length ?? 0}</span>
+          </div>
+          <div>
+            Total size:{" "}
+            <span className="text-foreground">{formatBackupBytes(totalBackupBytes || null)}</span>
+          </div>
+          <div>
+            Active datasets:{" "}
+            <span className="text-foreground">
+              {datasetsQ.isLoading
+                ? "…"
+                : Array.isArray(datasetsQ.data?.dataSets)
+                  ? datasetsQ.data.dataSets.length
+                  : "—"}
+            </span>
+          </div>
+          <div>
+            Quote ({estimateQuoteSize} B):{" "}
+            <span className="text-foreground">
+              {quoteQ.isLoading
+                ? "…"
+                : quoteQ.data
+                  ? `${quoteQ.data.ratePerMonthUsdfc} USDFC/mo · dep ${quoteQ.data.depositNeededUsdfc}`
+                  : "—"}
+            </span>
+          </div>
+        </div>
+        {backups.data && backups.data.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={cn("text-[9px]", filecoinStatusBadgeClass(backups.data[0].status))}
+            >
+              Latest: {backups.data[0].status}
+            </Badge>
+          </div>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 w-full text-[10px] font-mono uppercase tracking-wider"
+          disabled={backupNow.isPending || isLoading}
+          onClick={() => {
+            void backupNow.mutateAsync().then(
+              () => {
+                addNotification({
+                  title: "Backup queued",
+                  description: "Filecoin snapshot uploaded or recorded.",
+                  type: "success",
+                  createdAtLabel: "Just now",
+                });
+              },
+              () => {
+                addNotification({
+                  title: "Backup failed",
+                  description: "Could not complete Filecoin backup.",
+                  type: "warning",
+                  createdAtLabel: "Just now",
+                });
+              },
+            );
+          }}
+        >
+          {backupNow.isPending ? "Backing up…" : "Backup now"}
+        </Button>
+      </div>
 
       {isLoading ? (
         <p className="text-xs font-mono text-muted">Loading configuration…</p>
@@ -726,6 +831,8 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
                 ["agentMemory", "Agent memory + persona (soul)"],
                 ["configs", "Integration configs (app_configs)"],
                 ["strategies", "Strategies (active_strategies)"],
+                ["transactionHistory", "Transaction history (SQLite)"],
+                ["portfolioSnapshots", "Portfolio snapshots (history)"],
               ] as const
             ).map(([key, label]) => (
               <div key={key} className="flex items-center gap-2">
@@ -792,22 +899,107 @@ function FilecoinSettings({ appId, panelOpen }: { appId: string; panelOpen: bool
           <p className="text-xs text-muted">No backups recorded yet.</p>
         ) : (
           <ul className="max-h-40 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-            {(backups.data ?? []).map((b) => (
-              <li
-                key={b.id}
-                className="rounded-sm border border-border bg-secondary px-3 py-2 text-[11px] font-mono text-muted"
-              >
-                <div className="flex justify-between gap-2 text-foreground">
-                  <span className="truncate">{b.cid}</span>
-                  <Badge variant="outline" className="shrink-0 text-[9px]">
-                    {b.status}
-                  </Badge>
-                </div>
-                <div className="mt-1 text-[10px] opacity-80">
-                  {formatBackupTime(b.createdAt)} · v{b.encryptionVersion}
-                </div>
-              </li>
-            ))}
+            {(backups.data ?? []).map((b) => {
+              const rowMeta = parseFilecoinBackupMetadata(b.metadataJson);
+              const copiesLabel =
+                typeof rowMeta.committedCopies === "number"
+                  ? `${rowMeta.committedCopies}${
+                      typeof rowMeta.requestedCopies === "number"
+                        ? `/${rowMeta.requestedCopies}`
+                        : ""
+                    } copies`
+                  : null;
+              return (
+                <li
+                  key={b.id}
+                  className="rounded-sm border border-border bg-secondary px-3 py-2 text-[11px] font-mono text-muted"
+                >
+                  <div className="flex justify-between gap-2 text-foreground">
+                    <span className="truncate" title={b.cid}>
+                      {b.cid}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn("shrink-0 text-[9px]", filecoinStatusBadgeClass(b.status))}
+                    >
+                      {b.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] opacity-80">
+                    <span>
+                      {formatBackupTime(b.createdAt)} · v{b.encryptionVersion}
+                    </span>
+                    <span>· {formatBackupBytes(b.sizeBytes)}</span>
+                    {copiesLabel ? <span>· {copiesLabel}</span> : null}
+                    {rowMeta.storageRatePerMonthUsdfc ? (
+                      <span>· {rowMeta.storageRatePerMonthUsdfc} USDFC/mo</span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[9px] font-mono uppercase"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(b.cid).then(
+                          () => {
+                            addNotification({
+                              title: "Copied",
+                              description: "Piece CID copied to clipboard.",
+                              type: "success",
+                              createdAtLabel: "Just now",
+                            });
+                          },
+                          () => {
+                            addNotification({
+                              title: "Copy failed",
+                              description: "Clipboard unavailable.",
+                              type: "warning",
+                              createdAtLabel: "Just now",
+                            });
+                          },
+                        );
+                      }}
+                    >
+                      <Copy className="size-3 mr-1" />
+                      Copy CID
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[9px] font-mono uppercase"
+                      disabled={restoreByCid.isPending}
+                      onClick={() => {
+                        void restoreByCid.mutateAsync(b.cid).then(
+                          (ok) => {
+                            addNotification({
+                              title: ok ? "Restore applied" : "Nothing to restore",
+                              description: ok
+                                ? "Snapshot merged into local state."
+                                : "No matching data in snapshot.",
+                              type: ok ? "success" : "warning",
+                              createdAtLabel: "Just now",
+                            });
+                          },
+                          () => {
+                            addNotification({
+                              title: "Restore failed",
+                              description: "Could not download or apply snapshot.",
+                              type: "warning",
+                              createdAtLabel: "Just now",
+                            });
+                          },
+                        );
+                      }}
+                    >
+                      Restore
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

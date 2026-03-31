@@ -16,6 +16,7 @@ function chainBadge(chain: string): string {
     "ETH-SEP": "ES",
     "BASE-SEP": "BS",
     "POL-AMOY": "PA",
+    "FIL-CAL": "FC",
   };
   return map[chain] ?? chain.slice(0, 2).toUpperCase();
 }

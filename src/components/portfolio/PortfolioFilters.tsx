@@ -28,6 +28,7 @@ const CHAINS: {
   { label: "Polygon Amoy", value: "POL-AMOY", testnet: true },
   { label: "Flow Testnet (Cadence)", value: "FLOW-TEST", testnet: true, appGated: "flow" },
   { label: "Flow EVM Testnet", value: "FLOW-EVM-TEST", testnet: true, appGated: "flow" },
+  { label: "Filecoin Calibration", value: "FIL-CAL", testnet: true },
 ];
 
 const TYPES = [
