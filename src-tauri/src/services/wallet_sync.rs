@@ -18,15 +18,9 @@ const BASE_NETWORKS: &[&str] = &[
     "polygon-amoy",
 ];
 
-/// Build the list of networks to sync, conditionally including Flow when the app is installed.
+/// Build the list of EVM networks to sync via Alchemy.
 fn active_sync_networks() -> Vec<&'static str> {
-    let mut nets: Vec<&str> = BASE_NETWORKS.to_vec();
-    let flow_ready = super::apps::state::is_tool_app_ready("flow").unwrap_or(false);
-    if flow_ready {
-        nets.push("flow-mainnet");
-        nets.push("flow-testnet");
-    }
-    nets
+    BASE_NETWORKS.to_vec()
 }
 
 #[derive(Debug, Clone, Serialize)]

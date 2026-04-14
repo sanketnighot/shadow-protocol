@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Wallet } from "lucide-react";
 
 import { AssetList } from "@/components/portfolio/AssetList";
-import { BridgeModal } from "@/components/portfolio/BridgeModal";
 import { ReceiveModal } from "@/components/portfolio/ReceiveModal";
 import { NftGrid } from "@/components/portfolio/NftGrid";
 import { PortfolioFilters } from "@/components/portfolio/PortfolioFilters";
@@ -18,7 +17,6 @@ import { WalletEmptyState } from "@/components/wallet/WalletEmptyState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { Button } from "@/components/ui/button";
-import { useAppsMarketplace } from "@/hooks/useApps";
 import { useNfts } from "@/hooks/useNfts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -42,11 +40,6 @@ export function PortfolioView() {
   });
   const { success } = useToast();
   const developerModeEnabled = useUiStore((s) => s.developerModeEnabled);
-  const { data: marketplaceApps } = useAppsMarketplace();
-  const installedAppIds = useMemo(
-    () => (marketplaceApps ?? []).filter((a) => a.isInstalled && a.status === "active").map((a) => a.id),
-    [marketplaceApps],
-  );
   const [activeTab, setActiveTab] = useState<PortfolioTabId>("tokens");
   const [isReceiveOpen, setReceiveOpen] = useState(false);
   const [chain, setChain] = useState("All");
@@ -77,12 +70,7 @@ export function PortfolioView() {
         "ETH-SEP",
         "BASE-SEP",
         "POL-AMOY",
-        "FLOW-TEST",
-        "FLOW-EVM-TEST",
-        "FIL-CAL",
       ].includes(asset.chain);
-      // If the user picked a specific chain (e.g. Flow EVM Testnet), show those rows even when
-      // developer mode is off — otherwise the filter button and empty state contradict each other.
       const viewingThisChainExplicitly = chain !== "All" && asset.chain === chain;
       const devModeMatches =
         !isTestnet || developerModeEnabled || viewingThisChainExplicitly;
@@ -114,6 +102,9 @@ export function PortfolioView() {
     if (action === "receive") {
       setReceiveOpen(true);
       return;
+    }
+    if (action === "bridge") {
+      return; // Bridge removed for MVP
     }
     if (selectedAsset) {
       openAction(action, selectedAsset.id);
@@ -204,15 +195,12 @@ export function PortfolioView() {
               onTabChange={setActiveTab}
               tokensContent={
                 <div className="mt-4 space-y-4">
-                  {/* <SmartOpportunities /> */}
-
                   <div className="rounded-sm border border-border bg-white/2 p-3">
                     <PortfolioFilters
                       chain={chain}
                       sort={sort}
                       type={type}
                       developerModeEnabled={developerModeEnabled}
-                      installedAppIds={installedAppIds}
                       onChainChange={setChain}
                       onSortChange={setSort}
                       onTypeChange={setType}
@@ -299,18 +287,6 @@ export function PortfolioView() {
           success(
             "Swap preview generated",
             `${amount} ${selectedAsset?.symbol ?? ""} routed into ${targetSymbol}.`,
-          );
-        }}
-      />
-      <BridgeModal
-        open={portfolioAction?.action === "bridge"}
-        asset={selectedAsset}
-        onClose={closePortfolioAction}
-        onSubmit={(amount, destinationChain) => {
-          closePortfolioAction();
-          success(
-            "Bridge preview generated",
-            `${amount} ${selectedAsset?.symbol ?? ""} prepared for ${destinationChain}.`,
           );
         }}
       />

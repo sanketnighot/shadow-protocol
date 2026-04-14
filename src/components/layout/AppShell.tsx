@@ -49,7 +49,6 @@ export function AppShell() {
   );
   const openCommandPalette = useUiStore((state) => state.openCommandPalette);
   const pendingApprovalId = useUiStore((state) => state.pendingApprovalId);
-  const activeSignalPayload = useUiStore((state) => state.activeSignalPayload);
   const themePreference = useUiStore((state) => state.themePreference);
   const { pendingApproval, approveAction, rejectAction } = useAgentChat();
   const { info, success } = useToast();
@@ -176,43 +175,20 @@ export function AppShell() {
   }, [openCommandPalette]);
 
   const handleReject = () => {
-    if (pendingApprovalId === "signal-action") {
-      clearPendingApproval();
-    } else {
-      rejectAction();
-    }
+    rejectAction();
     info("Transaction rejected", "The strategy remains in monitoring mode.");
   };
 
   const handleApprove = async () => {
-    if (pendingApprovalId === "signal-action") {
-      clearPendingApproval();
-      info("Open Agent to approve", "Signal-based actions now require a persisted inline approval flow.");
-      return;
-    } else {
-      await approveAction();
-    }
+    await approveAction();
     success("Transaction approved", "SHADOW will execute the private route now.");
     setShowApprovalSuccess(true);
     window.setTimeout(() => setShowApprovalSuccess(false), 1200);
   };
 
   const modalTransaction = useMemo(() => {
-    if (pendingApprovalId === "signal-action" && activeSignalPayload) {
-      return {
-        id: "signal-action",
-        strategyId: "signal",
-        action: activeSignalPayload.action || "Execute Signal",
-        amount: activeSignalPayload.amount || "N/A",
-        chain: activeSignalPayload.chain || "N/A",
-        slippage: activeSignalPayload.slippage || "0.5%",
-        gas: activeSignalPayload.gasEstimate || "Low",
-        reason: activeSignalPayload.reason || "Autonomous signal triggered by ShadowWatcher.",
-        executionWindow: "2 mins",
-      };
-    }
     return pendingApproval;
-  }, [pendingApprovalId, activeSignalPayload, pendingApproval]);
+  }, [pendingApproval]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-3 py-3 text-foreground sm:px-5 sm:py-5 lg:h-screen lg:px-6 lg:py-6">

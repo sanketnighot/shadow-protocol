@@ -3,10 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::services::agent_chat::{self, ChatAgentResponse};
-use crate::services::ai_evaluation::{production_eval_cases, summarize_metrics, AiEvaluationCase, AiEvaluationReport};
 use crate::services::ai_kernel;
-use crate::services::apps::state as apps_state;
-use crate::services::apps::{filecoin, flow, flow_actions, flow_bridge, flow_scheduler};
 use tauri::AppHandle;
 use crate::services::audit;
 use crate::services::local_db::{
@@ -48,13 +45,6 @@ pub struct SummarizeAgentConversationInput {
     pub model: String,
     pub messages: Vec<agent_chat::ChatMessage>,
     pub num_ctx: Option<u32>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AiEvaluationFixtures {
-    pub cases: Vec<AiEvaluationCase>,
-    pub baseline: AiEvaluationReport,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,7 +120,7 @@ pub async fn get_strategies() -> Result<Vec<ActiveStrategy>, String> {
 }
 
 #[tauri::command]
-pub async fn create_strategy(app: AppHandle, input: CreateStrategyInput) -> Result<StrategyResult, String> {
+pub async fn create_strategy(_app: AppHandle, input: CreateStrategyInput) -> Result<StrategyResult, String> {
     let id = uuid::Uuid::new_v4().to_string();
     let name = input.name.trim().to_string();
     let summary = input.summary.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
@@ -152,12 +142,11 @@ pub async fn create_strategy(app: AppHandle, input: CreateStrategyInput) -> Resu
     strategy.next_run_at = Some(now_secs());
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_created", "strategy", Some(&strategy.id), &strategy);
-    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyResult { strategy })
 }
 
 #[tauri::command]
-pub async fn update_strategy(app: AppHandle, input: UpdateStrategyInput) -> Result<StrategyResult, String> {
+pub async fn update_strategy(_app: AppHandle, input: UpdateStrategyInput) -> Result<StrategyResult, String> {
     let existing = db_get_strategies()
         .map_err(|e| e.to_string())?
         .into_iter()
@@ -222,7 +211,6 @@ pub async fn update_strategy(app: AppHandle, input: UpdateStrategyInput) -> Resu
 
     upsert_strategy(&strategy).map_err(|e| e.to_string())?;
     audit::record("strategy_updated", "strategy", Some(&strategy.id), &strategy);
-    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(StrategyResult { strategy })
 }
 
@@ -271,12 +259,11 @@ pub async fn resume_strategy(app: AppHandle, input: StrategyStatusInput) -> Resu
 }
 
 #[tauri::command]
-pub async fn delete_strategy(app: AppHandle, input: DeleteStrategyInput) -> Result<DeleteStrategyResult, String> {
+pub async fn delete_strategy(_app: AppHandle, input: DeleteStrategyInput) -> Result<DeleteStrategyResult, String> {
     local_db::with_connection(|conn| {
         conn.execute("DELETE FROM active_strategies WHERE id = ?1", rusqlite::params![input.id])?;
         Ok(())
     }).map_err(|e| e.to_string())?;
-    filecoin::spawn_filecoin_snapshot_upload(&app);
     Ok(DeleteStrategyResult { success: true })
 }
 
@@ -341,14 +328,6 @@ pub async fn summarize_agent_conversation(
         .map(|message| (message.role, message.content))
         .collect();
     ai_kernel::summarize_conversation(&app, model, &messages, input.num_ctx).await
-}
-
-#[tauri::command]
-pub async fn get_ai_evaluation_fixtures() -> Result<AiEvaluationFixtures, String> {
-    Ok(AiEvaluationFixtures {
-        cases: production_eval_cases(),
-        baseline: summarize_metrics(0.0, 0.0, 0.0, 0.0),
-    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -463,23 +442,77 @@ pub async fn approve_agent_action(
 
     let tool_name = input.tool_name.trim();
     let result = if tool_name == "execute_token_swap" {
-        execution.status = "failed".to_string();
-        execution.error_code = Some("unsupported_route".to_string());
-        execution.error_message = Some("Production swap execution is not yet available for the requested route.".to_string());
-        execution.result_json = Some(
-            serde_json::json!({
-                "supported": false,
-                "reason": "unsupported_route"
-            })
-            .to_string(),
-        );
-        execution.completed_at = Some(now_secs());
-        local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-        ApproveAgentActionResult {
-            success: false,
-            execution_id: Some(execution_id),
-            message: "Swap execution refused because no production swap route is configured for this action.".to_string(),
-            tx_hash: None,
+        let payload = &input.payload;
+        // Resolve the from_address: payload may carry it explicitly or fall back to active wallet
+        let from_address = payload
+            .get("fromAddress")
+            .or_else(|| payload.get("from_address"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let from_token = payload.get("fromToken").or_else(|| payload.get("from_token")).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let to_token = payload.get("toToken").or_else(|| payload.get("to_token")).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let amount = payload.get("amount").and_then(|v| v.as_str()).unwrap_or("0").trim().to_string();
+        let chain = payload.get("chain").and_then(|v| v.as_str()).unwrap_or("ETH").trim().to_string();
+        let slippage_bps = payload.get("slippageBps").and_then(|v| v.as_u64()).map(|v| v as u32)
+            .or_else(|| payload.get("slippage_bps").and_then(|v| v.as_u64()).map(|v| v as u32))
+            .unwrap_or(50);
+
+        // Convert human amount to wei (assume 18 decimals for native; 6 for USDC/USDT)
+        let decimals: u8 = if matches!(from_token.to_uppercase().as_str(), "USDC" | "USDT") { 6 } else { 18 };
+        let amount_f: f64 = amount.parse().unwrap_or(0.0);
+        let sell_amount_wei = if amount_f > 0.0 {
+            let factor = 10_f64.powi(decimals as i32);
+            format!("{}", (amount_f * factor) as u128)
+        } else {
+            "0".to_string()
+        };
+
+        let swap_input = super::swap::SwapExecuteInput {
+            from_address: from_address.clone(),
+            from_token,
+            to_token: to_token.clone(),
+            sell_amount_wei,
+            chain,
+            slippage_bps: Some(slippage_bps),
+        };
+
+        match super::swap::swap_execute(swap_input).await {
+            Ok(res) => {
+                execution.status = "succeeded".to_string();
+                execution.tx_hash = Some(res.tx_hash.clone());
+                execution.result_json = Some(serde_json::json!({
+                    "txHash": res.tx_hash,
+                    "buyAmount": res.buy_amount,
+                    "toToken": to_token,
+                }).to_string());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                audit::record("swap_executed", "tool_execution", Some(&execution_id), &serde_json::json!({
+                    "txHash": res.tx_hash,
+                    "toToken": to_token,
+                }));
+                ApproveAgentActionResult {
+                    success: true,
+                    execution_id: Some(execution_id),
+                    message: format!("Swap executed — tx: {}", res.tx_hash),
+                    tx_hash: Some(res.tx_hash),
+                }
+            }
+            Err(e) => {
+                execution.status = "failed".to_string();
+                execution.error_code = Some("swap_failed".to_string());
+                execution.error_message = Some(e.to_string());
+                execution.completed_at = Some(now_secs());
+                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
+                ApproveAgentActionResult {
+                    success: false,
+                    execution_id: Some(execution_id),
+                    message: format!("Swap failed: {e}"),
+                    tx_hash: None,
+                }
+            }
         }
     } else if tool_name == "create_automation_strategy" {
         let payload = &input.payload;
@@ -509,386 +542,6 @@ pub async fn approve_agent_action(
             message: format!("Strategy '{}' has been created and is now active.", strategy.name),
             tx_hash: None,
         }
-    } else if tool_name == "flow_protocol_prepare_sponsored_transaction" {
-        let proposal = input
-            .payload
-            .get("original")
-            .cloned()
-            .unwrap_or_else(|| input.payload.clone());
-        match flow::prepare_sponsored_transaction(&app, proposal).await {
-            Ok(data) => {
-                execution.status = "succeeded".to_string();
-                execution.result_json =
-                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: true,
-                    execution_id: Some(execution_id),
-                    message: "Flow transaction prepared (review prepared payload in execution log)."
-                        .to_string(),
-                    tx_hash: None,
-                }
-            }
-            Err(e) => {
-                execution.status = "failed".to_string();
-                execution.error_code = Some("flow_prepare_failed".to_string());
-                execution.error_message = Some(e.clone());
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: false,
-                    execution_id: Some(execution_id),
-                    message: e,
-                    tx_hash: None,
-                }
-            }
-        }
-    } else if tool_name == "filecoin_protocol_request_backup" {
-        let base_scope = input
-            .payload
-            .get("scope")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
-        let cfg_raw = apps_state::get_app_config_json("filecoin-storage").unwrap_or_else(|_| "{}".to_string());
-        let cfg: serde_json::Value = serde_json::from_str(&cfg_raw).unwrap_or_default();
-        let scope = filecoin::merge_filecoin_backup_scope(base_scope, &cfg);
-        let policy = cfg.get("policy").cloned();
-        match filecoin::upload_and_record_snapshot(&app, scope, policy).await {
-            Ok(data) => {
-                let cid = data
-                    .get("cid")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                execution.status = "succeeded".to_string();
-                execution.result_json =
-                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: true,
-                    execution_id: Some(execution_id),
-                    message: format!("Backup completed. CID recorded: {cid}"),
-                    tx_hash: None,
-                }
-            }
-            Err(e) => {
-                execution.status = "failed".to_string();
-                execution.error_code = Some("filecoin_backup_failed".to_string());
-                execution.error_message = Some(e.clone());
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: false,
-                    execution_id: Some(execution_id),
-                    message: e,
-                    tx_hash: None,
-                }
-            }
-        }
-    } else if tool_name == "flow_schedule_transaction" {
-        let intent = input
-            .payload
-            .get("intent")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
-        let sid = input
-            .payload
-            .get("strategyId")
-            .and_then(|v| v.as_str());
-        let exec_res = if let Some(cron) = intent
-            .get("cronExpression")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            flow_scheduler::submit_cron_intent(&app, cron, sid).await
-        } else {
-            flow_scheduler::submit_schedule_intent(&app, intent, sid, None, None).await
-        };
-        match exec_res {
-            Ok(data) => {
-                let tx = data
-                    .get("txId")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                execution.status = "succeeded".to_string();
-                execution.result_json =
-                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                execution.tx_hash = tx;
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: true,
-                    execution_id: Some(execution_id),
-                    message: "Flow schedule intent submitted.".to_string(),
-                    tx_hash: execution.tx_hash.clone(),
-                }
-            }
-            Err(e) => {
-                execution.status = "failed".to_string();
-                execution.error_code = Some("flow_schedule_failed".to_string());
-                execution.error_message = Some(e.clone());
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: false,
-                    execution_id: Some(execution_id),
-                    message: e,
-                    tx_hash: None,
-                }
-            }
-        }
-    } else if tool_name == "flow_setup_recurring" {
-        let cron = input
-            .payload
-            .get("cronExpression")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        let sid = input
-            .payload
-            .get("strategyId")
-            .and_then(|v| v.as_str());
-        if cron.is_empty() {
-            execution.status = "failed".to_string();
-            execution.error_code = Some("invalid_params".to_string());
-            execution.error_message = Some("cronExpression required".to_string());
-            execution.completed_at = Some(now_secs());
-            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-            ApproveAgentActionResult {
-                success: false,
-                execution_id: Some(execution_id),
-                message: "cronExpression required".to_string(),
-                tx_hash: None,
-            }
-        } else {
-            match flow_scheduler::submit_cron_intent(&app, &cron, sid).await {
-                Ok(data) => {
-                    let tx = data
-                        .get("txId")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    execution.status = "succeeded".to_string();
-                    execution.result_json =
-                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                    execution.tx_hash = tx;
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: true,
-                        execution_id: Some(execution_id),
-                        message: "Flow recurring intent submitted.".to_string(),
-                        tx_hash: execution.tx_hash.clone(),
-                    }
-                }
-                Err(e) => {
-                    execution.status = "failed".to_string();
-                    execution.error_code = Some("flow_cron_failed".to_string());
-                    execution.error_message = Some(e.clone());
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: false,
-                        execution_id: Some(execution_id),
-                        message: e,
-                        tx_hash: None,
-                    }
-                }
-            }
-        }
-    } else if tool_name == "flow_cancel_scheduled" {
-        let record_id = input
-            .payload
-            .get("recordId")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if record_id.is_empty() {
-            execution.status = "failed".to_string();
-            execution.error_code = Some("invalid_params".to_string());
-            execution.error_message = Some("recordId required".to_string());
-            execution.completed_at = Some(now_secs());
-            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-            ApproveAgentActionResult {
-                success: false,
-                execution_id: Some(execution_id),
-                message: "recordId required".to_string(),
-                tx_hash: None,
-            }
-        } else {
-            match flow_scheduler::cancel_scheduled_by_record_id(&app, &record_id).await {
-                Ok(data) => {
-                    let tx = data
-                        .get("txId")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    execution.status = "succeeded".to_string();
-                    execution.result_json =
-                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                    execution.tx_hash = tx;
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: true,
-                        execution_id: Some(execution_id),
-                        message: "Flow cancel intent submitted.".to_string(),
-                        tx_hash: execution.tx_hash.clone(),
-                    }
-                }
-                Err(e) => {
-                    execution.status = "failed".to_string();
-                    execution.error_code = Some("flow_cancel_failed".to_string());
-                    execution.error_message = Some(e.clone());
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: false,
-                        execution_id: Some(execution_id),
-                        message: e,
-                        tx_hash: None,
-                    }
-                }
-            }
-        }
-    } else if tool_name == "flow_compose_defi_action" {
-        let kind = input
-            .payload
-            .get("kind")
-            .and_then(|v| v.as_str())
-            .unwrap_or("dca");
-        let params = input
-            .payload
-            .get("parameters")
-            .cloned()
-            .unwrap_or_else(|| input.payload.clone());
-        match flow_actions::preview_composition(&app, kind, &params).await {
-            Ok(data) => {
-                execution.status = "succeeded".to_string();
-                execution.result_json =
-                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: true,
-                    execution_id: Some(execution_id),
-                    message: "Flow Actions preview generated (beta).".to_string(),
-                    tx_hash: None,
-                }
-            }
-            Err(e) => {
-                execution.status = "failed".to_string();
-                execution.error_code = Some("flow_actions_preview_failed".to_string());
-                execution.error_message = Some(e.clone());
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: false,
-                    execution_id: Some(execution_id),
-                    message: e,
-                    tx_hash: None,
-                }
-            }
-        }
-    } else if tool_name == "flow_bridge_tokens" {
-        let direction = input
-            .payload
-            .get("direction")
-            .and_then(|v| v.as_str())
-            .unwrap_or("cadence_to_evm");
-        let token_ref = input
-            .payload
-            .get("tokenRef")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        let amount_hint = input
-            .payload
-            .get("amountHint")
-            .and_then(|v| v.as_str())
-            .unwrap_or("0")
-            .to_string();
-        if token_ref.is_empty() {
-            execution.status = "failed".to_string();
-            execution.error_code = Some("invalid_params".to_string());
-            execution.error_message = Some("tokenRef required".to_string());
-            execution.completed_at = Some(now_secs());
-            local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-            ApproveAgentActionResult {
-                success: false,
-                execution_id: Some(execution_id),
-                message: "tokenRef required".to_string(),
-                tx_hash: None,
-            }
-        } else {
-            match flow_bridge::preview_bridge(&app, direction, &token_ref, &amount_hint).await {
-                Ok(data) => {
-                    execution.status = "succeeded".to_string();
-                    execution.result_json =
-                        Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: true,
-                        execution_id: Some(execution_id),
-                        message: "Flow bridge preview generated.".to_string(),
-                        tx_hash: None,
-                    }
-                }
-                Err(e) => {
-                    execution.status = "failed".to_string();
-                    execution.error_code = Some("flow_bridge_preview_failed".to_string());
-                    execution.error_message = Some(e.clone());
-                    execution.completed_at = Some(now_secs());
-                    local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                    ApproveAgentActionResult {
-                        success: false,
-                        execution_id: Some(execution_id),
-                        message: e,
-                        tx_hash: None,
-                    }
-                }
-            }
-        }
-    } else if tool_name == "filecoin_protocol_request_restore" {
-        let cid = input
-            .payload
-            .get("cid")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "Missing cid".to_string())?;
-        match filecoin::prepare_restore(&app, cid).await {
-            Ok(data) => {
-                execution.status = "succeeded".to_string();
-                execution.result_json =
-                    Some(serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()));
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: true,
-                    execution_id: Some(execution_id),
-                    message: "Restore payload fetched (stub transport — verify before mainnet)."
-                        .to_string(),
-                    tx_hash: None,
-                }
-            }
-            Err(e) => {
-                execution.status = "failed".to_string();
-                execution.error_code = Some("filecoin_restore_failed".to_string());
-                execution.error_message = Some(e.clone());
-                execution.completed_at = Some(now_secs());
-                local_db::update_tool_execution(&execution).map_err(|e| e.to_string())?;
-                ApproveAgentActionResult {
-                    success: false,
-                    execution_id: Some(execution_id),
-                    message: e,
-                    tx_hash: None,
-                }
-            }
-        }
     } else {
         execution.status = "failed".to_string();
         execution.error_code = Some("unsupported_tool".to_string());
@@ -902,6 +555,8 @@ pub async fn approve_agent_action(
             tx_hash: None,
         }
     };
+
+    let _ = &app;
 
     let log_entry = CommandLogEntry {
         id: uuid::Uuid::new_v4().to_string(),

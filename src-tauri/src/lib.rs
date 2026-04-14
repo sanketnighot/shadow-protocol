@@ -46,11 +46,6 @@ pub fn run() {
                 let _ = services::local_db::init(&db_path);
             }
             let handle = app.handle().clone();
-            let restore_handle = handle.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = services::apps::filecoin::restore_latest_snapshot(&restore_handle).await;
-            });
-            app.manage(services::vincent_loopback::VincentLoopbackState::new());
             services::shadow_watcher::start(handle.clone());
             services::alpha_service::start(handle.clone());
             services::heartbeat::start(handle.clone());
@@ -95,7 +90,6 @@ pub fn run() {
             close_devtools,
             commands::chat_agent,
             commands::summarize_agent_conversation,
-            commands::get_ai_evaluation_fixtures,
             commands::approve_agent_action,
             commands::reject_agent_action,
             commands::get_pending_approvals,
@@ -119,6 +113,9 @@ pub fn run() {
             commands::set_ollama_key,
             commands::get_ollama_key,
             commands::remove_ollama_key,
+            commands::set_zerox_key,
+            commands::get_zerox_key,
+            commands::remove_zerox_key,
             commands::delete_all_data,
             commands::portfolio_fetch_balances,
             commands::portfolio_fetch_balances_multi,
@@ -134,6 +131,8 @@ pub fn run() {
             commands::market_prepare_opportunity_action,
             commands::portfolio_transfer,
             commands::portfolio_transfer_background,
+            commands::swap_get_quote,
+            commands::swap_execute,
             commands::check_ollama_status,
             commands::install_ollama,
             commands::pull_model,
@@ -160,39 +159,6 @@ pub fn run() {
             commands::delete_strategy,
             commands::run_strategy_simulation,
             commands::get_strategy_executions,
-            commands::apps_marketplace_list,
-            commands::apps_install,
-            commands::apps_uninstall,
-            commands::apps_set_enabled,
-            commands::apps_set_config,
-            commands::apps_get_config,
-            commands::apps_list_backups,
-            commands::apps_runtime_health,
-            commands::apps_refresh_health,
-            commands::apps_lit_wallet_status,
-            commands::apps_lit_mint_pkp,
-            commands::apps_lit_pkp_address,
-            commands::apps_vincent_consent_url,
-            commands::apps_vincent_loopback_poll,
-            commands::apps_vincent_loopback_cancel,
-            commands::apps_vincent_submit_jwt,
-            commands::apps_vincent_consent_status,
-            commands::apps_vincent_revoke_consent,
-            commands::apps_vincent_execute_approved,
-            commands::apps_vincent_set_delegatee_key,
-            commands::apps_flow_account_status,
-            commands::apps_flow_list_scheduled,
-            commands::apps_flow_estimate_schedule_fee,
-            commands::apps_flow_sync_scheduled,
-            commands::apps_flow_cancel_scheduled_record,
-            commands::apps_flow_create_schedule,
-            commands::apps_filecoin_auto_restore,
-            commands::apps_filecoin_restore_by_cid,
-            commands::apps_filecoin_backup_now,
-            commands::apps_filecoin_quote_cost,
-            commands::apps_filecoin_list_datasets,
-            commands::apps_set_secret,
-            commands::apps_remove_secret,
             // Autonomous agent commands
             commands::get_guardrails,
             commands::set_guardrails,

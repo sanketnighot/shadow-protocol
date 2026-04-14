@@ -1,11 +1,10 @@
-//! Portfolio balance fetching: local DB first, Alchemy fallback, Flow sidecar.
+//! Portfolio balance fetching: local DB first, Alchemy fallback.
 
 use serde::Deserialize;
 use serde::Serialize;
 use tauri::AppHandle;
 
 use crate::services::chain::{chain_code_to_display, chain_to_explorer_tx_url};
-use crate::services::flow_domain::{is_cadence_flow_address, normalize_stored_wallet_token_chain};
 use crate::services::local_db;
 use crate::services::portfolio_service::{self, PortfolioAsset, PortfolioError};
 
@@ -13,7 +12,7 @@ use crate::services::portfolio_service::{self, PortfolioAsset, PortfolioError};
 fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
     rows.into_iter()
         .map(|r| {
-            let chain = normalize_stored_wallet_token_chain(&r.chain, &r.wallet_address);
+            let chain = r.chain.clone();
             let chain_name = chain_code_to_display(&chain).to_string();
             let asset_type = if r.asset_type == "stablecoin" {
                 "stablecoin"
@@ -55,26 +54,12 @@ pub async fn portfolio_fetch_balances(
     }
 
     if !combined.is_empty() {
-        portfolio_service::append_configured_cadence_assets_if_absent(&app, &mut combined).await?;
         return Ok(combined);
-    }
-
-    // Determine if this is a Flow address
-    let is_flow = chain
-        .as_ref()
-        .map(|c| c == "FLOW" || c == "FLOW-TEST")
-        .unwrap_or(false)
-        || is_cadence_flow_address(&address);
-
-    tracing::info!("Address {} looks like Flow: {}", address, is_flow);
-
-    if is_flow {
-        tracing::info!("Fetching Flow / mixed balances for {}", address);
-        return portfolio_service::fetch_balances_mixed(&app, std::slice::from_ref(&address)).await;
     }
 
     // Fallback to Alchemy for EVM chains
     tracing::info!("Fetching EVM balances via Alchemy for {}", address);
+    let _ = chain; // unused without Flow routing
     portfolio_service::fetch_balances(&address).await
 }
 

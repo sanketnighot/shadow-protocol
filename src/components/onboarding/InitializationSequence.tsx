@@ -4,7 +4,6 @@ import { useOnboardingStore } from "@/store/useOnboardingStore";
 
 import { Step0Welcome } from "./steps/Step0Welcome";
 import { StepQuickSetup } from "./steps/StepQuickSetup";
-import { Step5MemorySeeds } from "./steps/Step5MemorySeeds";
 import { Step6Vault } from "./steps/Step4Vault";
 import { Step7Deployment } from "./steps/Step5Deployment";
 
@@ -27,12 +26,11 @@ export function InitializationSequence() {
 
   if (hasCompleted && !isReplay) return null;
 
-  // Streamlined 5-step flow:
+  // 4-step flow:
   // 0: Welcome
   // 1: Quick Setup (Persona + Risk + Chains combined)
-  // 2: Preferences (optional - experience, goals, constraints)
-  // 3: Vault (wallet)
-  // 4: Deployment
+  // 2: Vault (wallet)
+  // 3: Deployment
 
   const renderStep = () => {
     switch (currentStep) {
@@ -41,10 +39,8 @@ export function InitializationSequence() {
       case 1:
         return <StepQuickSetup />;
       case 2:
-        return <Step5MemorySeeds />;
-      case 3:
         return <Step6Vault />;
-      case 4:
+      case 3:
         return <Step7Deployment />;
       default:
         return <Step0Welcome />;
@@ -71,7 +67,7 @@ export function InitializationSequence() {
 
       {/* Progress Indicators */}
       <div className="absolute top-8 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-        {[0, 1, 2, 3, 4].map((step) => (
+        {[0, 1, 2, 3].map((step) => (
           <div
             key={step}
             className={`h-1 rounded-sm transition-all duration-100 ease-out ${

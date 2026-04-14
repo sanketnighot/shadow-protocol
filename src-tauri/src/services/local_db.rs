@@ -519,7 +519,6 @@ fn migrate(conn: &Connection) -> Result<(), DbError> {
 
     // After ensuring columns exist, run data migrations.
     crate::services::strategy_legacy::migrate_legacy_strategies(conn)?;
-    crate::services::apps::registry::seed_catalog_if_empty(conn).map_err(DbError::Sqlite)?;
 
     Ok(())
 }

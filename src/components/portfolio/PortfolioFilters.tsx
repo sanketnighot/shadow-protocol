@@ -5,30 +5,19 @@ type PortfolioFiltersProps = {
   sort: string;
   type: string;
   developerModeEnabled?: boolean;
-  installedAppIds?: string[];
   onChainChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onTypeChange: (value: string) => void;
 };
 
-const CHAINS: {
-  label: string;
-  value: string;
-  testnet?: boolean;
-  appGated?: string;
-}[] = [
+const CHAINS: { label: string; value: string; testnet?: boolean }[] = [
   { label: "All Chains", value: "All" },
   { label: "Ethereum", value: "ETH" },
   { label: "Base", value: "BASE" },
   { label: "Polygon", value: "POL" },
-  { label: "Flow (Cadence)", value: "FLOW", appGated: "flow" },
-  { label: "Flow EVM", value: "FLOW-EVM", appGated: "flow" },
   { label: "ETH Sepolia", value: "ETH-SEP", testnet: true },
   { label: "Base Sepolia", value: "BASE-SEP", testnet: true },
   { label: "Polygon Amoy", value: "POL-AMOY", testnet: true },
-  { label: "Flow Testnet (Cadence)", value: "FLOW-TEST", testnet: true, appGated: "flow" },
-  { label: "Flow EVM Testnet", value: "FLOW-EVM-TEST", testnet: true, appGated: "flow" },
-  { label: "Filecoin Calibration", value: "FIL-CAL", testnet: true },
 ];
 
 const TYPES = [
@@ -49,17 +38,11 @@ export function PortfolioFilters({
   sort,
   type,
   developerModeEnabled = false,
-  installedAppIds = [],
   onChainChange,
   onSortChange,
   onTypeChange,
 }: PortfolioFiltersProps) {
   const filteredChains = CHAINS.filter((c) => {
-    // Hide app-gated chains if their app isn't installed
-    if (c.appGated && !installedAppIds.includes(c.appGated)) {
-      return false;
-    }
-    // Hide testnets unless developer mode is on
     if (c.testnet) {
       return developerModeEnabled;
     }

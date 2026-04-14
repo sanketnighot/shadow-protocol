@@ -13,6 +13,7 @@ const KEYCHAIN_SERVICE: &str = "com.sanket.shadow";
 const PERPLEXITY_KEY_NAME: &str = "api_key:perplexity";
 const ALCHEMY_KEY_NAME: &str = "api_key:alchemy";
 const OLLAMA_KEY_NAME: &str = "api_key:ollama";
+const ZEROX_KEY_NAME: &str = "api_key:zerox";
 const BIOMETRY_DOMAIN: &str = "com.sanket.shadow";
 
 // ---------------------------------------------------------------------------
@@ -95,6 +96,7 @@ struct ApiKeyCache {
     alchemy: SecretCacheSlot,
     perplexity: SecretCacheSlot,
     ollama: SecretCacheSlot,
+    zerox: SecretCacheSlot,
 }
 
 static API_CACHE: OnceLock<ApiKeyCache> = OnceLock::new();
@@ -104,6 +106,7 @@ fn cache() -> &'static ApiKeyCache {
         alchemy: SecretCacheSlot::new(),
         perplexity: SecretCacheSlot::new(),
         ollama: SecretCacheSlot::new(),
+        zerox: SecretCacheSlot::new(),
     })
 }
 
@@ -252,6 +255,33 @@ pub fn get_alchemy_key_or_env() -> Option<String> {
     get_alchemy_key().ok().flatten().or_else(|| std::env::var("ALCHEMY_API_KEY").ok())
 }
 
+// ---------------------------------------------------------------------------
+// 0x API key (cached)
+// ---------------------------------------------------------------------------
+
+pub fn set_zerox_key(key: &str) -> Result<(), keyring::Error> {
+    let entry = Entry::new(KEYCHAIN_SERVICE, ZEROX_KEY_NAME)?;
+    entry.set_password(key)?;
+    cache().zerox.store_loaded(Some(key.to_string()));
+    Ok(())
+}
+
+pub fn get_zerox_key() -> Result<Option<String>, keyring::Error> {
+    cache().zerox.load_with(|| read_secret(ZEROX_KEY_NAME))
+}
+
+pub fn remove_zerox_key() -> Result<(), keyring::Error> {
+    let entry = Entry::new(KEYCHAIN_SERVICE, ZEROX_KEY_NAME)?;
+    let _ = entry.delete_password();
+    cache().zerox.store_loaded(None);
+    Ok(())
+}
+
+/// Returns the 0x key from cache/keychain, or falls back to env var ZEROX_API_KEY.
+pub fn get_zerox_key_or_env() -> Option<String> {
+    get_zerox_key().ok().flatten().or_else(|| std::env::var("ZEROX_API_KEY").ok())
+}
+
 /// Deletes ALL application data: DB, Keychain, Session, and local files.
 pub async fn delete_all_app_data(app: &AppHandle) -> Result<(), String> {
     // 1. Get addresses to clear their specific keychain entries
@@ -261,6 +291,7 @@ pub async fn delete_all_app_data(app: &AppHandle) -> Result<(), String> {
     let _ = remove_perplexity_key();
     let _ = remove_alchemy_key();
     let _ = remove_ollama_key();
+    let _ = remove_zerox_key();
     for app_id in ["lit-protocol", "flow", "filecoin-storage"] {
         let _ = remove_app_secrets_for(app_id);
     }

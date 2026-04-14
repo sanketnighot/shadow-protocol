@@ -5,7 +5,6 @@ use tauri::AppHandle;
 use super::agent_state::{read_memory, read_soul};
 use super::ai_memory::AiMemoryContext;
 use super::ai_profiles::{profile_config, AiProfileId};
-use super::apps::state as apps_state;
 use super::ollama_client;
 use super::tool_registry;
 use super::tool_router::{self, AgentContext};
@@ -42,32 +41,8 @@ pub struct AiKernelRequest {
 }
 
 pub fn collect_app_capabilities() -> Vec<AiAppCapability> {
-    let Ok(entries) = apps_state::list_marketplace() else {
-        return Vec::new();
-    };
-
-    entries
-        .into_iter()
-        .map(|entry| {
-            let installed = entry.installed.clone();
-            let tools = parse_tools_json(&entry.catalog.agent_tools_json);
-            AiAppCapability {
-                app_id: entry.catalog.id,
-                name: entry.catalog.name,
-                installed: installed.is_some(),
-                enabled: installed.as_ref().map(|item| item.enabled).unwrap_or(false),
-                healthy: installed
-                    .as_ref()
-                    .map(|item| item.health_status != "error")
-                    .unwrap_or(false),
-                permissioned: installed
-                    .as_ref()
-                    .and_then(|item| item.permissions_acknowledged_at)
-                    .is_some(),
-                available_tools: tools,
-            }
-        })
-        .collect()
+    // Apps marketplace removed for MVP. Returns empty — no bundled integrations active.
+    Vec::new()
 }
 
 pub fn build_memory_context(
