@@ -207,30 +207,14 @@ pub fn render_capability_block(capabilities: &[AiAppCapability]) -> String {
     )
 }
 
-fn parse_tools_json(raw: &str) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(raw).unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        compact_tool_observation, parse_tools_json, render_capability_block, resolve_num_ctx,
+        compact_tool_observation, render_capability_block, resolve_num_ctx,
         AiAppCapability, AiKernelRequest,
     };
     use crate::services::ai_profiles::AiProfileId;
     use crate::services::tool_router::AgentContext;
-
-    #[test]
-    fn parses_app_tool_lists_from_catalog_json() {
-        let tools = parse_tools_json(r#"["flow_schedule_transaction","flow_bridge_tokens"]"#);
-        assert_eq!(
-            tools,
-            vec![
-                "flow_schedule_transaction".to_string(),
-                "flow_bridge_tokens".to_string()
-            ]
-        );
-    }
 
     #[test]
     fn compacts_large_tool_outputs_into_short_observation() {

@@ -24,8 +24,6 @@ pub enum SwapError {
     MissingAlchemyKey,
     #[error("Invalid address")]
     InvalidAddress,
-    #[error("Invalid amount")]
-    InvalidAmount,
     #[error("Unsupported chain: {0}")]
     UnsupportedChain(String),
     #[error("Wallet not found for this address")]

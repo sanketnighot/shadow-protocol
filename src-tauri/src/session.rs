@@ -36,15 +36,6 @@ pub fn get_cached_key(address: &str) -> Option<Zeroizing<String>> {
     Some(cached.hex_pk.clone())
 }
 
-/// Returns the currently unlocked key (since only one is kept at a time). Refreshes expiry on use.
-pub fn get_unlocked_key() -> Option<Zeroizing<String>> {
-    let mut guard = cache().write().ok()?;
-    prune_expired_locked(&mut guard);
-    let (_, cached) = guard.iter_mut().next()?;
-    cached.expires_at = extend_expiry();
-    Some(cached.hex_pk.clone())
-}
-
 /// Refreshes expiry for a cached key. Call after successful transfer.
 pub fn refresh_expiry(address: &str) {
     let mut guard = match cache().write() {
@@ -114,31 +105,3 @@ pub fn prune_expired() {
     prune_expired_locked(&mut guard);
 }
 
-/// True when any wallet session has an unexpired cached key (used for sensitive app settings).
-pub fn has_unlocked_session() -> bool {
-    let mut guard = match cache().write() {
-        Ok(g) => g,
-        Err(_) => return false,
-    };
-    prune_expired_locked(&mut guard);
-    !guard.is_empty()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn has_unlocked_false_when_empty() {
-        clear_all();
-        assert!(!has_unlocked_session());
-    }
-
-    #[test]
-    fn has_unlocked_true_after_cache() {
-        clear_all();
-        cache_key("0xtest", "00".to_string());
-        assert!(has_unlocked_session());
-        clear_all();
-    }
-}

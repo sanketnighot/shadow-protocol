@@ -148,18 +148,6 @@ fn read_secret(entry_name: &str) -> Result<Option<String>, keyring::Error> {
     }
 }
 
-pub fn set_app_secret(app_id: &str, key: &str, value: &str) -> Result<(), keyring::Error> {
-    let entry_name = app_secret_entry_name(app_id, key);
-    let entry = Entry::new(KEYCHAIN_SERVICE, &entry_name)?;
-    entry.set_password(value)?;
-    app_secret_slot(app_id, key).store_loaded(Some(value.to_string()));
-    Ok(())
-}
-
-pub fn get_app_secret(app_id: &str, key: &str) -> Result<Option<String>, keyring::Error> {
-    app_secret_slot(app_id, key).load_with(|| read_secret(&app_secret_entry_name(app_id, key)))
-}
-
 pub fn remove_app_secret(app_id: &str, key: &str) -> Result<(), keyring::Error> {
     if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &app_secret_entry_name(app_id, key)) {
         let _ = entry.delete_password();
