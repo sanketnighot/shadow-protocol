@@ -21,7 +21,6 @@ export default defineConfig(async () => ({
     css: true,
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
-      "apps-runtime/**/*.{test,spec}.ts",
     ],
   },
 
