@@ -35,5 +35,4 @@ pub mod sonar_client;
 pub mod tool_registry;
 pub mod tool_router;
 pub mod tools;
-pub mod execution_preferences;
 pub mod harvester;

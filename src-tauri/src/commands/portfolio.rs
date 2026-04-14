@@ -41,7 +41,7 @@ fn token_rows_to_assets(rows: Vec<local_db::TokenRow>) -> Vec<PortfolioAsset> {
 pub async fn portfolio_fetch_balances(
     address: String,
     chain: Option<String>,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<Vec<PortfolioAsset>, PortfolioError> {
     tracing::info!("portfolio_fetch_balances called for address: {}, chain: {:?}", address, chain);
 
