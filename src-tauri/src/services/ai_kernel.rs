@@ -5,7 +5,6 @@ use tauri::AppHandle;
 use super::agent_state::{read_memory, read_soul};
 use super::ai_memory::AiMemoryContext;
 use super::ai_profiles::{profile_config, AiProfileId};
-use super::apps::state as apps_state;
 use super::ollama_client;
 use super::tool_registry;
 use super::tool_router::{self, AgentContext};
@@ -42,32 +41,8 @@ pub struct AiKernelRequest {
 }
 
 pub fn collect_app_capabilities() -> Vec<AiAppCapability> {
-    let Ok(entries) = apps_state::list_marketplace() else {
-        return Vec::new();
-    };
-
-    entries
-        .into_iter()
-        .map(|entry| {
-            let installed = entry.installed.clone();
-            let tools = parse_tools_json(&entry.catalog.agent_tools_json);
-            AiAppCapability {
-                app_id: entry.catalog.id,
-                name: entry.catalog.name,
-                installed: installed.is_some(),
-                enabled: installed.as_ref().map(|item| item.enabled).unwrap_or(false),
-                healthy: installed
-                    .as_ref()
-                    .map(|item| item.health_status != "error")
-                    .unwrap_or(false),
-                permissioned: installed
-                    .as_ref()
-                    .and_then(|item| item.permissions_acknowledged_at)
-                    .is_some(),
-                available_tools: tools,
-            }
-        })
-        .collect()
+    // Apps marketplace removed for MVP. Returns empty — no bundled integrations active.
+    Vec::new()
 }
 
 pub fn build_memory_context(
@@ -232,30 +207,14 @@ pub fn render_capability_block(capabilities: &[AiAppCapability]) -> String {
     )
 }
 
-fn parse_tools_json(raw: &str) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(raw).unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        compact_tool_observation, parse_tools_json, render_capability_block, resolve_num_ctx,
+        compact_tool_observation, render_capability_block, resolve_num_ctx,
         AiAppCapability, AiKernelRequest,
     };
     use crate::services::ai_profiles::AiProfileId;
     use crate::services::tool_router::AgentContext;
-
-    #[test]
-    fn parses_app_tool_lists_from_catalog_json() {
-        let tools = parse_tools_json(r#"["flow_schedule_transaction","flow_bridge_tokens"]"#);
-        assert_eq!(
-            tools,
-            vec![
-                "flow_schedule_transaction".to_string(),
-                "flow_bridge_tokens".to_string()
-            ]
-        );
-    }
 
     #[test]
     fn compacts_large_tool_outputs_into_short_observation() {

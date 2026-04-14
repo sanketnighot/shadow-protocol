@@ -1,19 +1,24 @@
 import { motion } from "framer-motion";
 import {
   BarChart3,
+  CheckCircle2,
+  Clock,
   Repeat2,
   Send,
   Sparkles,
+  XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { InstalledAppsStrip } from "@/components/home/InstalledAppsStrip";
 import { OrchestratorStatusCard } from "@/components/home/OrchestratorStatusCard";
 import { PortfolioStrip } from "@/components/home/PortfolioStrip";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useUiStore } from "@/store/useUiStore";
 import { useWalletStore } from "@/store/useWalletStore";
 import { cn } from "@/lib/utils";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
+import type { StrategyExecutionRecord } from "@/types/strategy";
 
 const container = {
   hidden: { opacity: 0 },
@@ -50,11 +55,58 @@ export function HomeDashboard() {
         <QuickActionsPanel />
       </motion.div>
 
-      {/* Row 3: Installed Apps */}
+      {/* Row 3: Recent Activity */}
       <motion.div variants={row}>
-        <InstalledAppsStrip />
+        <RecentActivityStrip />
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ─── Recent Activity strip ───────────────────────────────────── */
+
+function RecentActivityStrip() {
+  const [records, setRecords] = useState<StrategyExecutionRecord[]>([]);
+
+  useEffect(() => {
+    invoke<StrategyExecutionRecord[]>("strategy_get_execution_history", { limit: 3 })
+      .then(setRecords)
+      .catch(() => setRecords([]));
+  }, []);
+
+  if (records.length === 0) return null;
+
+  return (
+    <div className="glass-panel rounded-sm p-5 sm:p-6">
+      <p className="font-mono text-[10px] tracking-[0.28em] text-muted uppercase mb-3">
+        Recent Activity
+      </p>
+      <div className="flex flex-col gap-2">
+        {records.map((rec) => {
+          const isOk = rec.status === "executed" || rec.status === "approved";
+          const Icon = isOk ? CheckCircle2 : rec.status === "pending" ? Clock : XCircle;
+          const color = isOk ? "text-emerald-400" : rec.status === "pending" ? "text-amber-400" : "text-red-400";
+          const ts = new Date(rec.createdAt * 1000).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          return (
+            <div key={rec.id} className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
+              <Icon className={cn("size-4 shrink-0", color)} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground truncate">{rec.reason ?? rec.status}</p>
+                <p className="font-mono text-[10px] text-muted">{ts}</p>
+              </div>
+              <span className={cn("font-mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm", isOk ? "bg-emerald-500/10 text-emerald-400" : "bg-surface-elevated text-muted")}>
+                {rec.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

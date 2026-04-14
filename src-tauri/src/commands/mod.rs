@@ -1,5 +1,4 @@
 mod agent_state;
-mod apps;
 mod autonomous;
 mod chat;
 mod market;
@@ -8,12 +7,12 @@ mod portfolio;
 mod session;
 mod settings;
 pub mod strategy;
+mod swap;
 mod transfer;
 mod wallet;
 mod wallet_sync;
 
 pub use agent_state::*;
-pub use apps::*;
 pub use autonomous::*;
 pub use chat::*;
 pub use market::*;
@@ -21,6 +20,7 @@ pub use ollama_manager::*;
 pub use portfolio::*;
 pub use session::*;
 pub use settings::*;
+pub use swap::*;
 pub use transfer::*;
 pub use wallet::*;
 pub use wallet_sync::*;

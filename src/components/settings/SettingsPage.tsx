@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Key, Save, Trash2, Cpu, AlertTriangle, RefreshCw } from "lucide-react";
+import { Key, Save, Trash2, Cpu, AlertTriangle, RefreshCw, ShieldAlert, ShieldCheck, Repeat2 } from "lucide-react";
 
 import packageJson from "../../../package.json";
 import { ModelSelector } from "@/components/ModelSelector";
@@ -80,6 +80,10 @@ export function SettingsPage() {
   const [isOllamaKeySaved, setIsOllamaKeySaved] = useState(false);
   const [isSavingOllama, setIsSavingOllama] = useState(false);
 
+  const [zeroxKey, setZeroxKey] = useState("");
+  const [isZeroxKeySaved, setIsZeroxKeySaved] = useState(false);
+  const [isSavingZerox, setIsSavingZerox] = useState(false);
+
   useEffect(() => {
     if (!hasTauriRuntime()) {
       return;
@@ -101,6 +105,11 @@ export function SettingsPage() {
         if (oResult.key) {
           setOllamaKey("********");
           setIsOllamaKeySaved(true);
+        }
+        const zResult = await invoke<{ key?: string }>("get_zerox_key");
+        if (zResult.key) {
+          setZeroxKey("********");
+          setIsZeroxKeySaved(true);
         }
       } catch (err) {
         logError("Failed to fetch keys", err);
@@ -213,6 +222,41 @@ export function SettingsPage() {
         );
         setOllamaKey("");
         setIsOllamaKeySaved(false);
+      }
+    } catch (err) {
+      toastWarning("Failed to remove key", String(err));
+    }
+  };
+
+  const handleSaveZeroxKey = async () => {
+    if (!zeroxKey || zeroxKey === "********") return;
+    setIsSavingZerox(true);
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        "set_zerox_key",
+        { input: { key: zeroxKey } }
+      );
+      if (result.success) {
+        success("0x API Key saved", "Swap execution is now enabled.");
+        setIsZeroxKeySaved(true);
+        setZeroxKey("********");
+      } else {
+        toastWarning("Failed to save key", result.error || "Unknown error");
+      }
+    } catch (err) {
+      toastWarning("Failed to save key", String(err));
+    } finally {
+      setIsSavingZerox(false);
+    }
+  };
+
+  const handleRemoveZeroxKey = async () => {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>("remove_zerox_key");
+      if (result.success) {
+        success("Key removed", "0x API key has been cleared from keychain.");
+        setZeroxKey("");
+        setIsZeroxKeySaved(false);
       }
     } catch (err) {
       toastWarning("Failed to remove key", String(err));
@@ -416,6 +460,55 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
+
+            <div className="rounded-sm border border-border bg-secondary p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-purple-500/10 text-purple-400">
+                  <Repeat2 className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    0x API Key
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Required for swap execution. Get a free key at{" "}
+                    <span className="text-muted font-mono">0x.org</span>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  type="password"
+                  value={zeroxKey}
+                  onChange={(e) => setZeroxKey(e.target.value)}
+                  placeholder={isZeroxKeySaved ? "********" : "your-0x-api-key"}
+                  className="flex-1 rounded-sm border border-border bg-secondary px-4 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  disabled={isZeroxKeySaved && zeroxKey === "********"}
+                />
+                {!isZeroxKeySaved || zeroxKey !== "********" ? (
+                  <Button
+                    size="sm"
+                    className="rounded-sm"
+                    onClick={handleSaveZeroxKey}
+                    disabled={isSavingZerox || !zeroxKey}
+                  >
+                    <Save className="mr-2 size-4" />
+                    Save
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-sm border-red-500/20 text-red-400 hover:bg-red-500/10"
+                    onClick={handleRemoveZeroxKey}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -520,6 +613,8 @@ export function SettingsPage() {
 
       <AgentGovernance />
 
+      <SafetyLimitsSection />
+
       <section className="glass-panel rounded-sm p-5 sm:p-6">
         <h2 className="text-xl font-semibold text-foreground">About</h2>
         <div className="mt-5 space-y-4">
@@ -598,5 +693,176 @@ export function SettingsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+/* ─── Safety & Limits ─────────────────────────────────────────── */
+
+type GuardrailsConfig = {
+  portfolioFloorUsd?: number | null;
+  maxSingleTxUsd?: number | null;
+  dailySpendLimitUsd?: number | null;
+  requireApprovalAboveUsd?: number | null;
+  maxSlippageBps?: number | null;
+  emergencyKillSwitch: boolean;
+};
+
+function SafetyLimitsSection() {
+  const { success, warning: toastError } = useToast();
+  const [config, setConfig] = useState<GuardrailsConfig | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [killSwitchBusy, setKillSwitchBusy] = useState(false);
+
+  useEffect(() => {
+    if (!hasTauriRuntime) return;
+    invoke<{ config: GuardrailsConfig }>("get_guardrails")
+      .then((r) => setConfig(r.config))
+      .catch(() => {});
+  }, []);
+
+  if (!hasTauriRuntime || !config) return null;
+
+  const updateField = (field: keyof GuardrailsConfig, value: string | boolean) => {
+    setConfig((prev) => {
+      if (!prev) return prev;
+      if (typeof value === "boolean") return { ...prev, [field]: value };
+      const num = value === "" ? null : Number(value);
+      return { ...prev, [field]: isNaN(num as number) ? null : num };
+    });
+  };
+
+  const handleSave = async () => {
+    if (!config) return;
+    setIsSaving(true);
+    try {
+      await invoke("set_guardrails", { config });
+      success("Safety limits saved", "Agent guardrails updated.");
+    } catch {
+      toastError("Save failed", "Could not update guardrails.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleKillSwitch = async () => {
+    setKillSwitchBusy(true);
+    try {
+      if (config.emergencyKillSwitch) {
+        await invoke("deactivate_kill_switch");
+        setConfig((p) => p ? { ...p, emergencyKillSwitch: false } : p);
+        success("Kill switch deactivated", "Agent can execute transactions again.");
+      } else {
+        await invoke("activate_kill_switch");
+        setConfig((p) => p ? { ...p, emergencyKillSwitch: true } : p);
+        success("Kill switch activated", "All agent transactions are now blocked.");
+      }
+    } catch {
+      toastError("Kill switch error", "Could not toggle kill switch.");
+    } finally {
+      setKillSwitchBusy(false);
+    }
+  };
+
+  const fieldClass = "w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary/60";
+  const labelClass = "block text-sm font-medium text-foreground mb-1.5";
+
+  return (
+    <section className="glass-panel rounded-sm p-5 sm:p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Safety &amp; Limits</h2>
+          <p className="mt-1 text-sm text-muted">Guardrails applied to every agent action.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleKillSwitch}
+          disabled={killSwitchBusy}
+          className={cn(
+            "flex items-center gap-2 rounded-sm px-4 py-2 text-sm font-medium transition-all",
+            config.emergencyKillSwitch
+              ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30"
+              : "bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30"
+          )}
+        >
+          {config.emergencyKillSwitch
+            ? <><ShieldCheck className="size-4" /> Deactivate Kill Switch</>
+            : <><ShieldAlert className="size-4" /> Activate Kill Switch</>}
+        </button>
+      </div>
+
+      {config.emergencyKillSwitch && (
+        <div className="rounded-sm border border-red-500/20 bg-red-500/8 p-3 text-sm text-red-400">
+          Kill switch is active — all agent transaction execution is blocked.
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Portfolio floor (USD)</label>
+          <input
+            type="number"
+            className={fieldClass}
+            placeholder="e.g. 500"
+            value={config.portfolioFloorUsd ?? ""}
+            onChange={(e) => updateField("portfolioFloorUsd", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">Agent won't trade if portfolio drops below this.</p>
+        </div>
+        <div>
+          <label className={labelClass}>Max single tx (USD)</label>
+          <input
+            type="number"
+            className={fieldClass}
+            placeholder="e.g. 1000"
+            value={config.maxSingleTxUsd ?? ""}
+            onChange={(e) => updateField("maxSingleTxUsd", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">Hard cap on any single transaction.</p>
+        </div>
+        <div>
+          <label className={labelClass}>Daily spend limit (USD)</label>
+          <input
+            type="number"
+            className={fieldClass}
+            placeholder="e.g. 2000"
+            value={config.dailySpendLimitUsd ?? ""}
+            onChange={(e) => updateField("dailySpendLimitUsd", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">Total agent spend ceiling per day.</p>
+        </div>
+        <div>
+          <label className={labelClass}>Require approval above (USD)</label>
+          <input
+            type="number"
+            className={fieldClass}
+            placeholder="e.g. 100"
+            value={config.requireApprovalAboveUsd ?? ""}
+            onChange={(e) => updateField("requireApprovalAboveUsd", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">Always prompt for approval on large trades.</p>
+        </div>
+        <div>
+          <label className={labelClass}>Max slippage (bps)</label>
+          <input
+            type="number"
+            className={fieldClass}
+            placeholder="e.g. 50"
+            value={config.maxSlippageBps ?? ""}
+            onChange={(e) => updateField("maxSlippageBps", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted">100 bps = 1%. Agent rejects trades above this.</p>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        onClick={handleSave}
+        disabled={isSaving}
+        className="rounded-sm bg-primary text-primary-foreground hover:bg-primary/90"
+      >
+        <Save className="mr-2 size-4" />
+        {isSaving ? "Saving…" : "Save Limits"}
+      </Button>
+    </section>
   );
 }

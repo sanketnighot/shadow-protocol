@@ -3,9 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::apps::{self, flow, flow_scheduler, lit};
-use super::apps::state as apps_state;
-use super::local_db::{self, DbError};
+use super::local_db::{self};
 use super::sonar_client;
 use super::tool_registry;
 use super::tools::{
@@ -76,25 +74,17 @@ pub enum ToolResult {
     Error { message: String },
 }
 
-fn ensure_app_tool_gate(app: &AppHandle, def: &tool_registry::ToolDef) -> Result<(), String> {
-    if let Some(app_id) = def.required_app_id {
-        if !apps_state::is_tool_app_ready(app_id).map_err(|e: DbError| e.to_string())? {
-            return Err(format!(
-                "Install and enable the '{}' integration under Apps (complete permission review).",
-                app_id
-            ));
-        }
-        apps::permissions::assert_permissions_granted(app_id, def.required_permission_ids)?;
-    }
-    let _ = app;
-    Ok(())
-}
-
 fn router_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+// Suppress unused warning; kept for future use
+#[allow(dead_code)]
+fn _router_now() -> i64 {
+    router_now()
 }
 
 pub async fn route_and_execute(
@@ -150,11 +140,6 @@ pub async fn route_and_execute(
             results.push(ToolResult::Error {
                 message: "No wallet address. Please connect a wallet first.".to_string(),
             });
-            continue;
-        }
-
-        if let Err(msg) = ensure_app_tool_gate(app, &def) {
-            results.push(ToolResult::Error { message: msg });
             continue;
         }
 
@@ -416,486 +401,6 @@ pub async fn route_and_execute(
                     }
                 }
             }
-            "lit_protocol_wallet_status" => {
-                let daily = call.parameters.get("dailyLimitUsd").and_then(|v| v.as_f64());
-                let mut cfg: serde_json::Value =
-                    serde_json::from_str(&apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string()))
-                        .unwrap_or_else(|_| serde_json::json!({}));
-                if let Some(d) = daily {
-                    cfg["dailyLimitUsd"] = serde_json::json!(d);
-                }
-                match lit::wallet_status(app, cfg).await {
-                    Ok(v) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
-                    },
-                    Err(e) => ToolResult::Error { message: e },
-                }
-            }
-            "lit_protocol_connect_wallet" => {
-                // First check connectivity
-                let connect_result = lit::connect_wallet(app, serde_json::json!({})).await;
-
-                // If no PKP exists and session is unlocked, offer to mint
-                let pkp_address = lit::stored_pkp_address();
-                let mut data = connect_result.unwrap_or(serde_json::json!({"connected": false}));
-
-                if pkp_address.is_none() {
-                    data["hasPkp"] = serde_json::json!(false);
-                    data["note"] = serde_json::json!("Connected to Lit network. No PKP agent wallet yet — create one from Apps settings.");
-                } else {
-                    data["hasPkp"] = serde_json::json!(true);
-                    data["pkpAddress"] = serde_json::json!(pkp_address);
-                }
-
-                ToolResult::ToolOutput {
-                    tool_name: def.name.to_string(),
-                    content: serde_json::to_string(&data).unwrap_or_else(|_| "{}".into()),
-                }
-            }
-            "lit_protocol_precheck_action" => {
-                let kind = call
-                    .parameters
-                    .get("kind")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-                let notional = call.parameters.get("notionalUsd").and_then(|v| v.as_f64());
-                let protocol = call
-                    .parameters
-                    .get("protocol")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let action = serde_json::json!({
-                    "kind": kind,
-                    "notionalUsd": notional,
-                    "protocol": protocol,
-                });
-                match lit::precheck_action(app, action).await {
-                    Ok(v) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
-                    },
-                    Err(e) => ToolResult::Error { message: e },
-                }
-            }
-            "lit_protocol_execute_swap" => {
-                let from = call.parameters.get("fromToken").and_then(|v| v.as_str()).unwrap_or("USDC");
-                let to = call.parameters.get("toToken").and_then(|v| v.as_str()).unwrap_or("ETH");
-                let amount = call.parameters.get("amountUsd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let chain = call.parameters.get("chain").and_then(|v| v.as_str()).unwrap_or("ethereum");
-                let protocol = call.parameters.get("protocol").and_then(|v| v.as_str()).unwrap_or("uniswap");
-
-                let pkp_address = lit::stored_pkp_address();
-
-                // Check Vincent consent status — if active, use Vincent policy enforcement
-                let consent = lit::get_vincent_consent();
-                let has_vincent_consent = consent.is_some();
-                let enforcement_layer = if has_vincent_consent { "vincent-on-chain-policies" } else { "lit-tee-nodes" };
-
-                // Load guardrails from app config for local precheck
-                let guardrails_cfg: serde_json::Value = serde_json::from_str(
-                    &apps_state::get_app_config_json("lit-protocol").unwrap_or_else(|_| "{}".to_string())
-                ).unwrap_or_else(|_| serde_json::json!({}));
-
-                // Run precheck via Vincent policy or raw Lit Action fallback
-                let precheck_payload = serde_json::json!({
-                    "kind": "swap",
-                    "notionalUsd": amount,
-                    "protocol": protocol,
-                    "perTradeLimitUsd": guardrails_cfg.get("perTradeLimitUsd").and_then(|v| v.as_f64()).unwrap_or(100.0),
-                    "dailySpendLimitUsd": guardrails_cfg.get("dailySpendLimitUsd").and_then(|v| v.as_f64()).unwrap_or(500.0),
-                    "approvalThresholdUsd": guardrails_cfg.get("approvalThresholdUsd").and_then(|v| v.as_f64()).unwrap_or(1000.0),
-                    "allowedProtocols": guardrails_cfg.get("allowedProtocols").cloned().unwrap_or(serde_json::json!(["uniswap", "aave"])),
-                });
-
-                let precheck_result = if has_vincent_consent {
-                    lit::vincent_precheck_policy(app, "swap", amount, Some(protocol), &precheck_payload).await
-                } else {
-                    lit::precheck_action(app, precheck_payload).await
-                };
-
-                let precheck_allowed = precheck_result
-                    .as_ref()
-                    .ok()
-                    .and_then(|v| v.get("allowed"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let precheck_reason = precheck_result
-                    .as_ref()
-                    .ok()
-                    .and_then(|v| v.get("reason"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-
-                if !precheck_allowed {
-                    ToolResult::Error {
-                        message: format!(
-                            "Policy check denied: {}. Adjust guardrails in Lit Protocol settings.",
-                            precheck_reason
-                        ),
-                    }
-                } else {
-                    // Build the approval payload — after user approves, the frontend
-                    // calls apps_vincent_execute_approved (with Vincent consent) or
-                    // falls back to raw PKP signing via apps_lit_mint_pkp flow.
-                    let payload = serde_json::json!({
-                        "action": "lit_pkp_swap",
-                        "operation": "swap",
-                        "fromToken": from,
-                        "toToken": to,
-                        "amountUsd": amount,
-                        "chain": chain,
-                        "protocol": protocol,
-                        "pkpAddress": pkp_address,
-                        "hasVincentConsent": has_vincent_consent,
-                        "vincentAbility": "UNISWAP_SWAP",
-                        "abilityParams": {
-                            "fromToken": from,
-                            "toToken": to,
-                            "amountUsd": amount,
-                            "chain": chain,
-                            "protocol": protocol,
-                        },
-                        "precheckResult": {
-                            "allowed": true,
-                            "reason": precheck_reason,
-                            "enforcedBy": enforcement_layer,
-                        },
-                        "note": if has_vincent_consent {
-                            "User approval required. Execution will use Vincent delegated signing with on-chain policy enforcement."
-                        } else {
-                            "User approval required. PKP signs via Lit MPC. Enable Vincent for delegated execution."
-                        },
-                    });
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload,
-                    }
-                }
-            }
-            "flow_protocol_account_status" => match flow::account_status(app).await {
-                Ok(v) => ToolResult::ToolOutput {
-                    tool_name: def.name.to_string(),
-                    content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
-                },
-                Err(e) => ToolResult::Error { message: e },
-            },
-            "flow_protocol_prepare_sponsored_transaction" => {
-                let summary = call
-                    .parameters
-                    .get("summary")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Flow action");
-                let cadence = call
-                    .parameters
-                    .get("cadenceNote")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let payload = serde_json::json!({
-                    "summary": summary,
-                    "cadenceNote": cadence,
-                });
-                ToolResult::ApprovalRequired {
-                    tool_name: def.name.to_string(),
-                    payload,
-                }
-            }
-            "flow_schedule_transaction" => {
-                let intent = call.parameters.get("intent").cloned().unwrap_or(serde_json::json!({}));
-                if intent.as_object().map(|m| m.is_empty()).unwrap_or(true) {
-                    ToolResult::Error {
-                        message: "intent (object) is required.".to_string(),
-                    }
-                } else {
-                    let strategy_id = call
-                        .parameters
-                        .get("strategyId")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload: serde_json::json!({
-                            "intent": intent,
-                            "strategyId": strategy_id,
-                        }),
-                    }
-                }
-            }
-            "flow_setup_recurring" => {
-                let cron = call
-                    .parameters
-                    .get("cronExpression")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-                if cron.is_empty() {
-                    ToolResult::Error {
-                        message: "cronExpression is required.".to_string(),
-                    }
-                } else {
-                    let strategy_id = call
-                        .parameters
-                        .get("strategyId")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload: serde_json::json!({
-                            "cronExpression": cron,
-                            "strategyId": strategy_id,
-                        }),
-                    }
-                }
-            }
-            "flow_list_scheduled" => {
-                let limit = call
-                    .parameters
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(25)
-                    .clamp(1, 200) as u32;
-                match local_db::list_flow_scheduled_transactions(limit) {
-                    Ok(rows) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()),
-                    },
-                    Err(e) => ToolResult::Error {
-                        message: format!("{e}"),
-                    },
-                }
-            }
-            "flow_cancel_scheduled" => {
-                let record_id = call
-                    .parameters
-                    .get("recordId")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-                if record_id.is_empty() {
-                    ToolResult::Error {
-                        message: "recordId is required.".to_string(),
-                    }
-                } else {
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload: serde_json::json!({ "recordId": record_id }),
-                    }
-                }
-            }
-            "flow_estimate_schedule_fee" => {
-                let effort = call
-                    .parameters
-                    .get("executionEffort")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(100);
-                let priority_raw = call
-                    .parameters
-                    .get("priorityRaw")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(1)
-                    .min(255) as u8;
-                let data_mb = call
-                    .parameters
-                    .get("dataSizeMB")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("0.0001")
-                    .to_string();
-                match flow_scheduler::estimate_schedule_fee(app, effort, priority_raw, &data_mb).await {
-                    Ok(v) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&v).unwrap_or_else(|_| "{}".into()),
-                    },
-                    Err(e) => ToolResult::Error { message: e },
-                }
-            }
-            "flow_compose_defi_action" => {
-                let kind = call
-                    .parameters
-                    .get("kind")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("dca");
-                ToolResult::ApprovalRequired {
-                    tool_name: def.name.to_string(),
-                    payload: serde_json::json!({
-                        "kind": kind,
-                        "parameters": call.parameters.clone(),
-                    }),
-                }
-            }
-            "flow_bridge_tokens" => {
-                let direction = call
-                    .parameters
-                    .get("direction")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("cadence_to_evm");
-                let token_ref = call
-                    .parameters
-                    .get("tokenRef")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-                if token_ref.is_empty() {
-                    ToolResult::Error {
-                        message: "tokenRef is required.".to_string(),
-                    }
-                } else {
-                    let amount_hint = call
-                        .parameters
-                        .get("amountHint")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("0")
-                        .to_string();
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload: serde_json::json!({
-                            "direction": direction,
-                            "tokenRef": token_ref,
-                            "amountHint": amount_hint,
-                        }),
-                    }
-                }
-            }
-            "filecoin_protocol_list_backups" => {
-                let limit = call
-                    .parameters
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as u32;
-                match apps_state::list_app_backups("filecoin-storage", limit) {
-                    Ok(rows) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()),
-                    },
-                    Err(e) => ToolResult::Error {
-                        message: format!("{e}"),
-                    },
-                }
-            }
-            "filecoin_protocol_request_backup" => {
-                let mem = call
-                    .parameters
-                    .get("includeAgentMemory")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let persona = call
-                    .parameters
-                    .get("includePersona")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let scope = serde_json::json!({
-                    "agentMemory": mem,
-                    "persona": persona,
-                    "configs": true,
-                });
-                ToolResult::ApprovalRequired {
-                    tool_name: def.name.to_string(),
-                    payload: serde_json::json!({ "scope": scope }),
-                }
-            }
-            "filecoin_protocol_request_restore" => {
-                let cid = call
-                    .parameters
-                    .get("cid")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if cid.len() < 8 {
-                    ToolResult::Error {
-                        message: "Invalid CID".to_string(),
-                    }
-                } else {
-                    ToolResult::ApprovalRequired {
-                        tool_name: def.name.to_string(),
-                        payload: serde_json::json!({ "cid": cid }),
-                    }
-                }
-            }
-            "apps_schedule_integration_job" => {
-                let Some(target) = call.parameters.get("appId").and_then(|v| v.as_str()) else {
-                    results.push(ToolResult::Error {
-                        message: "Missing appId".to_string(),
-                    });
-                    continue;
-                };
-                let kind = call
-                    .parameters
-                    .get("kind")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let interval = call
-                    .parameters
-                    .get("intervalSeconds")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
-                if interval < 60 {
-                    results.push(ToolResult::Error {
-                        message: "intervalSeconds must be at least 60.".to_string(),
-                    });
-                    continue;
-                }
-                if target != "flow" && target != "filecoin-storage" {
-                    results.push(ToolResult::Error {
-                        message: "appId must be flow or filecoin-storage.".to_string(),
-                    });
-                    continue;
-                }
-                if !apps_state::is_tool_app_ready(target).unwrap_or(false) {
-                    results.push(ToolResult::Error {
-                        message: format!("App '{target}' must be active to schedule jobs."),
-                    });
-                    continue;
-                }
-                let perm_check = match kind {
-                    "flow_recurring_prepare" => {
-                        apps::permissions::assert_permissions_granted(
-                            "flow",
-                            &["flow.tx.prepare", "network.flow"],
-                        )
-                    }
-                    "filecoin_autobackup" => apps::permissions::assert_permissions_granted(
-                        "filecoin-storage",
-                        &["backup.read_local_state", "network.filecoin"],
-                    ),
-                    _ => Err("kind must be flow_recurring_prepare or filecoin_autobackup.".to_string()),
-                };
-                if let Err(m) = perm_check {
-                    results.push(ToolResult::Error { message: m });
-                    continue;
-                }
-                let payload = call
-                    .parameters
-                    .get("payload")
-                    .cloned()
-                    .unwrap_or(serde_json::json!({}));
-                let now = router_now();
-                let row = apps_state::AppSchedulerJobRow {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    app_id: target.to_string(),
-                    kind: kind.to_string(),
-                    payload_json: payload.to_string(),
-                    interval_secs: interval as i64,
-                    next_run_at: now,
-                    enabled: true,
-                    created_at: now,
-                    updated_at: now,
-                };
-                match apps_state::upsert_scheduler_job(&row) {
-                    Ok(_) => ToolResult::ToolOutput {
-                        tool_name: def.name.to_string(),
-                        content: serde_json::to_string(&serde_json::json!({
-                            "jobId": row.id,
-                            "nextRunAt": row.next_run_at
-                        }))
-                        .unwrap_or_else(|_| "{}".into()),
-                    },
-                    Err(e) => ToolResult::Error {
-                        message: format!("{e}"),
-                    },
-                }
-            }
             _ => {
                 results.push(ToolResult::Error {
                     message: format!("Unknown tool: {}", def.name),
@@ -934,12 +439,9 @@ pub fn tools_system_prompt(ctx: &AgentContext) -> String {
         serde_json::json!({
             "name": t.name,
             "description": t.description,
-            "requiresAppId": t.required_app_id,
             "parameters": serde_json::from_str::<serde_json::Value>(t.parameters).unwrap_or(serde_json::json!({"type": "object"}))
         })
     }).collect::<Vec<_>>()).unwrap_or_else(|_| "[]".to_string());
-
-    let integrations = apps::prompt_block();
 
     let ctx_block = if ctx.has_wallets() {
         let multi = if ctx.is_multi_wallet() {
@@ -996,8 +498,6 @@ When using a tool, you MUST output ONLY a valid JSON object in the following for
 {{"name": "tool_name", "parameters": {{"param1": "value1"}}}}
 
 {ctx_block}
-
-{integrations}
 
 Available tools:
 {tools_json}

@@ -93,6 +93,30 @@ pub async fn remove_ollama_key() -> SettingsResult {
 }
 
 #[tauri::command]
+pub async fn set_zerox_key(input: SetKeyInput) -> SettingsResult {
+    match settings::set_zerox_key(&input.key) {
+        Ok(_) => SettingsResult { success: true, error: None },
+        Err(e) => SettingsResult { success: false, error: Some(e.to_string()) },
+    }
+}
+
+#[tauri::command]
+pub async fn get_zerox_key() -> GetKeyResult {
+    match settings::get_zerox_key() {
+        Ok(key) => GetKeyResult { key, error: None },
+        Err(e) => GetKeyResult { key: None, error: Some(e.to_string()) },
+    }
+}
+
+#[tauri::command]
+pub async fn remove_zerox_key() -> SettingsResult {
+    match settings::remove_zerox_key() {
+        Ok(_) => SettingsResult { success: true, error: None },
+        Err(e) => SettingsResult { success: false, error: Some(e.to_string()) },
+    }
+}
+
+#[tauri::command]
 pub async fn delete_all_data(app: tauri::AppHandle) -> SettingsResult {
     match settings::delete_all_app_data(&app).await {
         Ok(_) => SettingsResult { success: true, error: None },

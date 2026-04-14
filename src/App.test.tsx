@@ -42,7 +42,7 @@ describe("App", () => {
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
     expect(screen.getByText("Total Portfolio Value")).toBeInTheDocument();
-    expect(screen.getByText("Markets calm. Capital ready.")).toBeInTheDocument();
+    expect(screen.getByText("Quick Actions")).toBeInTheDocument();
   });
 
   it("renders the agent workspace on the agent route", () => {
@@ -52,9 +52,6 @@ describe("App", () => {
 
     expect(screen.getByText("Agent Copilot")).toBeInTheDocument();
     expect(screen.getByLabelText("Agent instruction")).toBeInTheDocument();
-    expect(
-      screen.getAllByText("Find me the best yield for USDC").length,
-    ).toBeGreaterThan(0);
   });
 
   it("renders the automation center route", () => {
@@ -112,16 +109,21 @@ describe("App", () => {
     expect(screen.getByText("Theme")).toBeInTheDocument();
   });
 
-  it("opens the approval modal from the agent flow", async () => {
-    window.location.hash = "#/agent";
+  it("opens the approval modal when a pending approval is set", async () => {
     const user = userEvent.setup();
 
     renderApp();
 
-    await user.click(screen.getByRole("button", { name: "Deploy $500" }));
+    // Trigger the approval modal by setting state directly (the signal-action path was removed)
+    useUiStore.setState({ pendingApprovalId: "test-approval-123" });
 
-    expect(screen.getByText("Approve transaction")).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(screen.getByText("Approve transaction")).toBeInTheDocument();
+    });
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+
+    // Close the modal
+    await user.click(screen.getByRole("button", { name: "Reject" }));
   });
 });
